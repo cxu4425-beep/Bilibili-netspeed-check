@@ -26,8 +26,8 @@
 
 - **自動跟隨你在看的頁面**：不用每次手動貼房間號，換直播間、換影片、換分頁都會自己切過去
   （見[自動偵測](#-自動跟隨我正在看的頁面)），也可以隨時關掉改成手動指定。
-- **網頁版和官方 PC 客戶端都支援**：用客戶端的話，按一次「分享 → 複製連結」就會切過去，
-  之後同一個房間靠視窗標題自動認出。
+- **網頁版和官方 PC 客戶端都支援**：客戶端也是全自動的（直接讀它自己的瀏覽紀錄），
+  萬一版本不同讀不到，複製一次分享連結也能立刻切過去。
 - **直播與一般影片都能測**：直播量的是離直播邊緣有多遠；一般影片量的是
   **起播延遲**與**頻寬餘量**（線路撐不撐得住這個畫質、會不會轉圈）。
 - **即時延遲監測**：每 2 秒（可調）量一次，總延遲 + 網路 / 推流 / 顯示三段分項。
@@ -178,34 +178,51 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 | 來源 | 怎麼運作 | 適用 | 預設 |
 | --- | --- | --- | --- |
 | **油猴腳本** | 頁面自己把網址回報到 `http://127.0.0.1:23124` | 瀏覽器（最準，換分頁立刻反映）| 關（需裝腳本）|
-| **視窗標題** | 記住「這個視窗標題 = 這個直播間」，之後看到同樣標題就自動認出 | **官方 PC 客戶端**（Windows）| 開 |
+| **視窗標題** | 記住「這個視窗標題 = 這個直播間」，之後看到同樣標題就自動認出 | 客戶端／瀏覽器（Windows）| 開 |
 | **歷史紀錄 + 視窗標題** | 取最近造訪的 B 站網址，再用開著的視窗標題比對出「現在這個分頁」 | 瀏覽器（Windows）| 開 |
-| **複製連結** | 你按「分享 → 複製連結」，監視器認出剪貼簿裡的 B 站網址 | **官方 PC 客戶端**、手機分享的連結、任何 App | 開 |
+| **官方客戶端紀錄** | 直接讀客戶端自己的資料夾，看它最近在播什麼 | **官方 PC 客戶端（全自動）** | 開 |
+| **複製連結** | 你按「分享 → 複製連結」，監視器認出剪貼簿裡的 B 站網址 | 客戶端備援、手機分享的連結、任何 App | 開 |
 | **歷史紀錄** | 取時間窗口內最新一筆 B 站網址 | 瀏覽器 | 開 |
 
-> 「視窗標題」和「歷史紀錄 + 視窗標題」是**現在畫面上開著什麼**的證據，所以排在前面；
-> 「複製連結」和「歷史紀錄」則比誰的時間比較新，新的贏。
+> 前兩者是**現在畫面上開著什麼**的證據，所以排在前面；
+> 後三者比誰的時間比較新，新的贏。
 
 ### 用官方 PC 客戶端的話（不用瀏覽器也可以）
 
 **測量本身完全不受影響**——延遲是直接問 B 站公開 API 的，跟你用網頁版、官方客戶端還是別的播放器無關。
-只有「自動偵測」需要知道你在看哪個房間，而客戶端沒有網址列、也不寫瀏覽器歷史紀錄，所以走這條路：
+自動偵測也有專門的路：官方客戶端是 Chromium 核心的程式，**它自己會在使用者資料夾裡留下瀏覽紀錄**，
+監視器就直接讀那份（唯讀、只挑 B 站網址），所以**你什麼都不用做**——打開直播間就開始量了。
 
-1. 在客戶端裡打開直播間／影片，點 **分享 → 複製連結**（`b23.tv` 短連結也可以，監視器會自動還原）。
-2. 監視器看到剪貼簿裡的 B 站連結就**立刻切過去**開始量
-   （也可以從托盤選單點「讀取剪貼板裡的鏈接」手動觸發）。
-3. 同時它會把**當下客戶端視窗的標題**和這個房間配成一對記起來。
-   之後再打開同一個直播間，光靠視窗標題就會自動認出來，不用再複製一次。
+它會自動找這些位置：`%APPDATA%` 和 `%LOCALAPPDATA%` 底下的
+`bilibili` / `BiliBili` / `哔哩哔哩` 等資料夾，以及 Microsoft Store 版的
+`Packages\*Bilibili*`；找到 Chromium 格式的 `History` 就直接讀，沒有的話改掃客戶端自己的
+`.log` 檔（只抓 `roomid` / `room_id` / `BV` 號，不留其他內容）。
+
+**先跑一次這個確認你的客戶端讀不讀得到：**
+
+```bash
+bili-latency --detect-report          # 打包版：BiliLatencyMonitor.exe --detect-report
+```
+
+它會列出找到的客戶端資料夾、讀到的房間號、視窗標題等等。如果 `client.folders` 是空的，
+代表你的客戶端裝在別的位置——用 `--client-dir "路徑"` 指定（可重複），
+順便把路徑回報給我，我加進預設清單。
+
+**萬一真的讀不到（客戶端版本不同），還有兩層備援：**
+
+1. 在客戶端點 **分享 → 複製連結**（`b23.tv` 短連結會自動還原），監視器立刻切過去，
+   同時把**當下客戶端視窗的標題**和這個房間配成一對記起來——之後再打開同一個直播間，
+   光靠視窗標題就自動認出，不用再複製。
+2. 把「監測對象」改成手動指定，貼一次房間號就固定量它。
 
 補充：
 
-- 如果客戶端視窗標題只有「哔哩哔哩」這種看不出房間的字樣，就學不到東西——
-  這時**剛才複製的目標會一直保持著**，直到你複製下一個連結為止，照樣能用。
-- 只會處理剪貼簿裡**含 B 站網址**的文字，其他內容一律忽略，不記錄、不上傳；
-  不想用就在設定裡取消「識別復制的鏈接」。
+- 客戶端視窗標題若只有「哔哩哔哩」這種看不出房間的字樣，就學不到標題對應；
+  這時複製過的目標會一直保持到你複製下一個連結為止。
+- 剪貼簿只處理**含 B 站網址**的文字，其他內容一律忽略，不記錄、不上傳。
 - 學到的「標題 ↔ 房間」對應存在設定目錄的 `titles.json`（最多 200 筆），可以直接刪掉。
+- 讀客戶端資料、讀剪貼簿、記標題這三項都能在「設定 → 常規 → 自動檢測」個別關掉。
 - 懸浮窗的「跟隨B站視窗」也適用於客戶端：把關鍵字設成客戶端視窗標題裡有的字（預設「哔哩哔哩」）即可。
-- 完全不想自動偵測？把「監測對象」改成手動指定，貼一次房間號就固定量它。
 
 ### 關於讀取瀏覽器歷史紀錄（用瀏覽器的人請先看這段）
 
@@ -245,6 +262,8 @@ bili-latency --config-dir D:\bili-cfg     # 攜帶式：設定寫到指定資料
 bili-latency --reset-config               # 用預設值啟動（不刪除原本的設定檔）
 bili-latency --probe-once --room 21452505 # 不開視窗，量一次印出 JSON 後結束
 bili-latency --probe-once --detect        # 量「我現在正在看的那個頁面」一次
+bili-latency --detect-report              # 列出各偵測來源在你機器上讀到什麼（排查用）
+bili-latency --client-dir "D:\bili"       # 客戶端裝在別處時，指定它的資料夾（可重複）
 ```
 
 `--probe-once` 很適合排查問題或寫成腳本定時記錄：
@@ -278,7 +297,8 @@ bili-latency --probe-once --detect        # 量「我現在正在看的那個頁
 | 監測對象 | 自動跟隨 / 手動指定直播間 / 手動指定視頻 |
 | 直播間號或連結 | 要監測的直播間；自動模式下當作找不到頁面時的備援 |
 | 視頻號或連結 | 要監測的影片，支援 BV / av / 網址（`?p=` 指定分 P）|
-| 自動檢測：識別復制的鏈接 | 官方客戶端用這個：複製分享連結就自動切換（可關）|
+| 自動檢測：讀取官方PC客戶端正在播放的內容 | 直接讀客戶端自己的紀錄，全自動（可關）|
+| 自動檢測：識別復制的鏈接 | 客戶端備援：複製分享連結就自動切換（可關）|
 | 自動檢測：記住窗口標題對應的房間 | 學會「這個視窗標題 = 這個直播間」，之後自動認出（可關）|
 | 自動檢測：讀取瀏覽器歷史記錄 | 本機唯讀、只看 bilibili.com 網址（可關）|
 | 自動檢測：用窗口標題識別當前標籤頁 | 讓它跟著你切分頁走（Windows）|
@@ -337,11 +357,11 @@ bili-latency --probe-once --detect        # 量「我現在正在看的那個頁
 
 ## ❓ 常見問題 FAQ
 
-**Q：我用的是官方 Windows 客戶端，不用網頁版，可以用嗎？**
-A：可以。測量完全不受影響（延遲是直接問 API 的），只有自動偵測要多做一個動作：
-在客戶端點**分享 → 複製連結**，監視器就會切過去，並記住這個客戶端視窗標題，
-下次同一個房間自動認得。詳見[上面這一節](#用官方-pc-客戶端的話不用瀏覽器也可以)。
-不想每次複製也行——把「監測對象」改成手動指定房間號即可。
+**Q：我用的是官方 Windows 客戶端，不用網頁版，可以用嗎？要手動複製連結嗎？**
+A：可以用，而且**正常情況下不用手動做任何事**。客戶端是 Chromium 核心，會在自己的
+資料夾裡留下瀏覽紀錄，監視器直接讀那份就知道你在看哪個直播間。
+先跑 `bili-latency --detect-report` 確認讀不讀得到；讀不到再用「分享 → 複製連結」當備援，
+或直接手動指定房間號。詳見[上面這一節](#用官方-pc-客戶端的話不用瀏覽器也可以)。
 
 **Q：自動偵測沒反應／認錯頁面？**
 A：依序檢查：
@@ -427,10 +447,12 @@ src/bili_latency/
 │   └── display.py    影格週期與顯示延遲估算
 ├── detect/           自動判斷你在看哪個頁面
 │   ├── urls.py       B站網址 → 監測對象
+│   ├── client.py     官方 PC 客戶端的資料夾（History / log，唯讀）
 │   ├── history.py    瀏覽器歷史紀錄（複製後唯讀，只篩 bilibili.com）
-│   ├── titles.py     視窗標題比對，找出目前分頁
+│   ├── clipboard.py  剪貼簿裡的分享連結、b23.tv 短連結還原
+│   ├── titles.py     視窗標題比對與「標題 ↔ 房間」記憶
 │   ├── bridge.py     127.0.0.1 上的油猴腳本接收埠
-│   └── manager.py    來源優先順序與節流
+│   └── manager.py    來源優先順序、節流與 --detect-report
 └── ui/
     ├── overlay.py    懸浮窗（繪製、拖曳、跟隨視窗）
     ├── tray.py       狀態列圖示
@@ -485,17 +507,20 @@ Independent, individually switchable local sources, highest priority first:
 | Source | How | Works with | Default |
 | --- | --- | --- | --- |
 | **Userscript** | the page posts its URL to `http://127.0.0.1:23124` | browser (best, instant on tab changes) | off (install the script) |
-| **Window title** | learns "this window title is that room", then recognises it | **official desktop client** (Windows) | on |
+| **Window title** | learns "this window title is that room", then recognises it | client / browser (Windows) | on |
 | **History + window titles** | newest visited Bilibili URL, matched against open window titles | browser (Windows) | on |
-| **Copied link** | spots a Bilibili URL you copied to the clipboard | **official desktop client**, shared links, any app | on |
+| **Client records** | reads the desktop client's own data folder | **official desktop client (hands-free)** | on |
+| **Copied link** | spots a Bilibili URL you copied to the clipboard | client fallback, shared links, any app | on |
 | **History** | newest visited Bilibili URL in the time window | browser | on |
 
 **Using the official desktop client?** Measuring works exactly the same — the numbers come
-from the public API, not from your player. For detection, hit **share → copy link** in the
-client once (`b23.tv` short links are resolved automatically): the monitor switches over
-immediately and pairs the client's current window title with that room, so next time it is
-recognised from the title alone. If the client's title is just "哔哩哔哩" and says nothing
-about the room, the copied target simply sticks until you copy another link.
+from the public API, not from your player — and detection needs nothing from you either:
+the client is a Chromium-based app that keeps its own browsing records, and the monitor
+reads those (read-only, Bilibili URLs only), falling back to the ids in the client's logs.
+Run `bili-latency --detect-report` to see exactly what was found on your machine; if the
+client lives somewhere unusual, point at it with `--client-dir "PATH"`. Should a client
+build store things differently, **share → copy link** still switches the target instantly
+and teaches the monitor that window's title for next time.
 
 Reading the browser history is deliberately narrow: the file is **copied** and opened
 **read-only** (so a running browser is untouched and nothing is written back), only rows

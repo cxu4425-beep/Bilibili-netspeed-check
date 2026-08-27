@@ -33,6 +33,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--probe-once", action="store_true",
         help="run a single measurement, print it as JSON and exit (no window)",
     )
+    parser.add_argument(
+        "--detect-report", action="store_true",
+        help="print what each detection source can see on this machine, then exit",
+    )
+    parser.add_argument(
+        "--client-dir", action="append", metavar="PATH", default=None,
+        help="extra folder to search for the desktop client's data (repeatable)",
+    )
     parser.add_argument("--log-level", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="logging verbosity")
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
@@ -76,6 +84,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         config.detect.enabled = False
     if args.detect is not None:
         config.detect.enabled = args.detect
+    if args.client_dir:
+        config.detect.client_dirs = list(dict.fromkeys(config.detect.client_dirs + args.client_dir))
     if args.lang:
         config.language = args.lang
     if args.no_tray:
@@ -84,6 +94,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         config.overlay.enabled = False
     config = config.sanitized()
     set_language(config.language)
+
+    if args.detect_report:
+        return _detect_report(config)
 
     if args.probe_once:
         return _probe_once(config)
@@ -165,6 +178,28 @@ def _probe_once(config) -> int:
         return 0 if sample.ok else 1
     finally:
         client.close()
+
+
+def _detect_report(config) -> int:
+    """Show what each detection source finds here - the first thing to run when
+    auto-detection is not picking up the desktop client."""
+    from .config import title_memory_path
+    from .detect import AutoDetector
+
+    detector = AutoDetector(config.detect, memory_path=title_memory_path())
+    try:
+        report = detector.report()
+    finally:
+        detector.close()
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    if not report["client"]["folders"]:
+        print(
+            "\nNo desktop-client data folder found. If the client is installed, pass its\n"
+            "folder with --client-dir (e.g. --client-dir \"%APPDATA%\\bilibili\") and\n"
+            "report the path so it can be added to the defaults.",
+            file=sys.stderr,
+        )
+    return 0 if report.get("result") else 1
 
 
 def _probe_target(config):

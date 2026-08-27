@@ -10,6 +10,7 @@ import urllib.request
 import pytest
 
 from bili_latency.config import DetectConfig
+from bili_latency.detect import client as client_source
 from bili_latency.detect import clipboard as clipboard_source
 from bili_latency.detect import history as history_source
 from bili_latency.detect import titles as title_source
@@ -326,10 +327,13 @@ class FakeBridge:
         self.running = False
 
 
-def _detector(monkeypatch, entries=(), titles=(), **config_kwargs):
+def _detector(monkeypatch, entries=(), titles=(), client_entries=(), **config_kwargs):
     config = DetectConfig(**config_kwargs)
     monkeypatch.setattr(history_source, "scan", lambda **kwargs: list(entries))
     monkeypatch.setattr(title_source, "window_titles", lambda: list(titles))
+    monkeypatch.setattr(client_source.ClientScanner, "scan",
+                        lambda self, **kwargs: list(client_entries))
+    monkeypatch.setattr(client_source.ClientScanner, "discover", lambda self, force=False: [])
     return AutoDetector(config)
 
 
@@ -413,7 +417,95 @@ def test_history_entries_that_are_not_watchable_are_ignored(monkeypatch):
     assert detector.poll() is None
 
 
-# ------------------------------------------- the official desktop client path
+# ------------------------------------ the official desktop client, hands-free
+def test_the_desktop_client_is_detected_without_any_user_action(monkeypatch):
+    detector = _detector(
+        monkeypatch,
+        client_entries=[_entry("https://live.bilibili.com/31415926", "某某的直播间", ago_s=5)],
+    )
+
+    target = detector.poll(force=True)
+
+    assert target.kind == KIND_LIVE and target.ident == "31415926"
+    assert target.source == "client"
+
+
+def test_the_client_beats_an_older_browser_page(monkeypatch):
+    detector = _detector(
+        monkeypatch,
+        entries=[_entry("https://live.bilibili.com/111", "浏览器里的旧页面", ago_s=400)],
+        client_entries=[_entry("https://live.bilibili.com/222", "客户端正在放的", ago_s=5)],
+        use_titles=False,
+    )
+
+    assert detector.poll(force=True).ident == "222"
+
+
+def test_a_newer_browser_page_still_wins_over_an_old_client_entry(monkeypatch):
+    detector = _detector(
+        monkeypatch,
+        entries=[_entry("https://live.bilibili.com/111", "刚打开的网页", ago_s=5)],
+        client_entries=[_entry("https://live.bilibili.com/222", "客户端很久以前", ago_s=900)],
+        use_titles=False,
+    )
+
+    assert detector.poll(force=True).ident == "111"
+
+
+def test_the_client_source_can_be_turned_off(monkeypatch):
+    detector = _detector(
+        monkeypatch,
+        client_entries=[_entry("https://live.bilibili.com/222", "客户端", ago_s=5)],
+        use_client=False,
+    )
+
+    assert detector.poll(force=True) is None
+
+
+def test_the_client_teaches_its_window_title(monkeypatch, tmp_path):
+    monkeypatch.setattr(title_source, "foreground_title", lambda: "某某的直播间 - 哔哩哔哩")
+    monkeypatch.setattr(history_source, "scan", lambda **kwargs: [])
+    monkeypatch.setattr(title_source, "window_titles", lambda: ["某某的直播间 - 哔哩哔哩"])
+    monkeypatch.setattr(
+        client_source.ClientScanner, "scan",
+        lambda self, **kwargs: [_entry("https://live.bilibili.com/31415926", "", ago_s=5)],
+    )
+    monkeypatch.setattr(client_source.ClientScanner, "discover", lambda self, force=False: [])
+    detector = AutoDetector(DetectConfig(), memory_path=tmp_path / "titles.json")
+
+    detector.poll(force=True)
+
+    assert detector.remembered_titles == 1
+
+
+def test_a_broken_client_folder_does_not_break_detection(monkeypatch):
+    detector = _detector(monkeypatch,
+                         entries=[_entry("https://live.bilibili.com/111", "网页", ago_s=5)],
+                         use_titles=False)
+
+    def boom(self, **kwargs):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(client_source.ClientScanner, "scan", boom)
+
+    assert detector.poll(force=True).ident == "111"
+
+
+def test_the_report_lists_every_source(monkeypatch):
+    detector = _detector(
+        monkeypatch,
+        client_entries=[_entry("https://live.bilibili.com/31415926", "直播间", ago_s=5)],
+    )
+
+    report = detector.report()
+
+    assert report["client"]["used"] is True
+    assert report["client"]["found"][0]["id"] == "31415926"
+    assert report["result"]["id"] == "31415926"
+    assert set(report) >= {"client", "browser_history", "window_titles", "clipboard", "bridge"}
+
+
+# ---------------------------------- the desktop client, copy-link fallback
 def test_a_copied_link_switches_the_target_immediately(monkeypatch):
     detector = _detector(monkeypatch, poll_interval_s=300)   # scans are far apart
 

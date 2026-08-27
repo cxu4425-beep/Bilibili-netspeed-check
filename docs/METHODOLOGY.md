@@ -149,24 +149,39 @@ UI 標示為「估算」。
 | --- | --- | --- | --- |
 | 1 | **油猴腳本 (bridge)** | 頁面本身把網址 POST 到 `http://127.0.0.1:23124/report` | 瀏覽器 |
 | 2 | **歷史紀錄 + 視窗標題** | 取最近造訪的 B站網址，再用開著的視窗標題比對出「現在這個分頁」 | 瀏覽器（Windows）|
-| 3 | **視窗標題記憶 (title)** | 用學過的「標題 ↔ 房間」對應表，認出現在開著的視窗 | **官方 PC 客戶端**（Windows）|
-| 4 | **複製連結 (clipboard) 與歷史紀錄**，取時間較新的那個 | 剪貼簿裡的 B站網址；或時間窗口內最新的一筆造訪紀錄 | 客戶端／任何 App；瀏覽器 |
+| 3 | **視窗標題記憶 (title)** | 用學過的「標題 ↔ 房間」對應表，認出現在開著的視窗 | 客戶端／瀏覽器（Windows）|
+| 4 | **客戶端紀錄 (client)、複製連結 (clipboard)、瀏覽器歷史紀錄**，取時間最新的那個 | 見下 | 客戶端／任何 App／瀏覽器 |
 
-### 官方客戶端為什麼要繞這一圈
+### 官方客戶端：直接讀它自己的紀錄
 
-客戶端沒有網址列可讀、不寫瀏覽器歷史紀錄，視窗標題也常常只有 App 名稱。
-在不登入、不侵入行程的前提下，沒有辦法直接問出「你現在在看哪個房間」，
-所以改成由使用者給一次明確訊號：**分享 → 複製連結**。
+客戶端沒有網址列可讀、也不寫瀏覽器的歷史紀錄，但它是 **Chromium 核心的桌面程式**，
+會在自己的使用者資料夾裡留下一份 **Chromium 格式的 `History` 資料庫**——
+和瀏覽器完全同一套 schema，所以同一段唯讀複製的程式碼就能讀。
+
+* 資料夾用「找」的，不寫死：`%APPDATA%` 與 `%LOCALAPPDATA%` 底下的
+  `bilibili` / `BiliBili` / `哔哩哔哩` / `bilibili-desktop` 等名稱，
+  加上 Store 版的 `Packages\*Bilibili*`；使用者也能在設定裡補上自訂路徑。
+* 掃描時會跳過 `Cache`、`GPUCache`、`Service Worker` 這類只有幾千個檔案的目錄，
+  並限制遞迴深度，避免翻整顆硬碟。
+* 找不到 `History` 時，退而掃客戶端自己的 `.log` 檔（只讀最後 256 KB），
+  用正則抓 `roomid` / `room_id` / `live.bilibili.com/<id>` / `BV` 號，
+  **只取出 id，不保留任何其他內容**；檔案修改時間就是這筆證據的時間。
+* 讀到的第一筆（最新）同時會拿去和**當下前景視窗標題**配對存進 `titles.json`，
+  所以之後光靠標題就能認出同一個房間。
+* 客戶端版本千百種，這條路不保證每個版本都通——
+  `--detect-report` 會把找到的資料夾、資料庫、讀到的房間號全部印出來，一眼就知道通不通。
+
+### 備援：複製連結
+
+客戶端資料讀不到時（或使用者關掉了這個來源），還有一條不依賴任何內部格式的路：
+使用者按 **分享 → 複製連結**，監視器認剪貼簿。
 
 * 剪貼簿每 1.5 秒讀一次（在 GUI 執行緒，因為剪貼簿屬於它），只有內容變動才處理；
   文字裡沒有 B站網址就直接丟掉，不記錄也不上傳。
 * `b23.tv` 短連結用一次 HTTP 轉址還原成正式網址（在工作執行緒做，不卡介面）。
-* 認出目標的同時，會把**當下前景視窗的標題**和這個目標配成一對存進 `titles.json`
-  （最多 200 筆，超過就淘汰最舊的）。條件是標題夠特別（不是「哔哩哔哩」這類通用名稱），
+* 一樣會學「標題 ↔ 房間」：條件是標題夠特別（不是「哔哩哔哩」這類通用名稱），
   而且看起來就是 B站的視窗，免得把聊天軟體的標題學進去。
-* 學到之後，只要那個標題的視窗開著，順位 3 就直接認出房間，不用再複製。
-* 學不到（標題不具辨識度）時，複製過的目標會一直維持到下一次複製為止——
-  對客戶端使用者來說已經夠用。
+* 學不到時，複製過的目標會一直維持到下一次複製為止。
 
 實作細節與界線：
 
@@ -179,6 +194,7 @@ UI 標示為「估算」。
 * bridge 伺服器只綁 `127.0.0.1`，只接受 `*.bilibili.com` 來源，
   上報超過 120 秒沒更新就視為過期。
 * 剪貼簿只讀不寫，且只處理含 B站網址的文字；`titles.json` 只存標題與房間號／BV 號。
+* 客戶端的資料夾同樣只讀不寫：`History` 先複製再唯讀開啟，log 只讀最後 256 KB 並且只取 id。
 * 偵測不到任何東西時，會回到設定裡手動填的直播間／影片；兩個都沒填就是僅網路模式。
 
 ## 6. 這個數字和播放器顯示的延遲會一樣嗎？
@@ -257,10 +273,13 @@ matched against open window titles; a learned "window title → room" table; and
 last, whichever is newer of a Bilibili link copied to the clipboard or the newest
 page in the browser history.
 
-The **official desktop client** exposes neither a URL nor browser history, so it is
-handled by the clipboard path: share → copy link switches the target and pairs the
-client's current window title with that room, after which the title alone is enough.
-History files are copied and opened read-only, only rows whose URL contains
+The **official desktop client** exposes no URL and writes nothing to the browser's
+history, but it is a Chromium-based app that keeps its own `History` database, which
+is read with exactly the same read-only copy as the browser sources (falling back to
+the ids mentioned in the client's own logs). `--detect-report` prints what was found.
+When a client build stores things differently, share → copy link switches the target
+and pairs the client's window title with that room, after which the title alone is
+enough. History files are copied and opened read-only, only rows whose URL contains
 `bilibili.com` are read, and clipboard text without a Bilibili URL is discarded.
 
 Clock skew between your PC and Bilibili is estimated every 60 s from the HTTP `Date`

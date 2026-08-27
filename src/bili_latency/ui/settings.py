@@ -150,6 +150,8 @@ class SettingsDialog(QDialog):
         box = QGroupBox(tr("detect.group"), parent)
         form = QFormLayout(box)
 
+        self.detect_client_check = QCheckBox(tr("detect.client"), box)
+        form.addRow("", self.detect_client_check)
         self.detect_clipboard_check = QCheckBox(tr("detect.clipboard"), box)
         form.addRow("", self.detect_clipboard_check)
         self.detect_titles_memory_check = QCheckBox(tr("detect.remember_titles"), box)
@@ -359,6 +361,7 @@ class SettingsDialog(QDialog):
         self.target_combo.setCurrentIndex(max(0, self.target_combo.findData(mode)))
         self.room_edit.setText(self._config.room_id)
         self.video_edit.setText(self._config.video_id)
+        self.detect_client_check.setChecked(self._config.detect.use_client)
         self.detect_clipboard_check.setChecked(self._config.detect.use_clipboard)
         self.detect_titles_memory_check.setChecked(self._config.detect.remember_titles)
         self.detect_history_check.setChecked(self._config.detect.use_history)
@@ -444,6 +447,7 @@ class SettingsDialog(QDialog):
         config.detect.enabled = mode == "auto"
         if mode in ("live", "video"):
             config.manual_kind = mode
+        config.detect.use_client = self.detect_client_check.isChecked()
         config.detect.use_clipboard = self.detect_clipboard_check.isChecked()
         config.detect.remember_titles = self.detect_titles_memory_check.isChecked()
         config.detect.use_history = self.detect_history_check.isChecked()

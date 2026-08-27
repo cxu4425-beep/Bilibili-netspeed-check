@@ -109,6 +109,11 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "接收油猴腳本回報（最準）",
         "Accept userscript reports (most accurate)",
     ),
+    "detect.client": (
+        "读取官方PC客户端正在播放的内容",
+        "讀取官方PC用戶端正在播放的內容",
+        "Read what the official desktop client is playing",
+    ),
     "detect.clipboard": (
         "识别复制的链接（客户端用）",
         "辨識複製的連結（用戶端適用）",
@@ -120,12 +125,15 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "Remember which window title is which room",
     ),
     "detect.client_hint": (
-        "用官方 PC 客户端？在客户端里点「分享 → 复制链接」，监视器会自动切过去；"
-        "之后再打开同一个直播间，靠窗口标题就能认出来。",
-        "用官方 PC 用戶端？在用戶端點「分享 → 複製連結」，監視器會自動切過去；"
-        "之後再打開同一個直播間，靠視窗標題就能認出來。",
-        "Using the official desktop client? Hit share -> copy link there and the monitor "
-        "switches over; next time that window title alone is enough to recognise it.",
+        "用官方 PC 客户端时，监视器会直接读客户端自己的记录，不用你动手。"
+        "万一读不到（客户端版本不同），在客户端点「分享 → 复制链接」也能立刻切过去。"
+        "用命令行加 --detect-report 可以看到到底读到了什么。",
+        "用官方 PC 用戶端時，監視器會直接讀用戶端自己的紀錄，不用你動手。"
+        "萬一讀不到（用戶端版本不同），在用戶端點「分享 → 複製連結」也能立刻切過去。"
+        "用命令列加 --detect-report 可以看到到底讀到了什麼。",
+        "With the official desktop client the monitor reads the client's own records, so "
+        "there is nothing to do. If a client build stores things differently, share -> copy "
+        "link still switches over instantly. Run with --detect-report to see what was found.",
     ),
     "detect.bridge_port": ("脚本上报端口", "腳本回報連接埠", "Bridge port"),
     "detect.window": ("历史记录时间窗口（分钟）", "歷史紀錄時間視窗（分鐘）", "History window (minutes)"),

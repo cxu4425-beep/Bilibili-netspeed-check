@@ -134,12 +134,15 @@ class DetectConfig:
     """Automatic detection of what you are watching (every source optional)."""
 
     enabled: bool = True
+    use_client: bool = True       # read the official desktop client's own data folder
     use_history: bool = True      # newest bilibili.com URL in the browser history
     use_titles: bool = True       # match it against open window titles (Windows)
     use_bridge: bool = False      # accept reports from the companion userscript
     use_clipboard: bool = True    # a link copied from the desktop client's share menu
     remember_titles: bool = True  # learn which window title belongs to which page
     follow_videos: bool = True    # follow video pages too, not only live rooms
+    # Extra folders to look in when the client is installed somewhere unusual.
+    client_dirs: list = field(default_factory=list)
     history_window_min: int = 30
     poll_interval_s: int = 5
     bridge_port: int = 23124
@@ -232,6 +235,9 @@ class Config:
             self.overlay.theme = "dark"
         if self.language not in ("auto", "zh_CN", "zh_TW", "en"):
             self.language = "auto"
+        if not isinstance(self.detect.client_dirs, list):
+            self.detect.client_dirs = []
+        self.detect.client_dirs = [str(path) for path in self.detect.client_dirs if str(path).strip()]
         self.detect.history_window_min = int(_clamp(self.detect.history_window_min, 1, 1440))
         self.detect.poll_interval_s = int(_clamp(self.detect.poll_interval_s, 2, 300))
         self.detect.bridge_port = int(_clamp(self.detect.bridge_port, 1024, 65535))
