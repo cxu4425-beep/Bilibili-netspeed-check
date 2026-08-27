@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bili-latency-monitor"
+dynamic = ["version"]
+description = "Real-time Bilibili live latency monitor: server -> client -> screen, in an overlay or the status bar."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+keywords = ["bilibili", "latency", "live", "overlay", "monitor", "延迟", "直播"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video",
+    "Topic :: System :: Monitoring",
+]
+dependencies = [
+    "PySide6-Essentials>=6.5,<7",
+    "requests>=2.28",
+]
+
+[project.urls]
+Homepage = "https://github.com/cxu4425-beep/Bilibili-netspeed-check"
+Issues = "https://github.com/cxu4425-beep/Bilibili-netspeed-check/issues"
+
+[project.scripts]
+bili-latency = "bili_latency.cli:main"
+
+[project.gui-scripts]
+bili-latency-gui = "bili_latency.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pyinstaller>=6.3"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "bili_latency.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

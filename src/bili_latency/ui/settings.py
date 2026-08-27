@@ -1,0 +1,389 @@
+"""Settings dialog: everything is editable here, no config file editing needed."""
+
+from __future__ import annotations
+
+import copy
+from typing import Optional
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
+    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSlider, QSpinBox,
+    QTabWidget, QVBoxLayout, QWidget,
+)
+
+from .. import APP_NAME, REPO_URL, __version__
+from ..autostart import is_supported as autostart_supported
+from ..config import Config, app_config_dir, parse_room_id
+from ..i18n import LANGUAGE_NAMES, LANGUAGES, tr
+from .anchor import create_window_finder
+from .icons import app_icon
+
+
+class SettingsDialog(QDialog):
+    """Edits a copy of the config; emits :attr:`configApplied` on OK/Apply."""
+
+    configApplied = Signal(object)
+    openConfigFolderRequested = Signal()
+
+    def __init__(self, config: Config, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._config = copy.deepcopy(config)
+        self._window_following_available = create_window_finder().available
+
+        self.setWindowTitle(f"{APP_NAME} - {tr('settings.title')}")
+        self.setWindowIcon(app_icon())
+        self.setModal(False)
+        self.setMinimumWidth(430)
+
+        tabs = QTabWidget(self)
+        tabs.addTab(self._build_general_tab(), tr("settings.tab.general"))
+        tabs.addTab(self._build_overlay_tab(), tr("settings.tab.overlay"))
+        tabs.addTab(self._build_advanced_tab(), tr("settings.tab.advanced"))
+        tabs.addTab(self._build_about_tab(), tr("settings.tab.about"))
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel | QDialogButtonBox.Apply
+            | QDialogButtonBox.RestoreDefaults,
+            parent=self,
+        )
+        buttons.button(QDialogButtonBox.Ok).setText(tr("button.ok"))
+        buttons.button(QDialogButtonBox.Cancel).setText(tr("button.cancel"))
+        buttons.button(QDialogButtonBox.Apply).setText(tr("button.apply"))
+        buttons.button(QDialogButtonBox.RestoreDefaults).setText(tr("button.defaults"))
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        buttons.button(QDialogButtonBox.Apply).clicked.connect(self._apply)
+        buttons.button(QDialogButtonBox.RestoreDefaults).clicked.connect(self._restore_defaults)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(tabs)
+        layout.addWidget(buttons)
+
+        self.load_from(self._config)
+
+    # ------------------------------------------------------------------ build
+    def _build_general_tab(self) -> QWidget:
+        page = QWidget(self)
+        form = QFormLayout(page)
+
+        self.room_edit = QLineEdit(page)
+        self.room_edit.setPlaceholderText("https://live.bilibili.com/21452505")
+        form.addRow(tr("general.room"), self.room_edit)
+        hint = QLabel(tr("general.room_hint"), page)
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: palette(mid);")
+        form.addRow("", hint)
+
+        self.interval_spin = QSpinBox(page)
+        self.interval_spin.setRange(500, 60_000)
+        self.interval_spin.setSingleStep(500)
+        self.interval_spin.setSuffix(" ms")
+        form.addRow(tr("general.interval"), self.interval_spin)
+
+        self.window_spin = QSpinBox(page)
+        self.window_spin.setRange(20, 5000)
+        self.window_spin.setSingleStep(10)
+        form.addRow(tr("general.sample_window"), self.window_spin)
+
+        self.language_combo = QComboBox(page)
+        self.language_combo.addItem(tr("general.language_auto"), "auto")
+        for code in LANGUAGES:
+            self.language_combo.addItem(LANGUAGE_NAMES[code], code)
+        form.addRow(tr("general.language"), self.language_combo)
+
+        self.autostart_check = QCheckBox(tr("general.autostart"), page)
+        if not autostart_supported():
+            self.autostart_check.setEnabled(False)
+            self.autostart_check.setToolTip(tr("general.autostart_unsupported"))
+        form.addRow("", self.autostart_check)
+
+        self.tray_check = QCheckBox(tr("tray.enabled"), page)
+        form.addRow("", self.tray_check)
+        self.tray_value_check = QCheckBox(tr("tray.show_value"), page)
+        form.addRow("", self.tray_value_check)
+        return page
+
+    def _build_overlay_tab(self) -> QWidget:
+        page = QWidget(self)
+        outer = QVBoxLayout(page)
+
+        placement = QGroupBox(tr("overlay.anchor"), page)
+        form = QFormLayout(placement)
+
+        self.overlay_check = QCheckBox(tr("overlay.enabled"), placement)
+        form.addRow("", self.overlay_check)
+
+        self.anchor_combo = QComboBox(placement)
+        for mode in ("free", "screen", "window"):
+            self.anchor_combo.addItem(tr(f"overlay.anchor.{mode}"), mode)
+        self.anchor_combo.currentIndexChanged.connect(self._sync_anchor_state)
+        form.addRow(tr("overlay.anchor"), self.anchor_combo)
+
+        self.screen_combo = QComboBox(placement)
+        form.addRow(tr("overlay.screen"), self.screen_combo)
+
+        self.corner_combo = QComboBox(placement)
+        for corner in ("top-left", "top-right", "bottom-left", "bottom-right"):
+            self.corner_combo.addItem(tr(f"overlay.corner.{corner}"), corner)
+        form.addRow(tr("overlay.corner"), self.corner_combo)
+
+        self.offset_x_spin = QSpinBox(placement)
+        self.offset_x_spin.setRange(0, 4000)
+        form.addRow(tr("overlay.offset_x"), self.offset_x_spin)
+        self.offset_y_spin = QSpinBox(placement)
+        self.offset_y_spin.setRange(0, 4000)
+        form.addRow(tr("overlay.offset_y"), self.offset_y_spin)
+
+        self.keyword_edit = QLineEdit(placement)
+        form.addRow(tr("overlay.follow_keyword"), self.keyword_edit)
+        self.window_note = QLabel(tr("overlay.window_unsupported"), placement)
+        self.window_note.setWordWrap(True)
+        self.window_note.setStyleSheet("color: palette(mid);")
+        form.addRow("", self.window_note)
+        outer.addWidget(placement)
+
+        look = QGroupBox(tr("settings.tab.overlay"), page)
+        look_form = QFormLayout(look)
+
+        self.opacity_slider = QSlider(Qt.Horizontal, look)
+        self.opacity_slider.setRange(20, 100)
+        self.opacity_label = QLabel("", look)
+        opacity_row = QHBoxLayout()
+        opacity_row.addWidget(self.opacity_slider)
+        opacity_row.addWidget(self.opacity_label)
+        self.opacity_slider.valueChanged.connect(lambda v: self.opacity_label.setText(f"{v}%"))
+        look_form.addRow(tr("overlay.opacity"), opacity_row)
+
+        self.scale_spin = QDoubleSpinBox(look)
+        self.scale_spin.setRange(0.6, 3.0)
+        self.scale_spin.setSingleStep(0.1)
+        look_form.addRow(tr("overlay.scale"), self.scale_spin)
+
+        self.theme_combo = QComboBox(look)
+        for theme in ("dark", "light", "pink"):
+            self.theme_combo.addItem(tr(f"overlay.theme.{theme}"), theme)
+        look_form.addRow(tr("overlay.theme"), self.theme_combo)
+
+        self.on_top_check = QCheckBox(tr("overlay.on_top"), look)
+        look_form.addRow("", self.on_top_check)
+        self.click_through_check = QCheckBox(tr("overlay.click_through"), look)
+        look_form.addRow("", self.click_through_check)
+        self.locked_check = QCheckBox(tr("overlay.lock"), look)
+        look_form.addRow("", self.locked_check)
+        self.compact_check = QCheckBox(tr("overlay.compact"), look)
+        look_form.addRow("", self.compact_check)
+        self.breakdown_check = QCheckBox(tr("overlay.show_breakdown"), look)
+        look_form.addRow("", self.breakdown_check)
+        self.sparkline_check = QCheckBox(tr("overlay.show_sparkline"), look)
+        look_form.addRow("", self.sparkline_check)
+        self.stats_check = QCheckBox(tr("overlay.show_stats"), look)
+        look_form.addRow("", self.stats_check)
+        outer.addWidget(look)
+        outer.addStretch(1)
+        return page
+
+    def _build_advanced_tab(self) -> QWidget:
+        page = QWidget(self)
+        form = QFormLayout(page)
+
+        self.timeout_spin = QSpinBox(page)
+        self.timeout_spin.setRange(1000, 30_000)
+        self.timeout_spin.setSingleStep(500)
+        self.timeout_spin.setSuffix(" ms")
+        form.addRow(tr("advanced.timeout"), self.timeout_spin)
+
+        self.playurl_spin = QSpinBox(page)
+        self.playurl_spin.setRange(30, 3600)
+        self.playurl_spin.setSuffix(" s")
+        form.addRow(tr("advanced.playurl_refresh"), self.playurl_spin)
+
+        self.rtt_host_edit = QLineEdit(page)
+        form.addRow(tr("advanced.rtt_host"), self.rtt_host_edit)
+
+        self.prefer_hls_check = QCheckBox(tr("advanced.prefer_hls"), page)
+        form.addRow("", self.prefer_hls_check)
+
+        self.buffer_spin = QDoubleSpinBox(page)
+        self.buffer_spin.setRange(0.0, 10.0)
+        self.buffer_spin.setSingleStep(0.5)
+        form.addRow(tr("advanced.buffer_segments"), self.buffer_spin)
+
+        self.frames_spin = QDoubleSpinBox(page)
+        self.frames_spin.setRange(0.0, 6.0)
+        self.frames_spin.setSingleStep(0.5)
+        form.addRow(tr("advanced.frames_in_flight"), self.frames_spin)
+
+        self.manual_offset_spin = QDoubleSpinBox(page)
+        self.manual_offset_spin.setRange(0.0, 500.0)
+        self.manual_offset_spin.setSingleStep(1.0)
+        self.manual_offset_spin.setSuffix(" ms")
+        form.addRow(tr("advanced.manual_offset"), self.manual_offset_spin)
+
+        self.include_display_check = QCheckBox(tr("advanced.include_display"), page)
+        form.addRow("", self.include_display_check)
+
+        self.good_spin = QDoubleSpinBox(page)
+        self.good_spin.setRange(10.0, 600_000.0)
+        self.good_spin.setSingleStep(100.0)
+        self.good_spin.setSuffix(" ms")
+        form.addRow(tr("advanced.good"), self.good_spin)
+
+        self.warn_spin = QDoubleSpinBox(page)
+        self.warn_spin.setRange(10.0, 600_000.0)
+        self.warn_spin.setSingleStep(100.0)
+        self.warn_spin.setSuffix(" ms")
+        form.addRow(tr("advanced.warn"), self.warn_spin)
+
+        self.csv_check = QCheckBox(tr("advanced.csv"), page)
+        form.addRow("", self.csv_check)
+        csv_hint = QLabel(tr("advanced.csv_hint"), page)
+        csv_hint.setWordWrap(True)
+        csv_hint.setStyleSheet("color: palette(mid);")
+        form.addRow("", csv_hint)
+
+        open_button = QPushButton(tr("menu.open_config"), page)
+        open_button.clicked.connect(self.openConfigFolderRequested.emit)
+        form.addRow("", open_button)
+        return page
+
+    def _build_about_tab(self) -> QWidget:
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
+        title = QLabel(f"<b>{APP_NAME}</b>", page)
+        body = QLabel(tr("about.body"), page)
+        body.setWordWrap(True)
+        version = QLabel(f"{tr('about.version')}: {__version__}", page)
+        repo = QLabel(f'<a href="{REPO_URL}">{tr("about.repo")}</a>', page)
+        repo.setOpenExternalLinks(True)
+        folder = QLabel(str(app_config_dir()), page)
+        folder.setWordWrap(True)
+        folder.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        for widget in (title, body, version, repo, folder):
+            layout.addWidget(widget)
+        layout.addStretch(1)
+        return page
+
+    # ------------------------------------------------------------------- data
+    def load_from(self, config: Config) -> None:
+        self._config = copy.deepcopy(config)
+        overlay = self._config.overlay
+
+        self.room_edit.setText(self._config.room_id)
+        self.interval_spin.setValue(self._config.probe.interval_ms)
+        self.window_spin.setValue(self._config.sample_window)
+        self.language_combo.setCurrentIndex(max(0, self.language_combo.findData(self._config.language)))
+        self.autostart_check.setChecked(self._config.autostart)
+        self.tray_check.setChecked(self._config.tray.enabled)
+        self.tray_value_check.setChecked(self._config.tray.show_value_in_icon)
+
+        self._reload_screens(overlay.screen_name)
+        self.overlay_check.setChecked(overlay.enabled)
+        self.anchor_combo.setCurrentIndex(max(0, self.anchor_combo.findData(overlay.anchor_mode)))
+        self.corner_combo.setCurrentIndex(max(0, self.corner_combo.findData(overlay.corner)))
+        self.offset_x_spin.setValue(overlay.offset_x)
+        self.offset_y_spin.setValue(overlay.offset_y)
+        self.keyword_edit.setText(overlay.follow_window_keyword)
+        self.opacity_slider.setValue(int(round(overlay.opacity * 100)))
+        self.opacity_label.setText(f"{self.opacity_slider.value()}%")
+        self.scale_spin.setValue(overlay.scale)
+        self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(overlay.theme)))
+        self.on_top_check.setChecked(overlay.always_on_top)
+        self.click_through_check.setChecked(overlay.click_through)
+        self.locked_check.setChecked(overlay.locked)
+        self.compact_check.setChecked(overlay.compact)
+        self.breakdown_check.setChecked(overlay.show_breakdown)
+        self.sparkline_check.setChecked(overlay.show_sparkline)
+        self.stats_check.setChecked(overlay.show_stats)
+
+        probe = self._config.probe
+        self.timeout_spin.setValue(probe.timeout_ms)
+        self.playurl_spin.setValue(probe.playurl_refresh_s)
+        self.rtt_host_edit.setText(probe.rtt_host)
+        self.prefer_hls_check.setChecked(probe.prefer_hls)
+        self.buffer_spin.setValue(probe.player_buffer_segments)
+        self.frames_spin.setValue(self._config.display.frames_in_flight)
+        self.manual_offset_spin.setValue(self._config.display.manual_offset_ms)
+        self.include_display_check.setChecked(self._config.display.include_in_total)
+        self.good_spin.setValue(self._config.thresholds.good_ms)
+        self.warn_spin.setValue(self._config.thresholds.warn_ms)
+        self.csv_check.setChecked(self._config.recording.csv_enabled)
+
+        self._sync_anchor_state()
+
+    def _reload_screens(self, selected: str) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        self.screen_combo.clear()
+        self.screen_combo.addItem(tr("overlay.screen_primary"), "")
+        for screen in QApplication.screens():
+            geometry = screen.geometry()
+            label = f"{screen.name()} ({geometry.width()}x{geometry.height()})"
+            self.screen_combo.addItem(label, screen.name())
+        index = self.screen_combo.findData(selected)
+        self.screen_combo.setCurrentIndex(index if index >= 0 else 0)
+
+    def _sync_anchor_state(self) -> None:
+        mode = self.anchor_combo.currentData()
+        corner_modes = mode in ("screen", "window")
+        self.corner_combo.setEnabled(corner_modes)
+        self.offset_x_spin.setEnabled(corner_modes)
+        self.offset_y_spin.setEnabled(corner_modes)
+        self.screen_combo.setEnabled(mode == "screen")
+        self.keyword_edit.setEnabled(mode == "window")
+        self.window_note.setVisible(mode == "window" and not self._window_following_available)
+
+    def to_config(self) -> Config:
+        config = copy.deepcopy(self._config)
+        config.room_id = parse_room_id(self.room_edit.text())
+        config.probe.interval_ms = self.interval_spin.value()
+        config.sample_window = self.window_spin.value()
+        config.language = self.language_combo.currentData() or "auto"
+        config.autostart = self.autostart_check.isChecked()
+        config.tray.enabled = self.tray_check.isChecked()
+        config.tray.show_value_in_icon = self.tray_value_check.isChecked()
+
+        overlay = config.overlay
+        overlay.enabled = self.overlay_check.isChecked()
+        overlay.anchor_mode = self.anchor_combo.currentData() or "free"
+        overlay.screen_name = self.screen_combo.currentData() or ""
+        overlay.corner = self.corner_combo.currentData() or "top-right"
+        overlay.offset_x = self.offset_x_spin.value()
+        overlay.offset_y = self.offset_y_spin.value()
+        overlay.follow_window_keyword = self.keyword_edit.text().strip() or "哔哩哔哩"
+        overlay.opacity = self.opacity_slider.value() / 100.0
+        overlay.scale = self.scale_spin.value()
+        overlay.theme = self.theme_combo.currentData() or "dark"
+        overlay.always_on_top = self.on_top_check.isChecked()
+        overlay.click_through = self.click_through_check.isChecked()
+        overlay.locked = self.locked_check.isChecked()
+        overlay.compact = self.compact_check.isChecked()
+        overlay.show_breakdown = self.breakdown_check.isChecked()
+        overlay.show_sparkline = self.sparkline_check.isChecked()
+        overlay.show_stats = self.stats_check.isChecked()
+
+        config.probe.timeout_ms = self.timeout_spin.value()
+        config.probe.playurl_refresh_s = self.playurl_spin.value()
+        config.probe.rtt_host = self.rtt_host_edit.text().strip() or "api.live.bilibili.com"
+        config.probe.prefer_hls = self.prefer_hls_check.isChecked()
+        config.probe.player_buffer_segments = self.buffer_spin.value()
+        config.display.frames_in_flight = self.frames_spin.value()
+        config.display.manual_offset_ms = self.manual_offset_spin.value()
+        config.display.include_in_total = self.include_display_check.isChecked()
+        config.thresholds.good_ms = self.good_spin.value()
+        config.thresholds.warn_ms = max(self.warn_spin.value(), self.good_spin.value())
+        config.recording.csv_enabled = self.csv_check.isChecked()
+        return config.sanitized()
+
+    # ---------------------------------------------------------------- actions
+    def _apply(self) -> None:
+        self.configApplied.emit(self.to_config())
+
+    def _on_accept(self) -> None:
+        self._apply()
+        self.accept()
+
+    def _restore_defaults(self) -> None:
+        defaults = Config()
+        defaults.room_id = parse_room_id(self.room_edit.text())
+        self.load_from(defaults)
