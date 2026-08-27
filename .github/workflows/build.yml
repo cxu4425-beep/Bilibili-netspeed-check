@@ -2,7 +2,11 @@ name: Build executables
 
 on:
   push:
+    # A tag publishes a release; a push to a working branch just leaves the
+    # executables attached to the run, so there is always something to download
+    # without having to tag first.
     tags: ["v*"]
+    branches: ["claude/**", "main", "master"]
   workflow_dispatch:
 
 permissions:
