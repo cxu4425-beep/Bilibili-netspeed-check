@@ -45,6 +45,11 @@ def config_path() -> Path:
     return app_config_dir() / "config.json"
 
 
+def title_memory_path() -> Path:
+    """Where learned "window title -> room/video" pairs are kept."""
+    return app_config_dir() / "titles.json"
+
+
 def log_dir() -> Path:
     path = app_config_dir() / "logs"
     path.mkdir(parents=True, exist_ok=True)
@@ -132,6 +137,8 @@ class DetectConfig:
     use_history: bool = True      # newest bilibili.com URL in the browser history
     use_titles: bool = True       # match it against open window titles (Windows)
     use_bridge: bool = False      # accept reports from the companion userscript
+    use_clipboard: bool = True    # a link copied from the desktop client's share menu
+    remember_titles: bool = True  # learn which window title belongs to which page
     follow_videos: bool = True    # follow video pages too, not only live rooms
     history_window_min: int = 30
     poll_interval_s: int = 5

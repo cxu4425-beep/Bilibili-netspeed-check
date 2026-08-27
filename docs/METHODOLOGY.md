@@ -142,14 +142,31 @@ UI 標示為「估算」。
 
 ## 5. 自動偵測：監視器怎麼知道你在看什麼
 
-不用瀏覽器外掛也能跟著你切換頁面，靠的是三個各自獨立、都可以關掉的來源，
-優先順序由高到低：
+不用瀏覽器外掛也能跟著你切換頁面，靠的是幾個各自獨立、都可以關掉的來源。
+排序原則是：**「現在畫面上開著什麼」的證據 ＞ 「最近發生過什麼」的證據**。
 
-| 來源 | 怎麼運作 | 準確度 |
-| --- | --- | --- |
-| **油猴腳本 (bridge)** | 頁面本身把網址 POST 到 `http://127.0.0.1:23124/report` | 最準，換分頁/分 P 立刻反映 |
-| **歷史紀錄 + 視窗標題** | 取最近造訪的 B站網址，再用開著的視窗標題比對出「現在這個分頁」 | 高（Windows 上可跟著切分頁）|
-| **歷史紀錄** | 取時間窗口內最新的一筆 B站網址 | 中（換分頁時要重新整理才會更新）|
+| 順位 | 來源 | 怎麼運作 | 適用 |
+| --- | --- | --- | --- |
+| 1 | **油猴腳本 (bridge)** | 頁面本身把網址 POST 到 `http://127.0.0.1:23124/report` | 瀏覽器 |
+| 2 | **歷史紀錄 + 視窗標題** | 取最近造訪的 B站網址，再用開著的視窗標題比對出「現在這個分頁」 | 瀏覽器（Windows）|
+| 3 | **視窗標題記憶 (title)** | 用學過的「標題 ↔ 房間」對應表，認出現在開著的視窗 | **官方 PC 客戶端**（Windows）|
+| 4 | **複製連結 (clipboard) 與歷史紀錄**，取時間較新的那個 | 剪貼簿裡的 B站網址；或時間窗口內最新的一筆造訪紀錄 | 客戶端／任何 App；瀏覽器 |
+
+### 官方客戶端為什麼要繞這一圈
+
+客戶端沒有網址列可讀、不寫瀏覽器歷史紀錄，視窗標題也常常只有 App 名稱。
+在不登入、不侵入行程的前提下，沒有辦法直接問出「你現在在看哪個房間」，
+所以改成由使用者給一次明確訊號：**分享 → 複製連結**。
+
+* 剪貼簿每 1.5 秒讀一次（在 GUI 執行緒，因為剪貼簿屬於它），只有內容變動才處理；
+  文字裡沒有 B站網址就直接丟掉，不記錄也不上傳。
+* `b23.tv` 短連結用一次 HTTP 轉址還原成正式網址（在工作執行緒做，不卡介面）。
+* 認出目標的同時，會把**當下前景視窗的標題**和這個目標配成一對存進 `titles.json`
+  （最多 200 筆，超過就淘汰最舊的）。條件是標題夠特別（不是「哔哩哔哩」這類通用名稱），
+  而且看起來就是 B站的視窗，免得把聊天軟體的標題學進去。
+* 學到之後，只要那個標題的視窗開著，順位 3 就直接認出房間，不用再複製。
+* 學不到（標題不具辨識度）時，複製過的目標會一直維持到下一次複製為止——
+  對客戶端使用者來說已經夠用。
 
 實作細節與界線：
 
@@ -161,6 +178,7 @@ UI 標示為「估算」。
 * 歷史掃描預設每 5 秒一次（可調），中間直接沿用上次結果，不會反覆讀檔。
 * bridge 伺服器只綁 `127.0.0.1`，只接受 `*.bilibili.com` 來源，
   上報超過 120 秒沒更新就視為過期。
+* 剪貼簿只讀不寫，且只處理含 B站網址的文字；`titles.json` 只存標題與房間號／BV 號。
 * 偵測不到任何東西時，會回到設定裡手動填的直播間／影片；兩個都沒填就是僅網路模式。
 
 ## 6. 這個數字和播放器顯示的延遲會一樣嗎？
@@ -232,11 +250,18 @@ measured TTFB and throughput, and the reported figure is
 then shows the measured download speed; headroom below 1x means the connection
 cannot sustain that quality and playback will stall.
 
-**Auto-detection** works out what you are watching from three optional local
-sources, highest priority first: the companion userscript posting the page URL to
-`127.0.0.1`, the browser history matched against open window titles, and the browser
-history alone. History files are copied and opened read-only, and only rows whose
-URL contains `bilibili.com` are read.
+**Auto-detection** works out what you are watching from optional local sources,
+evidence about what is on screen right now ranking above what happened recently:
+the companion userscript posting the page URL to `127.0.0.1`; the browser history
+matched against open window titles; a learned "window title → room" table; and,
+last, whichever is newer of a Bilibili link copied to the clipboard or the newest
+page in the browser history.
+
+The **official desktop client** exposes neither a URL nor browser history, so it is
+handled by the clipboard path: share → copy link switches the target and pairs the
+client's current window title with that room, after which the title alone is enough.
+History files are copied and opened read-only, only rows whose URL contains
+`bilibili.com` are read, and clipboard text without a Bilibili URL is discarded.
 
 Clock skew between your PC and Bilibili is estimated every 60 s from the HTTP `Date`
 header (`offset = server_time − local_recv_time + RTT/2`), which carries roughly

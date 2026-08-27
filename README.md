@@ -26,6 +26,8 @@
 
 - **自動跟隨你在看的頁面**：不用每次手動貼房間號，換直播間、換影片、換分頁都會自己切過去
   （見[自動偵測](#-自動跟隨我正在看的頁面)），也可以隨時關掉改成手動指定。
+- **網頁版和官方 PC 客戶端都支援**：用客戶端的話，按一次「分享 → 複製連結」就會切過去，
+  之後同一個房間靠視窗標題自動認出。
 - **直播與一般影片都能測**：直播量的是離直播邊緣有多遠；一般影片量的是
   **起播延遲**與**頻寬餘量**（線路撐不撐得住這個畫質、會不會轉圈）。
 - **即時延遲監測**：每 2 秒（可調）量一次，總延遲 + 網路 / 推流 / 顯示三段分項。
@@ -171,17 +173,43 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 
 ## 🔎 自動跟隨我正在看的頁面
 
-監視器用三個**各自獨立、都可以單獨關掉**的來源判斷你在看什麼，優先順序由高到低：
+監視器用幾個**各自獨立、都可以單獨關掉**的來源判斷你在看什麼，優先順序由高到低：
 
-| 來源 | 怎麼運作 | 準確度 | 預設 |
+| 來源 | 怎麼運作 | 適用 | 預設 |
 | --- | --- | --- | --- |
-| **油猴腳本** | 頁面自己把網址回報到 `http://127.0.0.1:23124` | 最準，換分頁／分 P 立刻反映 | 關（需裝腳本）|
-| **歷史紀錄 + 視窗標題** | 取最近造訪的 B 站網址，再用開著的視窗標題比對出「現在這個分頁」 | 高（Windows）| 開 |
-| **歷史紀錄** | 取時間窗口內最新一筆 B 站網址 | 中（換分頁要重新整理才更新）| 開 |
+| **油猴腳本** | 頁面自己把網址回報到 `http://127.0.0.1:23124` | 瀏覽器（最準，換分頁立刻反映）| 關（需裝腳本）|
+| **視窗標題** | 記住「這個視窗標題 = 這個直播間」，之後看到同樣標題就自動認出 | **官方 PC 客戶端**（Windows）| 開 |
+| **歷史紀錄 + 視窗標題** | 取最近造訪的 B 站網址，再用開著的視窗標題比對出「現在這個分頁」 | 瀏覽器（Windows）| 開 |
+| **複製連結** | 你按「分享 → 複製連結」，監視器認出剪貼簿裡的 B 站網址 | **官方 PC 客戶端**、手機分享的連結、任何 App | 開 |
+| **歷史紀錄** | 取時間窗口內最新一筆 B 站網址 | 瀏覽器 | 開 |
 
-### 關於讀取瀏覽器歷史紀錄（請先看這段）
+> 「視窗標題」和「歷史紀錄 + 視窗標題」是**現在畫面上開著什麼**的證據，所以排在前面；
+> 「複製連結」和「歷史紀錄」則比誰的時間比較新，新的贏。
 
-這是唯一能在不裝任何外掛的情況下知道你在看哪個頁面的方法，做法刻意收得很窄：
+### 用官方 PC 客戶端的話（不用瀏覽器也可以）
+
+**測量本身完全不受影響**——延遲是直接問 B 站公開 API 的，跟你用網頁版、官方客戶端還是別的播放器無關。
+只有「自動偵測」需要知道你在看哪個房間，而客戶端沒有網址列、也不寫瀏覽器歷史紀錄，所以走這條路：
+
+1. 在客戶端裡打開直播間／影片，點 **分享 → 複製連結**（`b23.tv` 短連結也可以，監視器會自動還原）。
+2. 監視器看到剪貼簿裡的 B 站連結就**立刻切過去**開始量
+   （也可以從托盤選單點「讀取剪貼板裡的鏈接」手動觸發）。
+3. 同時它會把**當下客戶端視窗的標題**和這個房間配成一對記起來。
+   之後再打開同一個直播間，光靠視窗標題就會自動認出來，不用再複製一次。
+
+補充：
+
+- 如果客戶端視窗標題只有「哔哩哔哩」這種看不出房間的字樣，就學不到東西——
+  這時**剛才複製的目標會一直保持著**，直到你複製下一個連結為止，照樣能用。
+- 只會處理剪貼簿裡**含 B 站網址**的文字，其他內容一律忽略，不記錄、不上傳；
+  不想用就在設定裡取消「識別復制的鏈接」。
+- 學到的「標題 ↔ 房間」對應存在設定目錄的 `titles.json`（最多 200 筆），可以直接刪掉。
+- 懸浮窗的「跟隨B站視窗」也適用於客戶端：把關鍵字設成客戶端視窗標題裡有的字（預設「哔哩哔哩」）即可。
+- 完全不想自動偵測？把「監測對象」改成手動指定，貼一次房間號就固定量它。
+
+### 關於讀取瀏覽器歷史紀錄（用瀏覽器的人請先看這段）
+
+這是**用瀏覽器**時，不裝任何外掛也能知道你在看哪個頁面的方法，做法刻意收得很窄：
 
 - 歷史紀錄檔會先**複製**成暫存檔，再以**唯讀**方式開啟，瀏覽器開著也能讀，且**絕不寫回原檔**；
 - SQL 只撈網址含 `bilibili.com` 的列，**其他網站的紀錄不會被讀出來**；
@@ -250,6 +278,8 @@ bili-latency --probe-once --detect        # 量「我現在正在看的那個頁
 | 監測對象 | 自動跟隨 / 手動指定直播間 / 手動指定視頻 |
 | 直播間號或連結 | 要監測的直播間；自動模式下當作找不到頁面時的備援 |
 | 視頻號或連結 | 要監測的影片，支援 BV / av / 網址（`?p=` 指定分 P）|
+| 自動檢測：識別復制的鏈接 | 官方客戶端用這個：複製分享連結就自動切換（可關）|
+| 自動檢測：記住窗口標題對應的房間 | 學會「這個視窗標題 = 這個直播間」，之後自動認出（可關）|
 | 自動檢測：讀取瀏覽器歷史記錄 | 本機唯讀、只看 bilibili.com 網址（可關）|
 | 自動檢測：用窗口標題識別當前標籤頁 | 讓它跟著你切分頁走（Windows）|
 | 自動檢測：也跟隨普通視頻 | 關掉的話只跟隨直播間，看影片時維持原本目標 |
@@ -307,13 +337,20 @@ bili-latency --probe-once --detect        # 量「我現在正在看的那個頁
 
 ## ❓ 常見問題 FAQ
 
+**Q：我用的是官方 Windows 客戶端，不用網頁版，可以用嗎？**
+A：可以。測量完全不受影響（延遲是直接問 API 的），只有自動偵測要多做一個動作：
+在客戶端點**分享 → 複製連結**，監視器就會切過去，並記住這個客戶端視窗標題，
+下次同一個房間自動認得。詳見[上面這一節](#用官方-pc-客戶端的話不用瀏覽器也可以)。
+不想每次複製也行——把「監測對象」改成手動指定房間號即可。
+
 **Q：自動偵測沒反應／認錯頁面？**
 A：依序檢查：
 1. 托盤選單的「自動跟隨觀看頁面」有沒有勾；
-2. 設定裡「讀取瀏覽器歷史記錄」有沒有被關掉；
-3. 你的瀏覽器是不是無痕模式（無痕不寫歷史紀錄，偵測不到）；
-4. 用的瀏覽器不在支援清單裡（Chrome / Edge / Brave / Vivaldi / Chromium / Firefox）。
-最保險的做法是裝上油猴腳本，或直接改成「手動指定」。
+2. 用**客戶端**的話，有沒有複製過一次分享連結（見上一題）；
+3. 用**瀏覽器**的話：設定裡「讀取瀏覽器歷史記錄」是否被關掉、是不是無痕模式
+   （無痕不寫歷史紀錄）、瀏覽器是否在支援清單內
+   （Chrome / Edge / Brave / Vivaldi / Chromium / Firefox）。
+最保險的做法是裝上油猴腳本（瀏覽器）或直接改成「手動指定」。
 
 **Q：讀我的瀏覽器歷史紀錄？我不放心。**
 A：可以理解，所以它是可以關的：設定 → 常規 → 自動檢測 → 取消「讀取瀏覽器歷史記錄」。
@@ -443,19 +480,29 @@ whatever you are watching, live rooms and ordinary videos alike.
 
 ### Auto-detection
 
-Three independent, individually switchable local sources, highest priority first:
+Independent, individually switchable local sources, highest priority first:
 
-| Source | How | Accuracy | Default |
+| Source | How | Works with | Default |
 | --- | --- | --- | --- |
-| **Userscript** | the page posts its URL to `http://127.0.0.1:23124` | best, instant on tab changes | off (install the script) |
-| **History + window titles** | newest visited Bilibili URL, matched against open window titles | high (Windows) | on |
-| **History** | newest visited Bilibili URL in the time window | medium | on |
+| **Userscript** | the page posts its URL to `http://127.0.0.1:23124` | browser (best, instant on tab changes) | off (install the script) |
+| **Window title** | learns "this window title is that room", then recognises it | **official desktop client** (Windows) | on |
+| **History + window titles** | newest visited Bilibili URL, matched against open window titles | browser (Windows) | on |
+| **Copied link** | spots a Bilibili URL you copied to the clipboard | **official desktop client**, shared links, any app | on |
+| **History** | newest visited Bilibili URL in the time window | browser | on |
+
+**Using the official desktop client?** Measuring works exactly the same — the numbers come
+from the public API, not from your player. For detection, hit **share → copy link** in the
+client once (`b23.tv` short links are resolved automatically): the monitor switches over
+immediately and pairs the client's current window title with that room, so next time it is
+recognised from the title alone. If the client's title is just "哔哩哔哩" and says nothing
+about the room, the copied target simply sticks until you copy another link.
 
 Reading the browser history is deliberately narrow: the file is **copied** and opened
 **read-only** (so a running browser is untouched and nothing is written back), only rows
 whose URL contains `bilibili.com` are read, and the result — a room id or a BV id — stays
-in memory. Turn it off in Settings → General → Auto-detection, or switch the whole thing
-off from the tray menu. For the most accurate option, install
+in memory. The clipboard source only ever acts on text containing a Bilibili URL and stores
+nothing else. Turn any of them off in Settings → General → Auto-detection, or switch the
+whole thing off from the tray menu. For the most accurate browser option, install
 [`extras/bilibili-latency-bridge.user.js`](extras/bilibili-latency-bridge.user.js) in
 Tampermonkey and tick "Accept userscript reports".
 

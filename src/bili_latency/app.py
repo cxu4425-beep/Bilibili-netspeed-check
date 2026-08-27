@@ -31,6 +31,8 @@ LOG = logging.getLogger(__name__)
 
 DISPLAY_PUSH_INTERVAL_MS = 1000
 CONFIG_SAVE_DEBOUNCE_MS = 1500
+CLIPBOARD_POLL_INTERVAL_MS = 1500
+MAX_CLIPBOARD_CHARS = 4096
 
 
 class MonitorApplication(QObject):
@@ -44,6 +46,7 @@ class MonitorApplication(QObject):
     configChanged = Signal(object)
     pauseRequested = Signal(bool)
     stopRequested = Signal()
+    clipboardText = Signal(str)
 
     def __init__(self, app: QApplication, config: Config,
                  instance: Optional[SingleInstance] = None) -> None:
@@ -90,6 +93,15 @@ class MonitorApplication(QObject):
         self.configChanged.connect(self._worker.applyConfig)
         self.pauseRequested.connect(self._worker.setPaused)
         self.stopRequested.connect(self._worker.stop)
+        self.clipboardText.connect(self._worker.submitClipboard)
+
+        # The clipboard belongs to the GUI thread, so it is polled here and the
+        # text is handed to the worker, which does the parsing and any lookup.
+        self._clipboard_timer = QTimer(self)
+        self._clipboard_timer.timeout.connect(self._poll_clipboard)
+        self._last_clipboard = ""
+        if self._config.detect.enabled and self._config.detect.use_clipboard:
+            self._clipboard_timer.start(CLIPBOARD_POLL_INTERVAL_MS)
 
         self._instance = instance or SingleInstance()
         self._instance.setParent(self)
@@ -133,6 +145,10 @@ class MonitorApplication(QObject):
         self._action_detect.setChecked(self._config.detect.enabled)
         self._action_detect.toggled.connect(self._set_auto_detect)
         self._menu.addAction(self._action_detect)
+
+        clipboard_action = QAction(tr("menu.read_clipboard"), self._menu)
+        clipboard_action.triggered.connect(self._read_clipboard_now)
+        self._menu.addAction(clipboard_action)
 
         theme_menu = self._menu.addMenu(tr("overlay.theme"))
         theme_group = QActionGroup(theme_menu)
@@ -327,6 +343,12 @@ class MonitorApplication(QObject):
             if not set_autostart(self._config.autostart):
                 self._config.autostart = bool(get_autostart())
 
+        if self._config.detect.enabled and self._config.detect.use_clipboard:
+            if not self._clipboard_timer.isActive():
+                self._clipboard_timer.start(CLIPBOARD_POLL_INTERVAL_MS)
+        else:
+            self._clipboard_timer.stop()
+
         self._apply_recording()
         self.configChanged.emit(copy.deepcopy(self._config))
         self._save_config_now()
@@ -411,6 +433,30 @@ class MonitorApplication(QObject):
         if self._tray is not None:
             self._tray.update_sample(self._stats.last(), self._status_line())
 
+    def _poll_clipboard(self, force: bool = False) -> None:
+        """Hand a freshly copied Bilibili link to the worker.
+
+        Only the text is passed on, and only when it changed; the worker throws
+        away anything that is not a Bilibili link.
+        """
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is None:
+            return
+        try:
+            text = clipboard.text() or ""
+        except RuntimeError:  # clipboard busy or owned by another app
+            return
+        text = text.strip()[:MAX_CLIPBOARD_CHARS]
+        if not text or (text == self._last_clipboard and not force):
+            return
+        self._last_clipboard = text
+        self.clipboardText.emit(text)
+
+    def _read_clipboard_now(self) -> None:
+        self._poll_clipboard(force=True)
+        if self._tray is not None:
+            self._tray.showMessage(APP_NAME, tr("notice.clipboard_read"), app_icon(), 2500)
+
     def _push_display_latency(self) -> None:
         if not self._overlay.isVisible():
             # Without a visible overlay there are no frames to time; the
@@ -465,6 +511,7 @@ class MonitorApplication(QObject):
 
     def _shutdown(self) -> None:
         self._display_timer.stop()
+        self._clipboard_timer.stop()
         if self._save_timer.isActive():
             self._save_timer.stop()
         self._save_config_now()

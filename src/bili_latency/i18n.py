@@ -109,6 +109,24 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "接收油猴腳本回報（最準）",
         "Accept userscript reports (most accurate)",
     ),
+    "detect.clipboard": (
+        "识别复制的链接（客户端用）",
+        "辨識複製的連結（用戶端適用）",
+        "Watch for copied links (desktop client)",
+    ),
+    "detect.remember_titles": (
+        "记住窗口标题对应的房间",
+        "記住視窗標題對應的房間",
+        "Remember which window title is which room",
+    ),
+    "detect.client_hint": (
+        "用官方 PC 客户端？在客户端里点「分享 → 复制链接」，监视器会自动切过去；"
+        "之后再打开同一个直播间，靠窗口标题就能认出来。",
+        "用官方 PC 用戶端？在用戶端點「分享 → 複製連結」，監視器會自動切過去；"
+        "之後再打開同一個直播間，靠視窗標題就能認出來。",
+        "Using the official desktop client? Hit share -> copy link there and the monitor "
+        "switches over; next time that window title alone is enough to recognise it.",
+    ),
     "detect.bridge_port": ("脚本上报端口", "腳本回報連接埠", "Bridge port"),
     "detect.window": ("历史记录时间窗口（分钟）", "歷史紀錄時間視窗（分鐘）", "History window (minutes)"),
     "detect.follow_videos": ("也跟随普通视频", "也跟隨一般影片", "Follow ordinary videos too"),
@@ -123,6 +141,14 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "Turn it off if you would rather not.",
     ),
     "detect.source.manual": ("手动", "手動", "manual"),
+    "detect.source.clipboard": ("复制的链接", "複製的連結", "copied link"),
+    "detect.source.title": ("窗口标题", "視窗標題", "window title"),
+    "menu.read_clipboard": ("读取剪贴板里的链接", "讀取剪貼簿裡的連結", "Read link from clipboard"),
+    "notice.clipboard_read": (
+        "已读取剪贴板。若里面是B站链接，马上就会切过去。",
+        "已讀取剪貼簿。若裡面是B站連結，馬上就會切過去。",
+        "Clipboard read. If it held a Bilibili link, the monitor is switching now.",
+    ),
     "detect.source.history": ("历史记录", "歷史紀錄", "history"),
     "detect.source.history+title": ("当前标签页", "目前分頁", "current tab"),
     "detect.source.bridge": ("脚本", "腳本", "userscript"),

@@ -59,6 +59,10 @@ class WindowFinder:
         """Every visible top-level window as ``(title, rect)``."""
         return []
 
+    def foreground_title(self) -> str:
+        """Title of the window the user is working in right now."""
+        return ""
+
     def find(self, keyword: str) -> Optional[WindowRect]:
         keyword = (keyword or "").strip().lower()
         if not keyword:
@@ -109,6 +113,21 @@ class Win32WindowFinder(WindowFinder):
             LOG.debug("EnumWindows failed: %s", exc)
             return []
         return windows
+
+    def foreground_title(self) -> str:  # pragma: no cover - Windows only
+        try:
+            hwnd = self._user32.GetForegroundWindow()
+            if not hwnd:
+                return ""
+            length = self._user32.GetWindowTextLengthW(hwnd)
+            if length <= 0:
+                return ""
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            self._user32.GetWindowTextW(hwnd, buffer, length + 1)
+            return buffer.value or ""
+        except OSError as exc:
+            LOG.debug("GetForegroundWindow failed: %s", exc)
+            return ""
 
 
 def create_window_finder() -> WindowFinder:

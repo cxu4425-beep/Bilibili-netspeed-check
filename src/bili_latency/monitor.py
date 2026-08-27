@@ -15,7 +15,7 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
-from .config import Config
+from .config import Config, title_memory_path
 from .detect import AutoDetector
 from .models import KIND_LIVE, KIND_NETWORK, KIND_VIDEO, LatencySample, WatchTarget
 from .probes.network import HttpClient, tcp_rtt_ms
@@ -77,6 +77,10 @@ class MonitorWorker(QObject):
         self._running = False
         if self._timer is not None:
             self._timer.stop()
+            # Destroy it here, inside its own thread: a QTimer torn down from
+            # another thread at interpreter exit warns on stderr.
+            self._timer.deleteLater()
+            self._timer = None
         if self._detector is not None:
             self._detector.close()
         if self._client is not None:
@@ -105,6 +109,38 @@ class MonitorWorker(QObject):
         with self._lock:
             self._display_ms = display_ms
 
+    @Slot(str)
+    def submitClipboard(self, text: str) -> None:
+        """Clipboard text handed over by the UI thread (it owns the clipboard).
+
+        Resolving a b23.tv share link needs the network, which is why this runs
+        here rather than in the UI thread.
+        """
+        if self._detector is None:
+            return
+        try:
+            target = self._detector.submit_clipboard(text)
+        except Exception:  # a odd clipboard must never break the loop
+            LOG.exception("clipboard detection failed")
+            return
+        if target is not None and self._running and self._timer is not None:
+            self._timer.start(0)      # switch over immediately
+
+    def _resolve_url(self, url: str) -> Optional[str]:
+        """Follow a short link to the page it points at."""
+        if self._client is None:
+            return None
+        try:
+            response = self._client.session.get(
+                url, timeout=self._client.timeout_s, allow_redirects=True, stream=True
+            )
+            final_url = response.url
+            response.close()
+            return final_url
+        except Exception as exc:
+            LOG.debug("short link %s did not resolve: %s", url, exc)
+            return None
+
     # ---------------------------------------------------------------- helpers
     def _build_probes(self) -> None:
         with self._lock:
@@ -123,9 +159,10 @@ class MonitorWorker(QObject):
         )
         self._video = VideoProbe(self._client, playurl_refresh_s=config.probe.playurl_refresh_s)
         if self._detector is None:
-            self._detector = AutoDetector(config.detect)
+            self._detector = AutoDetector(config.detect, memory_path=title_memory_path())
         else:
             self._detector.apply_config(config.detect)
+        self._detector.set_url_resolver(self._resolve_url)
         self._target = None
         self._last_clock_sync = 0.0
 
