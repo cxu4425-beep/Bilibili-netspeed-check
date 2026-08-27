@@ -50,14 +50,18 @@ exe = EXE(
     runtime_tmpdir=None,
     console=False,          # no console window: this is a desktop app
     disable_windowed_traceback=False,
-    icon=str(ICON_ICO if sys.platform.startswith("win") else ICON_PNG),
+    # Windows is the only platform whose EXE embeds an icon; macOS takes its
+    # icon from the bundle below and Linux ignores it entirely. Passing a .png
+    # where an .icns is expected can fail the build, so it is left off.
+    icon=str(ICON_ICO) if sys.platform.startswith("win") else None,
 )
 
 if sys.platform == "darwin":
+    ICON_ICNS = ROOT / "assets" / "icon.icns"
     app = BUNDLE(
         exe,
         name="BiliLatencyMonitor.app",
-        icon=str(ICON_PNG),
+        icon=str(ICON_ICNS) if ICON_ICNS.exists() else None,
         bundle_identifier="com.bili-latency-monitor",
         info_plist={
             "LSUIElement": True,          # menu-bar app, no dock icon
