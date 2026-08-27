@@ -8,16 +8,28 @@ from typing import Optional
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
-    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSlider, QSpinBox,
-    QTabWidget, QVBoxLayout, QWidget,
+    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QSlider,
+    QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from .. import APP_NAME, REPO_URL, __version__
 from ..autostart import is_supported as autostart_supported
 from ..config import Config, app_config_dir, parse_room_id
+from ..probes.video import parse_video_target
 from ..i18n import LANGUAGE_NAMES, LANGUAGES, tr
 from .anchor import create_window_finder
 from .icons import app_icon
+
+
+def _scrollable(page: QWidget) -> QScrollArea:
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QScrollArea.NoFrame)
+    # No sideways scrolling: the page follows the viewport width so that the
+    # wrapped hint labels reflow instead of pushing the form wider.
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    area.setWidget(page)
+    return area
 
 
 class SettingsDialog(QDialog):
@@ -34,12 +46,15 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(f"{APP_NAME} - {tr('settings.title')}")
         self.setWindowIcon(app_icon())
         self.setModal(False)
-        self.setMinimumWidth(430)
+        self.setMinimumWidth(500)
+        self.resize(540, 660)
 
+        # Scrollable pages: translations differ in length and a small laptop
+        # screen must never cut a setting off.
         tabs = QTabWidget(self)
-        tabs.addTab(self._build_general_tab(), tr("settings.tab.general"))
-        tabs.addTab(self._build_overlay_tab(), tr("settings.tab.overlay"))
-        tabs.addTab(self._build_advanced_tab(), tr("settings.tab.advanced"))
+        tabs.addTab(_scrollable(self._build_general_tab()), tr("settings.tab.general"))
+        tabs.addTab(_scrollable(self._build_overlay_tab()), tr("settings.tab.overlay"))
+        tabs.addTab(_scrollable(self._build_advanced_tab()), tr("settings.tab.advanced"))
         tabs.addTab(self._build_about_tab(), tr("settings.tab.about"))
 
         buttons = QDialogButtonBox(
@@ -65,15 +80,39 @@ class SettingsDialog(QDialog):
     # ------------------------------------------------------------------ build
     def _build_general_tab(self) -> QWidget:
         page = QWidget(self)
-        form = QFormLayout(page)
+        outer = QVBoxLayout(page)
 
-        self.room_edit = QLineEdit(page)
+        target_box = QGroupBox(tr("general.target"), page)
+        target_form = QFormLayout(target_box)
+
+        self.target_combo = QComboBox(target_box)
+        self.target_combo.addItem(tr("general.target.auto"), "auto")
+        self.target_combo.addItem(tr("general.target.live"), "live")
+        self.target_combo.addItem(tr("general.target.video"), "video")
+        self.target_combo.currentIndexChanged.connect(self._sync_detect_state)
+        target_form.addRow(tr("general.target"), self.target_combo)
+
+        self.room_edit = QLineEdit(target_box)
         self.room_edit.setPlaceholderText("https://live.bilibili.com/21452505")
-        form.addRow(tr("general.room"), self.room_edit)
-        hint = QLabel(tr("general.room_hint"), page)
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color: palette(mid);")
-        form.addRow("", hint)
+        target_form.addRow(tr("general.room"), self.room_edit)
+        room_hint = QLabel(tr("general.room_hint"), target_box)
+        room_hint.setWordWrap(True)
+        room_hint.setStyleSheet("color: palette(mid);")
+        target_form.addRow(room_hint)
+
+        self.video_edit = QLineEdit(target_box)
+        self.video_edit.setPlaceholderText("https://www.bilibili.com/video/BV1GJ411x7h7")
+        target_form.addRow(tr("general.video"), self.video_edit)
+        video_hint = QLabel(tr("general.video_hint"), target_box)
+        video_hint.setWordWrap(True)
+        video_hint.setStyleSheet("color: palette(mid);")
+        target_form.addRow(video_hint)
+        outer.addWidget(target_box)
+
+        outer.addWidget(self._build_detect_box(page))
+
+        general_box = QGroupBox(tr("settings.tab.general"), page)
+        form = QFormLayout(general_box)
 
         self.interval_spin = QSpinBox(page)
         self.interval_spin.setRange(500, 60_000)
@@ -102,7 +141,45 @@ class SettingsDialog(QDialog):
         form.addRow("", self.tray_check)
         self.tray_value_check = QCheckBox(tr("tray.show_value"), page)
         form.addRow("", self.tray_value_check)
+
+        outer.addWidget(general_box)
+        outer.addStretch(1)
         return page
+
+    def _build_detect_box(self, parent: QWidget) -> QWidget:
+        box = QGroupBox(tr("detect.group"), parent)
+        form = QFormLayout(box)
+
+        self.detect_history_check = QCheckBox(tr("detect.history"), box)
+        form.addRow("", self.detect_history_check)
+        self.detect_titles_check = QCheckBox(tr("detect.titles"), box)
+        form.addRow("", self.detect_titles_check)
+        self.detect_videos_check = QCheckBox(tr("detect.follow_videos"), box)
+        form.addRow("", self.detect_videos_check)
+        self.detect_bridge_check = QCheckBox(tr("detect.bridge"), box)
+        self.detect_bridge_check.toggled.connect(self._sync_detect_state)
+        form.addRow("", self.detect_bridge_check)
+
+        self.detect_port_spin = QSpinBox(box)
+        self.detect_port_spin.setRange(1024, 65535)
+        form.addRow(tr("detect.bridge_port"), self.detect_port_spin)
+
+        self.detect_window_spin = QSpinBox(box)
+        self.detect_window_spin.setRange(1, 1440)
+        self.detect_window_spin.setSuffix(" min")
+        form.addRow(tr("detect.window"), self.detect_window_spin)
+
+        self.detect_interval_spin = QSpinBox(box)
+        self.detect_interval_spin.setRange(2, 300)
+        self.detect_interval_spin.setSuffix(" s")
+        form.addRow(tr("detect.interval"), self.detect_interval_spin)
+
+        privacy = QLabel(tr("detect.privacy"), box)
+        privacy.setWordWrap(True)
+        privacy.setStyleSheet("color: palette(mid);")
+        form.addRow(privacy)
+        self._detect_box = box
+        return box
 
     def _build_overlay_tab(self) -> QWidget:
         page = QWidget(self)
@@ -140,7 +217,7 @@ class SettingsDialog(QDialog):
         self.window_note = QLabel(tr("overlay.window_unsupported"), placement)
         self.window_note.setWordWrap(True)
         self.window_note.setStyleSheet("color: palette(mid);")
-        form.addRow("", self.window_note)
+        form.addRow(self.window_note)
         outer.addWidget(placement)
 
         look = QGroupBox(tr("settings.tab.overlay"), page)
@@ -240,7 +317,7 @@ class SettingsDialog(QDialog):
         csv_hint = QLabel(tr("advanced.csv_hint"), page)
         csv_hint.setWordWrap(True)
         csv_hint.setStyleSheet("color: palette(mid);")
-        form.addRow("", csv_hint)
+        form.addRow(csv_hint)
 
         open_button = QPushButton(tr("menu.open_config"), page)
         open_button.clicked.connect(self.openConfigFolderRequested.emit)
@@ -269,7 +346,18 @@ class SettingsDialog(QDialog):
         self._config = copy.deepcopy(config)
         overlay = self._config.overlay
 
+        mode = "auto" if self._config.detect.enabled else self._config.manual_kind
+        self.target_combo.setCurrentIndex(max(0, self.target_combo.findData(mode)))
         self.room_edit.setText(self._config.room_id)
+        self.video_edit.setText(self._config.video_id)
+        self.detect_history_check.setChecked(self._config.detect.use_history)
+        self.detect_titles_check.setChecked(self._config.detect.use_titles)
+        self.detect_bridge_check.setChecked(self._config.detect.use_bridge)
+        self.detect_videos_check.setChecked(self._config.detect.follow_videos)
+        self.detect_port_spin.setValue(self._config.detect.bridge_port)
+        self.detect_window_spin.setValue(self._config.detect.history_window_min)
+        self.detect_interval_spin.setValue(self._config.detect.poll_interval_s)
+
         self.interval_spin.setValue(self._config.probe.interval_ms)
         self.window_spin.setValue(self._config.sample_window)
         self.language_combo.setCurrentIndex(max(0, self.language_combo.findData(self._config.language)))
@@ -310,6 +398,7 @@ class SettingsDialog(QDialog):
         self.csv_check.setChecked(self._config.recording.csv_enabled)
 
         self._sync_anchor_state()
+        self._sync_detect_state()
 
     def _reload_screens(self, selected: str) -> None:
         from PySide6.QtWidgets import QApplication
@@ -333,9 +422,27 @@ class SettingsDialog(QDialog):
         self.keyword_edit.setEnabled(mode == "window")
         self.window_note.setVisible(mode == "window" and not self._window_following_available)
 
+    def _sync_detect_state(self) -> None:
+        auto = self.target_combo.currentData() == "auto"
+        self._detect_box.setEnabled(auto)
+        self.detect_port_spin.setEnabled(auto and self.detect_bridge_check.isChecked())
+
     def to_config(self) -> Config:
         config = copy.deepcopy(self._config)
+        mode = self.target_combo.currentData() or "auto"
+        config.detect.enabled = mode == "auto"
+        if mode in ("live", "video"):
+            config.manual_kind = mode
+        config.detect.use_history = self.detect_history_check.isChecked()
+        config.detect.use_titles = self.detect_titles_check.isChecked()
+        config.detect.use_bridge = self.detect_bridge_check.isChecked()
+        config.detect.follow_videos = self.detect_videos_check.isChecked()
+        config.detect.bridge_port = self.detect_port_spin.value()
+        config.detect.history_window_min = self.detect_window_spin.value()
+        config.detect.poll_interval_s = self.detect_interval_spin.value()
+
         config.room_id = parse_room_id(self.room_edit.text())
+        config.video_id, config.video_page = parse_video_target(self.video_edit.text())
         config.probe.interval_ms = self.interval_spin.value()
         config.sample_window = self.window_spin.value()
         config.language = self.language_combo.currentData() or "auto"
@@ -384,6 +491,8 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def _restore_defaults(self) -> None:
+        # Keep what the user is watching; reset everything else.
         defaults = Config()
         defaults.room_id = parse_room_id(self.room_edit.text())
+        defaults.video_id, defaults.video_page = parse_video_target(self.video_edit.text())
         self.load_from(defaults)

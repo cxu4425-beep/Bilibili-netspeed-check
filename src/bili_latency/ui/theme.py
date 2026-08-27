@@ -78,6 +78,17 @@ def format_ms(value: Optional[float], placeholder: str = "--") -> str:
     return f"{int(minutes)} m {seconds:04.1f} s"
 
 
+def format_mbps(value: Optional[float], placeholder: str = "--") -> str:
+    """Download speed: ``820 kbps`` / ``24.3 Mbps`` / ``1.20 Gbps``."""
+    if value is None:
+        return placeholder
+    if value < 1:
+        return f"{value * 1000:.0f} kbps"
+    if value < 1000:
+        return f"{value:.1f} Mbps"
+    return f"{value / 1000:.2f} Gbps"
+
+
 def format_ms_short(value: Optional[float], placeholder: str = "--") -> str:
     """Compact form used inside the tray icon (max 4 glyphs)."""
     if value is None:

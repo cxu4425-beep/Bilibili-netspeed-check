@@ -4,15 +4,19 @@
 
 # 哔哩哔哩延迟监视器 · Bilibili Latency Monitor
 
-**即時顯示 B 站直播「伺服器 → 你的電腦 → 螢幕」的延遲，常駐在狀態列或直播畫面旁。**
+**即時顯示 B 站「伺服器 → 你的電腦 → 螢幕」的延遲，常駐在狀態列或直播畫面旁。**
+**會自動跟著你正在看的直播間／影片走，一般影片也能測。**
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-dark.png" width="232" alt="深色主題懸浮窗">
+<img src="docs/images/overlay-video.png" width="232" alt="影片模式懸浮窗">
 <img src="docs/images/overlay-light.png" width="232" alt="淺色主題懸浮窗">
 <img src="docs/images/overlay-compact.png" width="212" alt="緊湊模式">
+
+<em>左起：直播模式、影片模式（起播＋頻寬）、淺色主題、緊湊模式</em>
 
 </div>
 
@@ -20,6 +24,10 @@
 
 ## ✨ 功能
 
+- **自動跟隨你在看的頁面**：不用每次手動貼房間號，換直播間、換影片、換分頁都會自己切過去
+  （見[自動偵測](#-自動跟隨我正在看的頁面)），也可以隨時關掉改成手動指定。
+- **直播與一般影片都能測**：直播量的是離直播邊緣有多遠；一般影片量的是
+  **起播延遲**與**頻寬餘量**（線路撐不撐得住這個畫質、會不會轉圈）。
 - **即時延遲監測**：每 2 秒（可調）量一次，總延遲 + 網路 / 推流 / 顯示三段分項。
 - **常駐兩種形態，可同時開**
   - **狀態列（系統匣）圖示**：圖示上直接畫出目前的毫秒數，滑鼠移上去看完整分項。
@@ -102,14 +110,37 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 ### 第一次啟動
 
 1. 執行程式後，狀態列（Windows 右下角 / macOS 選單列）會出現圖示，畫面上出現懸浮窗。
-2. 在圖示上按右鍵 → **設定…**（懸浮窗上按右鍵也可以）。
-3. 在「直播間號或連結」填入你要看的直播間，支援三種寫法：
-   - `21452505`
-   - `https://live.bilibili.com/21452505`
-   - 直接把網址列整段貼上（含 `?spm_id_from=...` 也沒問題）
-4. 按「確定」。數字開始跳動就成功了。
+2. **直接用瀏覽器打開任何 B 站直播間或影片**，監視器會自己認出來並開始量
+   （預設就是「自動跟隨我正在看的頁面」）。
+3. 想手動指定的話：在圖示或懸浮窗上按右鍵 → **設定…** → 把「監測對象」改成
+   「手動指定直播間」或「手動指定視頻」，再填內容。
 
-留空房間號也能用：此時進入**僅網路模式**，只量到 B 站伺服器的網路延遲。
+**監測對象**三種模式：
+
+| 模式 | 說明 |
+| --- | --- |
+| **自動跟隨我正在看的頁面**（預設）| 自動偵測你在看哪個直播間／影片，換頁就跟著換 |
+| **手動指定直播間** | 只量你填的那個直播間，不受瀏覽器影響 |
+| **手動指定視頻** | 只量你填的那支影片（可指定分 P）|
+
+填寫格式都很寬鬆：
+
+- 直播間：`21452505`、`https://live.bilibili.com/21452505`，或整段網址貼上。
+- 影片：`BV1GJ411x7h7`、`av170001`、`https://www.bilibili.com/video/BV1GJ411x7h7?p=2`（分 P 用 `?p=`）。
+
+兩個都留空、又關掉自動偵測時，進入**僅網路模式**，只量到 B 站伺服器的網路延遲。
+
+### 直播和影片量的東西不一樣
+
+| | 直播 | 一般影片 |
+| --- | --- | --- |
+| 中間那一列 | **推流**：離直播邊緣有多遠 | **起播**：現在開播要等多久才有畫面 |
+| 統計列 | 均值 / P95 / 抖動 | 均值 / P95 / **帶寬**（實測下載速度）|
+| 典型數值 | 2–6 秒 | 0.3–1.5 秒 |
+| 怎麼看 | 數字越小越接近「即時」 | 帶寬遠大於畫質碼率＝不會卡；接近或更低＝會轉圈 |
+
+錄播沒有「直播邊緣」，所以延遲改用「起播延遲 + 頻寬餘量」表示——這才是看影片時真正有感的東西。
+公式與誤差都寫在 [docs/METHODOLOGY.md](docs/METHODOLOGY.md)。
 
 ### 讓它待在你要的位置
 
@@ -136,16 +167,56 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 | 選單 → 暫停監測 | 暫時停止探測（例如你要跑測速） |
 | 選單 → 複製診斷信息 | 複製一份 JSON 診斷資料，回報問題時貼上很有幫助 |
 
+---
+
+## 🔎 自動跟隨我正在看的頁面
+
+監視器用三個**各自獨立、都可以單獨關掉**的來源判斷你在看什麼，優先順序由高到低：
+
+| 來源 | 怎麼運作 | 準確度 | 預設 |
+| --- | --- | --- | --- |
+| **油猴腳本** | 頁面自己把網址回報到 `http://127.0.0.1:23124` | 最準，換分頁／分 P 立刻反映 | 關（需裝腳本）|
+| **歷史紀錄 + 視窗標題** | 取最近造訪的 B 站網址，再用開著的視窗標題比對出「現在這個分頁」 | 高（Windows）| 開 |
+| **歷史紀錄** | 取時間窗口內最新一筆 B 站網址 | 中（換分頁要重新整理才更新）| 開 |
+
+### 關於讀取瀏覽器歷史紀錄（請先看這段）
+
+這是唯一能在不裝任何外掛的情況下知道你在看哪個頁面的方法，做法刻意收得很窄：
+
+- 歷史紀錄檔會先**複製**成暫存檔，再以**唯讀**方式開啟，瀏覽器開著也能讀，且**絕不寫回原檔**；
+- SQL 只撈網址含 `bilibili.com` 的列，**其他網站的紀錄不會被讀出來**；
+- 只看設定的時間窗口內（預設 30 分鐘）的紀錄；
+- 結果只有房間號或 BV 號，**只留在記憶體裡，不上傳、不寫檔、不需要登入**；
+- 支援 Chrome / Edge / Brave / Vivaldi / Chromium / Firefox 的各個設定檔。
+
+不想用就在「設定 → 常規 → 自動檢測」把「讀取瀏覽器歷史記錄」取消勾選；
+整個自動偵測也可以在托盤選單一鍵關閉（**自動跟隨觀看頁面**）。
+
+### 想要最準：安裝油猴腳本（選用）
+
+1. 瀏覽器安裝 [Tampermonkey](https://www.tampermonkey.net/)（或 Violentmonkey）。
+2. 安裝本專案的
+   [`extras/bilibili-latency-bridge.user.js`](extras/bilibili-latency-bridge.user.js)
+   （在 GitHub 上點檔案 → Raw，油猴會自動跳出安裝視窗）。
+3. 監視器裡：**設定 → 常規 → 自動檢測 → 勾選「接收油猴腳本上報」**，端口保持一致（預設 23124）。
+
+腳本只做一件事：把目前頁面的網址 POST 到 `127.0.0.1`。不讀 Cookie、不讀頁面內容、
+不連任何外部伺服器；監視器的接收埠只綁定本機、只接受 `*.bilibili.com` 來源的請求。
+
 ### 命令列參數
 
 ```bash
-bili-latency --room 21452505              # 啟動時直接指定直播間
+bili-latency --room 21452505              # 啟動時直接指定直播間（並關閉自動偵測）
+bili-latency --video BV1GJ411x7h7         # 指定影片；也可貼整段網址（?p=2 指定分P）
+bili-latency --detect                     # 強制開啟自動跟隨
+bili-latency --no-detect                  # 強制關閉自動跟隨
 bili-latency --lang zh_TW                 # 指定介面語言 (auto / zh_CN / zh_TW / en)
 bili-latency --no-overlay                 # 只留狀態列圖示
 bili-latency --no-tray                    # 只留懸浮窗
 bili-latency --config-dir D:\bili-cfg     # 攜帶式：設定寫到指定資料夾
 bili-latency --reset-config               # 用預設值啟動（不刪除原本的設定檔）
 bili-latency --probe-once --room 21452505 # 不開視窗，量一次印出 JSON 後結束
+bili-latency --probe-once --detect        # 量「我現在正在看的那個頁面」一次
 ```
 
 `--probe-once` 很適合排查問題或寫成腳本定時記錄：
@@ -157,10 +228,14 @@ bili-latency --probe-once --room 21452505 # 不開視窗，量一次印出 JSON 
   "network_ms": 41.2,
   "ok": true,
   "estimated": false,
+  "kind": "live",
   "method": "hls-pdt",
-  "host": "cn-hbyc-ct-01.bilivideo.com"
+  "host": "cn-hbyc-ct-01.bilivideo.com",
+  "target": { "kind": "live", "id": "21452505", "page": 1, "source": "history+title" }
 }
 ```
+
+影片模式下還會多出 `throughput_mbps`（實測下載速度）與 `required_mbps`（該畫質需要的碼率）。
 
 ---
 
@@ -172,7 +247,14 @@ bili-latency --probe-once --room 21452505 # 不開視窗，量一次印出 JSON 
 
 | 項目 | 說明 |
 | --- | --- |
-| 直播間號或連結 | 要監測的直播間；留空 = 僅網路模式 |
+| 監測對象 | 自動跟隨 / 手動指定直播間 / 手動指定視頻 |
+| 直播間號或連結 | 要監測的直播間；自動模式下當作找不到頁面時的備援 |
+| 視頻號或連結 | 要監測的影片，支援 BV / av / 網址（`?p=` 指定分 P）|
+| 自動檢測：讀取瀏覽器歷史記錄 | 本機唯讀、只看 bilibili.com 網址（可關）|
+| 自動檢測：用窗口標題識別當前標籤頁 | 讓它跟著你切分頁走（Windows）|
+| 自動檢測：也跟隨普通視頻 | 關掉的話只跟隨直播間，看影片時維持原本目標 |
+| 自動檢測：接收油猴腳本上報 | 最準的來源，需安裝 [`extras/`](extras/) 裡的腳本 |
+| 自動檢測：時間窗口 / 檢測間隔 | 歷史紀錄要看多久以內、多久重新判斷一次 |
 | 探測間隔 | 預設 2000 ms。長時間掛著建議 2000–5000 ms |
 | 統計窗口 | 均值 / P95 / 抖動 使用的樣本數（預設 180） |
 | 界面語言 | 跟隨系統 / 简体中文 / 繁體中文 / English |
@@ -225,6 +307,24 @@ bili-latency --probe-once --room 21452505 # 不開視窗，量一次印出 JSON 
 
 ## ❓ 常見問題 FAQ
 
+**Q：自動偵測沒反應／認錯頁面？**
+A：依序檢查：
+1. 托盤選單的「自動跟隨觀看頁面」有沒有勾；
+2. 設定裡「讀取瀏覽器歷史記錄」有沒有被關掉；
+3. 你的瀏覽器是不是無痕模式（無痕不寫歷史紀錄，偵測不到）；
+4. 用的瀏覽器不在支援清單裡（Chrome / Edge / Brave / Vivaldi / Chromium / Firefox）。
+最保險的做法是裝上油猴腳本，或直接改成「手動指定」。
+
+**Q：讀我的瀏覽器歷史紀錄？我不放心。**
+A：可以理解，所以它是可以關的：設定 → 常規 → 自動檢測 → 取消「讀取瀏覽器歷史記錄」。
+程式只會複製歷史檔後**唯讀**開啟、只撈網址含 `bilibili.com` 的列、只留房間號／BV 號在記憶體，
+不寫回、不上傳、不需要登入。相關程式碼在
+[`src/bili_latency/detect/history.py`](src/bili_latency/detect/history.py)，歡迎自己看過再決定。
+
+**Q：一般影片的「延遲」是什麼意思？**
+A：錄播沒有直播邊緣，所以量的是**起播延遲**（現在開播要等多久才有畫面）加上顯示延遲，
+另外用實測下載速度和該畫質碼率算出**頻寬餘量**，直接告訴你會不會卡。
+
 **Q：一直顯示「主播未开播」？**
 A：該直播間目前沒有開播（輪播錄影也算沒開播）。換一個正在直播的房間號即可。
 
@@ -257,8 +357,8 @@ A：預設每 2 秒一次 TCP 交握 + 一份幾 KB 的播放清單，遠低於�
 探測失敗會自動退避。只用公開 API、不登入、不模擬觀看行為。
 
 **Q：可以同時監測多個直播間嗎？**
-A：一個使用者同時跑一份程式、監測一個房間。要監測多個房間，可以用不同的
-`--config-dir` 搭配 `--probe-once` 寫成腳本記錄。
+A：一個使用者同時跑一份程式、監測一個對象。要同時記錄多個房間／影片，可以用不同的
+`--config-dir` 搭配 `--probe-once` 寫成腳本定時執行。
 
 ---
 
@@ -285,8 +385,15 @@ src/bili_latency/
 ├── autostart.py      三個平台的開機自動啟動
 ├── probes/
 │   ├── network.py    TCP RTT、TTFB、時鐘偏移
-│   ├── stream.py     playurl API、m3u8 解析、FLV tag 解析
+│   ├── stream.py     直播 playurl API、m3u8 解析、FLV tag 解析
+│   ├── video.py      影片 view/playurl API、Range 測速與起播延遲
 │   └── display.py    影格週期與顯示延遲估算
+├── detect/           自動判斷你在看哪個頁面
+│   ├── urls.py       B站網址 → 監測對象
+│   ├── history.py    瀏覽器歷史紀錄（複製後唯讀，只篩 bilibili.com）
+│   ├── titles.py     視窗標題比對，找出目前分頁
+│   ├── bridge.py     127.0.0.1 上的油猴腳本接收埠
+│   └── manager.py    來源優先順序與節流
 └── ui/
     ├── overlay.py    懸浮窗（繪製、拖曳、跟隨視窗）
     ├── tray.py       狀態列圖示
@@ -294,6 +401,9 @@ src/bili_latency/
     ├── anchor.py     位置計算與 Windows 視窗搜尋
     ├── icons.py      程式內畫出來的圖示
     └── theme.py      配色與數字格式化
+
+extras/
+└── bilibili-latency-bridge.user.js   選用的油猴腳本（最準的自動偵測來源）
 ```
 
 歡迎 issue 與 PR。送 PR 前請先跑過 `python -m pytest tests -q`。
@@ -312,19 +422,42 @@ MIT License，詳見 [LICENSE](LICENSE)。
 
 # English
 
-**Bilibili Latency Monitor** shows, in real time, how far behind a Bilibili live stream
-is — from the server, through your machine, to your screen — in a always-on-top overlay
-and/or a status-bar (tray) icon that draws the number right on itself.
+**Bilibili Latency Monitor** shows, in real time, how far behind a Bilibili stream is —
+from the server, through your machine, to your screen — in an always-on-top overlay
+and/or a status-bar (tray) icon that draws the number right on itself. It follows
+whatever you are watching, live rooms and ordinary videos alike.
 
 ### Highlights
 
+- **Follows what you watch**: no pasting room ids — it detects the live room or video
+  you have open and switches with you (see [Auto-detection](#auto-detection)).
+- **Live rooms and videos**: live shows the distance from the live edge; a VOD shows
+  **start-up delay** and **bandwidth headroom** (can this connection sustain that quality?).
 - Total latency plus a **network / stream / display** breakdown, refreshed every 2 s (configurable).
 - Overlay you can **drag freely**, **pin to a screen corner**, or **attach to the Bilibili window** (Windows).
 - Tray icon with the live value, colour coded green / amber / red.
 - Built for long sessions: bounded memory, exponential backoff, atomic config writes, auto recovery.
-- Stats (avg / p95 / jitter), a sparkline, and optional CSV logging with rotation.
+- Stats (avg / p95 / jitter or speed), a sparkline, and optional CSV logging with rotation.
 - **No account, no cookies, no telemetry** — only the public endpoints a browser already calls.
 - 简体中文 / 繁體中文 / English, per-user settings, single instance per user.
+
+### Auto-detection
+
+Three independent, individually switchable local sources, highest priority first:
+
+| Source | How | Accuracy | Default |
+| --- | --- | --- | --- |
+| **Userscript** | the page posts its URL to `http://127.0.0.1:23124` | best, instant on tab changes | off (install the script) |
+| **History + window titles** | newest visited Bilibili URL, matched against open window titles | high (Windows) | on |
+| **History** | newest visited Bilibili URL in the time window | medium | on |
+
+Reading the browser history is deliberately narrow: the file is **copied** and opened
+**read-only** (so a running browser is untouched and nothing is written back), only rows
+whose URL contains `bilibili.com` are read, and the result — a room id or a BV id — stays
+in memory. Turn it off in Settings → General → Auto-detection, or switch the whole thing
+off from the tray menu. For the most accurate option, install
+[`extras/bilibili-latency-bridge.user.js`](extras/bilibili-latency-bridge.user.js) in
+Tampermonkey and tick "Accept userscript reports".
 
 ### Install
 
@@ -344,22 +477,28 @@ Build your own executable: `pip install -r requirements-dev.txt && python packag
 
 ### Usage
 
-Right-click the tray icon (or the overlay) → **Settings**, paste a room id or a
-`https://live.bilibili.com/...` URL, and press OK. Leave the room empty for
-network-only mode. Handy flags:
+Just open a Bilibili live room or video in your browser — the monitor picks it up on
+its own. To pin it to one thing instead, right-click the tray icon (or the overlay) →
+**Settings** → set "What to monitor" to a live room or a video and paste an id or URL.
+With nothing selected and detection off it runs in network-only mode. Handy flags:
 
 ```bash
-bili-latency --lang en --room 21452505     # language + room
+bili-latency --lang en --room 21452505     # language + room (detection off)
+bili-latency --video BV1GJ411x7h7          # a video; URLs with ?p=2 work too
+bili-latency --no-detect                   # never auto-detect
 bili-latency --no-tray                     # overlay only
 bili-latency --config-dir /media/usb/cfg   # portable settings
-bili-latency --probe-once --room 21452505  # one JSON measurement, no window
+bili-latency --probe-once --detect         # one JSON measurement of what you are watching
 ```
 
 ### How the number is computed
 
-`total = stream + display`, where **stream** is measured from the HLS playlist's
-`EXT-X-PROGRAM-DATE-TIME` server clock when available (shown as *measured*) and
-estimated from the playlist window or the first FLV key frame otherwise (*estimated*).
+For a **live room**, `total = stream + display`, where **stream** is measured from the
+HLS playlist's `EXT-X-PROGRAM-DATE-TIME` server clock when available (shown as
+*measured*) and estimated from the playlist window or the first FLV key frame otherwise
+(*estimated*). For a **video**, the middle term is the start-up delay: a real 512 KB
+ranged download gives a measured TTFB and throughput, and the figure shown is
+`TTFB + bitrate ÷ throughput`, with the measured speed in the stats row.
 **display** is a model of the client-to-photons delay you can calibrate or exclude.
 The **network** RTT is reported for context and never added twice.
 Full details, formulas and error bars: **[docs/METHODOLOGY.md](docs/METHODOLOGY.md)**.

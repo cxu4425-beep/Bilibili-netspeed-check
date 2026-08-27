@@ -20,12 +20,14 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from ..config import Config
 from ..i18n import tr
-from ..models import LatencySample, RollingStats
+from ..models import KIND_VIDEO, LatencySample, RollingStats
 from ..probes.display import DisplayProbe
 from .anchor import (
     WindowFinder, WindowRect, clamp_to_rect, compute_anchor_position, create_window_finder,
 )
-from .theme import Palette, color_for_level, format_ms, level_for, palette_for
+from .theme import (
+    Palette, color_for_level, format_mbps, format_ms, level_for, palette_for,
+)
 
 FRAME_BURST_INTERVAL_MS = 30_000
 FRAME_BURST_COUNT = 24
@@ -297,9 +299,14 @@ class OverlayWindow(QWidget):
         painter.drawText(QRectF(pad + dot + 6 * scale, y - 2 * scale, self.width(), 16 * scale),
                          Qt.AlignLeft | Qt.AlignVCenter, header)
         if self._room_label:
+            header_width = QFontMetrics(painter.font()).horizontalAdvance(header)
             painter.setFont(self._font(7.5 * scale))
+            metrics = QFontMetrics(painter.font())
+            # Video titles can be long; keep them inside the card.
+            available = int(self.width() - pad * 2 - dot - header_width - 12 * scale)
+            label = metrics.elidedText(self._room_label, Qt.ElideRight, max(24, available))
             painter.drawText(QRectF(0, y - 2 * scale, self.width() - pad, 16 * scale),
-                             Qt.AlignRight | Qt.AlignVCenter, self._room_label)
+                             Qt.AlignRight | Qt.AlignVCenter, label)
         y += 16 * scale
 
         # Big number
@@ -330,9 +337,12 @@ class OverlayWindow(QWidget):
 
     def _paint_breakdown(self, painter: QPainter, palette: Palette, scale: float,
                          pad: float, y: float) -> float:
+        # A VOD has no live edge: that row is the start-up delay instead.
+        is_video = self._sample is not None and self._sample.kind == KIND_VIDEO
         rows = [
             (tr("label.network"), self._sample.network_ms if self._sample else None),
-            (tr("label.stream"), self._sample.stream_ms if self._sample else None),
+            (tr("label.startup") if is_video else tr("label.stream"),
+             self._sample.stream_ms if self._sample else None),
             (tr("label.display"), self._sample.display_ms if self._sample else None),
         ]
         painter.setFont(self._font(8 * scale))
@@ -388,6 +398,9 @@ class OverlayWindow(QWidget):
             f"{tr('label.p95')} {format_ms(self._stats.percentile(95))}",
             f"{tr('label.jitter')} {format_ms(self._stats.jitter())}",
         ]
+        if self._sample is not None and self._sample.throughput_mbps:
+            # For a video, download speed is what decides whether it stalls.
+            parts = parts[:2] + [f"{tr('label.speed')} {format_mbps(self._sample.throughput_mbps)}"]
         text = "   ".join(parts)
         painter.setFont(self._font(7 * scale))
         painter.setPen(QPen(QColor(palette.muted)))

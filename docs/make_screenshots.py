@@ -25,7 +25,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from bili_latency.config import Config  # noqa: E402
 from bili_latency.i18n import set_language  # noqa: E402
-from bili_latency.models import LatencySample, RollingStats  # noqa: E402
+from bili_latency.models import KIND_VIDEO, LatencySample, RollingStats  # noqa: E402
 from bili_latency.probes.display import DisplayProbe  # noqa: E402
 from bili_latency.ui.icons import value_pixmap  # noqa: E402
 from bili_latency.ui.overlay import OverlayWindow  # noqa: E402
@@ -53,10 +53,31 @@ def demo_stats() -> tuple[LatencySample, RollingStats]:
     return sample, stats
 
 
-def shoot_overlay(name: str, config: Config, sample, stats) -> None:
+def video_stats() -> tuple[LatencySample, RollingStats]:
+    stats = RollingStats(120)
+    sample = LatencySample()
+    for index in range(60):
+        total = 780 + math.sin(index / 5.0) * 180 + (index % 5) * 12
+        sample = LatencySample(
+            network_ms=34 + (index % 4) * 3,
+            stream_ms=total - 33,
+            display_ms=33.2,
+            total_ms=total,
+            ok=True,
+            kind=KIND_VIDEO,
+            method="video-startup",
+            host="upos-sz-mirrorcos.bilivideo.com",
+            throughput_mbps=42.6,
+            required_mbps=3.1,
+        )
+        stats.append(sample)
+    return sample, stats
+
+
+def shoot_overlay(name: str, config: Config, sample, stats, label="房间 21452505") -> None:
     window = OverlayWindow(config, DisplayProbe())
     window.show()
-    window.set_room_label("房间 21452505")
+    window.set_room_label(label)
     window.update_sample(sample, stats)
     QApplication.processEvents()
     window.grab().save(str(OUT / name), "PNG")
@@ -80,6 +101,10 @@ def main() -> int:
     compact.overlay.compact = True
     compact.overlay.scale = 1.6
     shoot_overlay("overlay-compact.png", compact, sample, stats)
+
+    video_sample, video_series = video_stats()
+    shoot_overlay("overlay-video.png", Config(), video_sample, video_series,
+                  label="视频 【4K】测试影片标题 P2")
 
     dialog = SettingsDialog(Config())
     dialog.room_edit.setText("https://live.bilibili.com/21452505")

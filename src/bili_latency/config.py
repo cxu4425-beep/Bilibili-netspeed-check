@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import APP_ID, APP_NAME
+from .probes.video import parse_video_id, parse_video_page
 
 CONFIG_VERSION = 1
 
@@ -124,6 +125,21 @@ class RecordingConfig:
 
 
 @dataclass
+class DetectConfig:
+    """Automatic detection of what you are watching (every source optional)."""
+
+    enabled: bool = True
+    use_history: bool = True      # newest bilibili.com URL in the browser history
+    use_titles: bool = True       # match it against open window titles (Windows)
+    use_bridge: bool = False      # accept reports from the companion userscript
+    follow_videos: bool = True    # follow video pages too, not only live rooms
+    history_window_min: int = 30
+    poll_interval_s: int = 5
+    bridge_port: int = 23124
+    bridge_timeout_s: int = 120
+
+
+@dataclass
 class ThresholdConfig:
     good_ms: float = 2000.0
     warn_ms: float = 5000.0
@@ -134,6 +150,9 @@ class Config:
     version: int = CONFIG_VERSION
     language: str = "auto"          # auto | zh_CN | zh_TW | en
     room_id: str = ""
+    video_id: str = ""              # BV id (or avNNN), used when manual_kind is "video"
+    video_page: int = 1             # which part (P) of that video
+    manual_kind: str = "live"       # what to watch when auto-detection is off or idle
     sample_window: int = 180
     autostart: bool = False
     overlay: OverlayConfig = field(default_factory=OverlayConfig)
@@ -142,6 +161,7 @@ class Config:
     display: DisplayConfig = field(default_factory=DisplayConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     thresholds: ThresholdConfig = field(default_factory=ThresholdConfig)
+    detect: DetectConfig = field(default_factory=DetectConfig)
 
     # ---------------------------------------------------------------- loading
     @classmethod
@@ -205,7 +225,19 @@ class Config:
             self.overlay.theme = "dark"
         if self.language not in ("auto", "zh_CN", "zh_TW", "en"):
             self.language = "auto"
+        self.detect.history_window_min = int(_clamp(self.detect.history_window_min, 1, 1440))
+        self.detect.poll_interval_s = int(_clamp(self.detect.poll_interval_s, 2, 300))
+        self.detect.bridge_port = int(_clamp(self.detect.bridge_port, 1024, 65535))
+        self.detect.bridge_timeout_s = int(_clamp(self.detect.bridge_timeout_s, 10, 3600))
+        if self.manual_kind not in ("live", "video"):
+            self.manual_kind = "live"
         self.room_id = parse_room_id(self.room_id)
+        # A pasted URL carries its own part number; keep it.
+        pasted_page = parse_video_page(self.video_id)
+        self.video_id = parse_video_id(self.video_id)
+        if pasted_page > 1:
+            self.video_page = pasted_page
+        self.video_page = int(_clamp(self.video_page, 1, 10_000))
         self.version = CONFIG_VERSION
         return self
 
@@ -252,6 +284,7 @@ _NESTED = {
     "display": DisplayConfig,
     "recording": RecordingConfig,
     "thresholds": ThresholdConfig,
+    "detect": DetectConfig,
 }
 
 

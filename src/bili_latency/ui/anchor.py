@@ -55,7 +55,17 @@ class WindowFinder:
 
     available = False
 
+    def enumerate(self) -> list[tuple[str, WindowRect]]:
+        """Every visible top-level window as ``(title, rect)``."""
+        return []
+
     def find(self, keyword: str) -> Optional[WindowRect]:
+        keyword = (keyword or "").strip().lower()
+        if not keyword:
+            return None
+        for title, rect in self.enumerate():
+            if keyword in title.lower():
+                return rect
         return None
 
 
@@ -66,11 +76,8 @@ class Win32WindowFinder(WindowFinder):
         self._user32 = ctypes.windll.user32  # type: ignore[attr-defined]
         self._user32.SetProcessDPIAware()
 
-    def find(self, keyword: str) -> Optional[WindowRect]:
-        keyword = (keyword or "").strip().lower()
-        if not keyword:
-            return None
-        found: list[WindowRect] = []
+    def enumerate(self) -> list[tuple[str, WindowRect]]:  # pragma: no cover - Windows only
+        windows: list[tuple[str, WindowRect]] = []
 
         class RECT(ctypes.Structure):
             _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
@@ -78,7 +85,7 @@ class Win32WindowFinder(WindowFinder):
 
         enum_proc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
 
-        def callback(hwnd, _lparam):  # pragma: no cover - Windows only
+        def callback(hwnd, _lparam):
             if not self._user32.IsWindowVisible(hwnd) or self._user32.IsIconic(hwnd):
                 return True
             length = self._user32.GetWindowTextLengthW(hwnd)
@@ -87,24 +94,21 @@ class Win32WindowFinder(WindowFinder):
             buffer = ctypes.create_unicode_buffer(length + 1)
             self._user32.GetWindowTextW(hwnd, buffer, length + 1)
             title = buffer.value or ""
-            if keyword not in title.lower():
-                return True
             rect = RECT()
             if not self._user32.GetWindowRect(hwnd, ctypes.byref(rect)):
                 return True
             width = rect.right - rect.left
             height = rect.bottom - rect.top
             if width > 200 and height > 150:
-                found.append(WindowRect(rect.left, rect.top, width, height))
-                return False
+                windows.append((title, WindowRect(rect.left, rect.top, width, height)))
             return True
 
         try:
             self._user32.EnumWindows(enum_proc(callback), 0)
-        except OSError as exc:  # pragma: no cover - Windows only
+        except OSError as exc:
             LOG.debug("EnumWindows failed: %s", exc)
-            return None
-        return found[0] if found else None
+            return []
+        return windows
 
 
 def create_window_finder() -> WindowFinder:

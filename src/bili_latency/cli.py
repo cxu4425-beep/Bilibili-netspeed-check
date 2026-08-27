@@ -18,6 +18,12 @@ def build_parser() -> argparse.ArgumentParser:
         description=f"{APP_NAME} - measure Bilibili live delay from server to client to screen.",
     )
     parser.add_argument("--room", metavar="ID_OR_URL", help="live room id or URL to monitor")
+    parser.add_argument("--video", metavar="ID_OR_URL", help="video (BV/av id or URL) to monitor")
+    parser.add_argument("--detect", dest="detect", action="store_true",
+                        help="follow whatever Bilibili page you are watching")
+    parser.add_argument("--no-detect", dest="detect", action="store_false",
+                        help="never auto-detect; use --room / --video only")
+    parser.set_defaults(detect=None)
     parser.add_argument("--lang", choices=["auto", "zh_CN", "zh_TW", "en"], help="interface language")
     parser.add_argument("--config-dir", metavar="PATH", help="use this folder for config and logs")
     parser.add_argument("--reset-config", action="store_true", help="start from default settings")
@@ -55,6 +61,21 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"not a room id or live URL: {args.room}", file=sys.stderr)
             return 2
         config.room_id = room
+        config.manual_kind = "live"
+        config.detect.enabled = False
+    if args.video:
+        from .probes.video import parse_video_target
+
+        video, page = parse_video_target(args.video)
+        if not video:
+            print(f"not a video id or URL: {args.video}", file=sys.stderr)
+            return 2
+        config.video_id = video
+        config.video_page = page
+        config.manual_kind = "video"
+        config.detect.enabled = False
+    if args.detect is not None:
+        config.detect.enabled = args.detect
     if args.lang:
         config.language = args.lang
     if args.no_tray:
@@ -89,42 +110,84 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 
 def _probe_once(config) -> int:
-    """Headless single measurement - handy for troubleshooting and CI."""
-    from .models import LatencySample
+    """Headless single measurement - handy for troubleshooting and scripting."""
+    from .models import KIND_NETWORK, KIND_VIDEO, LatencySample
     from .probes.network import HttpClient, tcp_rtt_ms
     from .probes.stream import StreamProbe
+    from .probes.video import VideoProbe
 
+    target = _probe_target(config)
     timeout_s = config.probe.timeout_ms / 1000.0
     client = HttpClient(timeout_s=timeout_s)
     try:
         rtt = tcp_rtt_ms(config.probe.rtt_host, config.probe.rtt_port, timeout_s)
-        if not config.room_id:
+        if target.kind == KIND_NETWORK:
             sample = LatencySample(
-                network_ms=rtt, total_ms=rtt, ok=rtt is not None, method="network-only",
-                host=config.probe.rtt_host,
+                network_ms=rtt, total_ms=rtt, ok=rtt is not None, kind=KIND_NETWORK,
+                method="network-only", host=config.probe.rtt_host,
                 error=None if rtt is not None else "network unreachable",
             )
         else:
-            probe = StreamProbe(
-                client,
-                prefer_hls=config.probe.prefer_hls,
-                player_buffer_segments=config.probe.player_buffer_segments,
-                playurl_refresh_s=config.probe.playurl_refresh_s,
-            )
-            measurement = client.measure("https://api.live.bilibili.com/room/v1/Room/get_info?room_id=1")
-            probe.set_clock_offset_ms(measurement.clock_offset_ms)
-            result = probe.measure(config.room_id)
+            if target.kind == KIND_VIDEO:
+                probe = VideoProbe(client, playurl_refresh_s=config.probe.playurl_refresh_s)
+                result = probe.measure(target.ident, target.page)
+            else:
+                probe = StreamProbe(
+                    client,
+                    prefer_hls=config.probe.prefer_hls,
+                    player_buffer_segments=config.probe.player_buffer_segments,
+                    playurl_refresh_s=config.probe.playurl_refresh_s,
+                )
+                measurement = client.measure(
+                    "https://api.live.bilibili.com/room/v1/Room/get_info?room_id=1"
+                )
+                probe.set_clock_offset_ms(measurement.clock_offset_ms)
+                result = probe.measure(target.ident)
             sample = LatencySample(
                 network_ms=probe.endpoint_rtt_ms(timeout_s) or rtt,
                 stream_ms=result.stream_ms,
                 total_ms=result.stream_ms,
                 ok=result.stream_ms is not None,
                 estimated=result.estimated,
+                kind=target.kind,
                 method=result.method,
                 host=result.host,
+                title=result.title or target.title,
+                source=target.source,
+                throughput_mbps=result.throughput_mbps,
+                required_mbps=result.required_mbps,
                 error=result.error,
             )
-        print(json.dumps(sample.to_dict(), indent=2, ensure_ascii=False))
+        payload = sample.to_dict()
+        payload["target"] = {"kind": target.kind, "id": target.ident, "page": target.page,
+                             "source": target.source}
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0 if sample.ok else 1
     finally:
         client.close()
+
+
+def _probe_target(config):
+    """Same target rules as the GUI: detected first, configured second."""
+    from .detect import AutoDetector
+    from .models import KIND_LIVE, KIND_NETWORK, KIND_VIDEO, WatchTarget
+
+    if config.detect.enabled:
+        detector = AutoDetector(config.detect)
+        try:
+            detected = detector.poll(force=True)
+        finally:
+            detector.close()
+        if detected is not None and not detected.is_empty:
+            if detected.kind != KIND_VIDEO or config.detect.follow_videos:
+                return detected
+
+    if config.manual_kind == KIND_VIDEO and config.video_id:
+        return WatchTarget(kind=KIND_VIDEO, ident=config.video_id, page=config.video_page,
+                               source="manual")
+    if config.room_id:
+        return WatchTarget(kind=KIND_LIVE, ident=config.room_id, source="manual")
+    if config.video_id:
+        return WatchTarget(kind=KIND_VIDEO, ident=config.video_id, page=config.video_page,
+                               source="manual")
+    return WatchTarget(kind=KIND_NETWORK, source="manual")

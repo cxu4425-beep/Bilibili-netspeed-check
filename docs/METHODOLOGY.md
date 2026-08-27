@@ -22,14 +22,17 @@
 | **推流 (stream)** | 從「伺服器上已經產生這一刻的畫面」到「你的機器拿得到它」 | HLS 播放清單的伺服器時間戳，或 FLV 首個關鍵影格到達時間 |
 | **顯示 (display)** | 從「客戶端拿到影格」到「螢幕真的亮起來」 | 由實測影格週期與合成器排隊層數推估，可加上使用者填的面板延遲 |
 
-**總延遲 = 推流 + 顯示**（沒填房間號時為 `網路 + 顯示`）。
+**總延遲 = 推流 + 顯示**（沒有監測對象時為 `網路 + 顯示`）。
+
+看**一般影片（VOD）**時沒有「直播邊緣」這回事，中間那一段會換成**起播延遲**，
+詳見 [第 3 節](#3-一般影片vod起播延遲與頻寬餘量)。
 
 網路那一欄是**參考值，不會再加一次**：推流欄本身就是在你的機器上計時的，
 網路傳輸時間已經包含在裡面，重複相加會高估。
 
 ---
 
-## 2. 推流延遲：兩種量法
+## 2. 直播推流延遲：三種量法
 
 ### 2.1 HLS + `EXT-X-PROGRAM-DATE-TIME`（實測，method = `hls-pdt`）
 
@@ -80,7 +83,37 @@ UI 標示為「估算」。
 
 ---
 
-## 3. 顯示延遲：為什麼只能估算
+## 3. 一般影片（VOD）：起播延遲與頻寬餘量
+
+錄播沒有「直播邊緣」，所以「延遲」要換一個有意義的定義。看影片時真正會影響體驗的是
+**要等多久才有畫面**，以及**線路撐不撐得住碼率**（會不會轉圈），監視器就量這兩件事：
+
+1. 用 `x/web-interface/view` 取得該影片（含分 P）的 `cid`；
+2. 用 `x/player/playurl` 取得播放地址，挑 API 給出的最高畫質（未登入時通常是 360P/480P，
+   量的是同一條 CDN 線路）；
+3. 對該 CDN 發一個 **Range 請求**（預設前 512 KB），量到：
+   - `TTFB`：從送出請求到收到第一個位元組（**實測**）
+   - `throughput`：這段資料的實際下載速度（**實測**）
+
+然後推出：
+
+```
+一秒影像資料所需時間 = 該畫質碼率 (Mbps) ÷ 實測下載速度 (Mbps) × 1000 ms
+起播延遲 ≈ TTFB + 一秒影像資料所需時間
+頻寬餘量 = 實測下載速度 ÷ 該畫質碼率
+```
+
+* **總延遲 = 起播延遲 + 顯示延遲**，UI 上第二列會顯示成「起播」而不是「推流」。
+* 統計列會多出**帶寬**（實測下載速度）。餘量小於 1× 代表這條線路餵不飽這個畫質，
+  播放時會卡；2× 以上就相當寬裕。
+* 這一段永遠標示為「估算」：TTFB 和速度是實測，但「一秒資料」是用碼率換算出來的，
+  而且真實播放器的緩衝策略比這複雜。
+* API 沒給碼率（少數 `durl` 格式）時，退回用探測本身花的時間當作起播時間，
+  並在診斷資料裡標記 `bitrate_unknown`。
+* 每輪只下載 512 KB 就中斷連線；預設 2 秒一輪的話大約 2 Mbps，比實際播放輕得多。
+  嫌多可以把探測間隔調長。
+
+## 4. 顯示延遲：為什麼只能估算
 
 任何一般應用程式都拿不到「像素真正發光」的時刻——那需要顯示器端的硬體量測
 （高速攝影機或光感測器）。監視器只量它能量的：
@@ -107,7 +140,30 @@ UI 標示為「估算」。
 
 ---
 
-## 4. 這個數字和播放器顯示的延遲會一樣嗎？
+## 5. 自動偵測：監視器怎麼知道你在看什麼
+
+不用瀏覽器外掛也能跟著你切換頁面，靠的是三個各自獨立、都可以關掉的來源，
+優先順序由高到低：
+
+| 來源 | 怎麼運作 | 準確度 |
+| --- | --- | --- |
+| **油猴腳本 (bridge)** | 頁面本身把網址 POST 到 `http://127.0.0.1:23124/report` | 最準，換分頁/分 P 立刻反映 |
+| **歷史紀錄 + 視窗標題** | 取最近造訪的 B站網址，再用開著的視窗標題比對出「現在這個分頁」 | 高（Windows 上可跟著切分頁）|
+| **歷史紀錄** | 取時間窗口內最新的一筆 B站網址 | 中（換分頁時要重新整理才會更新）|
+
+實作細節與界線：
+
+* 歷史紀錄檔會先**複製**成暫存檔再以**唯讀**方式開啟（`file:...?mode=ro`），
+  瀏覽器開著也能讀，且絕不會寫回原檔；連 `-wal` 旁檔一起複製，才看得到剛剛的造訪。
+* SQL 只撈 `url LIKE '%bilibili.com%'` 的列，其他網站的紀錄不會被讀出來。
+* 只有能解析成「直播間」或「影片」的網址才算數；首頁、空間、番劇播放頁都會被忽略，
+  這時監視器維持上一個目標或退回你手動設定的對象。
+* 歷史掃描預設每 5 秒一次（可調），中間直接沿用上次結果，不會反覆讀檔。
+* bridge 伺服器只綁 `127.0.0.1`，只接受 `*.bilibili.com` 來源，
+  上報超過 120 秒沒更新就視為過期。
+* 偵測不到任何東西時，會回到設定裡手動填的直播間／影片；兩個都沒填就是僅網路模式。
+
+## 6. 這個數字和播放器顯示的延遲會一樣嗎？
 
 不一定完全一樣，原因是：
 
@@ -122,7 +178,7 @@ UI 標示為「估算」。
 
 ---
 
-## 5. 誤差來源整理
+## 7. 誤差來源整理
 
 | 來源 | 影響 | 備註 |
 | --- | --- | --- |
@@ -132,16 +188,21 @@ UI 標示為「估算」。
 | CDN 節點切換 | 突然跳動 | 播放地址預設每 4 分鐘重取 |
 | 顯示延遲為模型估算 | 10–40 ms | 可關閉或手動校正 |
 | 本機時鐘誤差 | 已用時鐘偏移補償 | 偏差過大時自動退回估算法 |
+| 影片碼率為 API 宣告值 | 影響起播延遲的比例 | 未宣告時標記 `bitrate_unknown` |
+| 512 KB 取樣估速 | 短時波動 | 拉長探測間隔可讓數字更穩 |
+| 自動偵測認錯頁面 | 量到別的房間 | 用油猴腳本或改成手動指定最保險 |
 
 ---
 
-## 6. 隱私與對伺服器的負擔
+## 8. 隱私與對伺服器的負擔
 
-* 只呼叫 B站**公開**的網頁 API：`Room/get_info` 與 `getRoomPlayInfo`，
-  和你用瀏覽器打開直播間時是同一批介面。
+* 只呼叫 B站**公開**的網頁 API：直播用 `Room/get_info`、`getRoomPlayInfo`，
+  影片用 `web-interface/view`、`player/playurl`，和你用瀏覽器打開頁面時是同一批介面。
 * **不需要登入、不讀取也不上傳任何 Cookie 或帳號資訊**，沒有任何遙測。
-* 預設每 2 秒一次探測：一個 TCP 交握 + 一份播放清單（數 KB）。
-  FLV 模式下讀到第一個關鍵影格就中斷連線。
+* 自動偵測完全在本機進行：歷史紀錄唯讀、只篩 bilibili.com 網址、
+  bridge 只綁 `127.0.0.1`；偵測結果（房間號／BV 號）只留在記憶體裡。
+* 預設每 2 秒一次探測：一個 TCP 交握 + 一份播放清單（數 KB）；
+  FLV 模式下讀到第一個關鍵影格就中斷連線，影片模式下讀滿 512 KB 就中斷。
 * 探測失敗會指數退避（最多 8 倍間隔），不會在對方出問題時猛打。
 * 所有設定與紀錄都只存在你自己的使用者目錄裡。
 
@@ -160,9 +221,22 @@ The overlay splits the observable delay into three parts:
   times the number of frames the compositor keeps in flight, plus event-loop lag and
   an optional panel-latency offset you can enter yourself.
 
-The total is `stream + display` (or `network + display` with no room configured).
+The total is `stream + display` (or `network + display` with nothing selected).
 The network figure is shown for context and deliberately **not** added again: the
 stream figure is timed on your machine and already contains the transit time.
+
+For an **ordinary video (VOD)** there is no live edge, so the middle term becomes
+**start-up delay**: a real ranged download (512 KB) from the video's CDN gives a
+measured TTFB and throughput, and the reported figure is
+`TTFB + bitrate ÷ throughput` - the wait before playback could begin. The stats row
+then shows the measured download speed; headroom below 1x means the connection
+cannot sustain that quality and playback will stall.
+
+**Auto-detection** works out what you are watching from three optional local
+sources, highest priority first: the companion userscript posting the page URL to
+`127.0.0.1`, the browser history matched against open window titles, and the browser
+history alone. History files are copied and opened read-only, and only rows whose
+URL contains `bilibili.com` are read.
 
 Clock skew between your PC and Bilibili is estimated every 60 s from the HTTP `Date`
 header (`offset = server_time − local_recv_time + RTT/2`), which carries roughly

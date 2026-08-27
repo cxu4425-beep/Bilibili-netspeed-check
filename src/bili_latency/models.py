@@ -9,18 +9,61 @@ from dataclasses import dataclass, field, asdict
 from typing import Deque, Iterable, Optional
 
 
+KIND_LIVE = "live"
+KIND_VIDEO = "video"
+KIND_NETWORK = "network"
+
+
+@dataclass(frozen=True)
+class WatchTarget:
+    """What the monitor is currently measuring.
+
+    ``kind`` is one of ``live`` (a room), ``video`` (a VOD) or ``network``
+    (nothing selected, network-only mode). ``source`` records where the target
+    came from: ``manual``, ``history``, ``bridge`` or ``title``.
+    """
+
+    kind: str = KIND_NETWORK
+    ident: str = ""               # room id for live, BV id for a video
+    page: int = 1                 # video part (1-based); ignored for live
+    title: str = ""
+    source: str = "manual"
+    detected_at: float = field(default_factory=time.time)
+
+    @property
+    def is_empty(self) -> bool:
+        return self.kind == KIND_NETWORK or not self.ident
+
+    def same_content(self, other: Optional["WatchTarget"]) -> bool:
+        """True when both point at the same thing, ignoring source and time."""
+        if other is None:
+            return False
+        return (self.kind, self.ident, self.page) == (other.kind, other.ident, other.page)
+
+
 @dataclass(frozen=True)
 class StreamMeasurement:
-    """Result of a single live-stream probe."""
+    """Result of a single live-stream or video probe."""
 
     stream_ms: Optional[float]
-    method: str = "none"          # "hls-pdt" | "hls-window" | "flv-keyframe" | "none"
+    method: str = "none"          # hls-pdt | hls-window | flv-keyframe | video-startup | none
     estimated: bool = True        # False only when a server wall-clock is available
+    kind: str = KIND_LIVE
     edge_lag_ms: Optional[float] = None
     buffer_ms: Optional[float] = None
+    throughput_mbps: Optional[float] = None   # measured download speed (video mode)
+    required_mbps: Optional[float] = None     # bitrate the chosen quality needs
     host: str = ""
+    title: str = ""
     detail: dict = field(default_factory=dict)
     error: Optional[str] = None
+
+    @property
+    def headroom(self) -> Optional[float]:
+        """How many times the required bitrate the connection can sustain."""
+        if not self.throughput_mbps or not self.required_mbps:
+            return None
+        return self.throughput_mbps / self.required_mbps
 
 
 @dataclass(frozen=True)
@@ -50,8 +93,13 @@ class LatencySample:
     total_ms: Optional[float] = None
     ok: bool = True
     estimated: bool = True
+    kind: str = KIND_LIVE
     method: str = "none"
     host: str = ""
+    title: str = ""
+    source: str = "manual"
+    throughput_mbps: Optional[float] = None
+    required_mbps: Optional[float] = None
     error: Optional[str] = None
 
     def to_dict(self) -> dict:

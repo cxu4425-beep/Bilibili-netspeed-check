@@ -105,8 +105,9 @@ class HttpClient:
         except Exception:  # pragma: no cover - defensive, close must never raise
             pass
 
-    def get_json(self, url: str, params: Optional[dict] = None) -> dict:
-        response = self._session.get(url, params=params, timeout=self.timeout_s)
+    def get_json(self, url: str, params: Optional[dict] = None,
+                 headers: Optional[dict] = None) -> dict:
+        response = self._session.get(url, params=params, headers=headers, timeout=self.timeout_s)
         response.raise_for_status()
         return response.json()
 

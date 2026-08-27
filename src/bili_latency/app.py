@@ -15,7 +15,7 @@ from . import APP_NAME, REPO_URL, __version__
 from .autostart import get_autostart, is_supported as autostart_supported, set_autostart
 from .config import Config, app_config_dir
 from .i18n import set_language, tr
-from .models import LatencySample, RollingStats
+from .models import KIND_LIVE, KIND_NETWORK, KIND_VIDEO, LatencySample, RollingStats, WatchTarget
 from .monitor import (
     MonitorWorker, STATUS_ERROR, STATUS_NO_ROOM, STATUS_OFFLINE, STATUS_OK, STATUS_PAUSED,
 )
@@ -58,6 +58,7 @@ class MonitorApplication(QObject):
         self._status_detail = ""
         self._paused = False
         self._room_title = ""
+        self._target: Optional[WatchTarget] = None
 
         self._overlay = OverlayWindow(self._config, self._display)
         self._overlay.positionChanged.connect(self._on_overlay_moved)
@@ -84,6 +85,7 @@ class MonitorApplication(QObject):
         self._worker.sampleReady.connect(self._on_sample)
         self._worker.statusChanged.connect(self._on_status)
         self._worker.roomInfoChanged.connect(self._on_room_info)
+        self._worker.targetChanged.connect(self._on_target)
         self._thread.started.connect(self._worker.start)
         self.configChanged.connect(self._worker.applyConfig)
         self.pauseRequested.connect(self._worker.setPaused)
@@ -126,6 +128,11 @@ class MonitorApplication(QObject):
         self._menu.addAction(self._action_click_through)
 
         self._menu.addSeparator()
+
+        self._action_detect = QAction(tr("menu.auto_detect"), self._menu, checkable=True)
+        self._action_detect.setChecked(self._config.detect.enabled)
+        self._action_detect.toggled.connect(self._set_auto_detect)
+        self._menu.addAction(self._action_detect)
 
         theme_menu = self._menu.addMenu(tr("overlay.theme"))
         theme_group = QActionGroup(theme_menu)
@@ -228,6 +235,11 @@ class MonitorApplication(QObject):
         self.pauseRequested.emit(self._paused)
         self._update_status_text()
 
+    def _set_auto_detect(self, enabled: bool) -> None:
+        self._config.detect.enabled = bool(enabled)
+        self.configChanged.emit(copy.deepcopy(self._config))
+        self._schedule_save()
+
     def _toggle_compact(self) -> None:
         self._config.overlay.compact = not self._config.overlay.compact
         self._overlay.apply_config(self._config)
@@ -301,6 +313,9 @@ class MonitorApplication(QObject):
         self._action_overlay.setChecked(self._config.overlay.enabled)
         self._action_lock.setChecked(self._config.overlay.locked)
         self._action_click_through.setChecked(self._config.overlay.click_through)
+        self._action_detect.blockSignals(True)
+        self._action_detect.setChecked(self._config.detect.enabled)
+        self._action_detect.blockSignals(False)
 
         if self._config.tray.enabled and self._tray is None:
             self._setup_tray()
@@ -355,10 +370,19 @@ class MonitorApplication(QObject):
 
     @Slot(object)
     def _on_room_info(self, info) -> None:
-        if info is None:
-            self._room_title = ""
-        else:
+        if info is not None and self._target is not None and self._target.kind == KIND_LIVE:
             self._room_title = f"{tr('label.room')} {info.room_id}"
+            self._overlay.set_room_label(self._room_title)
+
+    @Slot(object)
+    def _on_target(self, target) -> None:
+        self._target = target
+        if target is None or target.kind == KIND_NETWORK:
+            self._room_title = ""
+        elif target.kind == KIND_VIDEO:
+            self._room_title = f"{tr('label.video')} {target.title or target.ident}"
+        else:
+            self._room_title = f"{tr('label.room')} {target.ident}"
         self._overlay.set_room_label(self._room_title)
 
     def _status_line(self) -> str:
@@ -374,6 +398,9 @@ class MonitorApplication(QObject):
         if self._status_key == STATUS_OK:
             # Nothing to say once samples are flowing.
             return "" if len(self._stats) else tr("status.connecting")
+        if self._status_key == STATUS_NO_ROOM and self._config.detect.enabled:
+            # Auto-detection is on but has not found a page yet.
+            return tr("status.detecting")
         text = mapping.get(self._status_key, "")
         if self._status_key == STATUS_ERROR and self._status_detail:
             return f"{text}: {self._status_detail}"
@@ -405,7 +432,15 @@ class MonitorApplication(QObject):
             "app": APP_NAME,
             "version": __version__,
             "language": self._config.language,
+            "auto_detect": self._config.detect.enabled,
+            "target": {
+                "kind": self._target.kind if self._target else None,
+                "id": self._target.ident if self._target else None,
+                "page": self._target.page if self._target else None,
+                "source": self._target.source if self._target else None,
+            },
             "room_id": self._config.room_id or None,
+            "video_id": self._config.video_id or None,
             "status": self._status_key,
             "status_detail": self._status_detail,
             "samples": len(self._stats),

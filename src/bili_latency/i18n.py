@@ -41,8 +41,12 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "label.jitter": ("抖动", "抖動", "jitter"),
     "label.range": ("范围", "範圍", "range"),
     "label.room": ("房间", "房間", "Room"),
+    "label.video": ("视频", "影片", "Video"),
+    "label.startup": ("起播", "起播", "Startup"),
+    "label.speed": ("带宽", "頻寬", "Speed"),
     "label.measured": ("实测", "實測", "measured"),
     "label.estimated": ("估算", "估算", "estimated"),
+    "label.auto": ("自动", "自動", "auto"),
 
     "status.no_room": ("未设置房间号", "未設定房間號", "No room configured"),
     "status.offline": ("主播未开播", "主播未開播", "Stream offline"),
@@ -51,12 +55,27 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "status.error": ("探测失败", "偵測失敗", "Probe failed"),
     "status.network_only": ("仅网络模式", "僅網路模式", "Network-only mode"),
 
+    "status.no_video": ("未设置视频", "未設定影片", "No video configured"),
+    "status.detecting": ("正在识别观看页面…", "正在辨識觀看頁面…", "Looking for what you are watching…"),
+
     "settings.title": ("设置", "設定", "Settings"),
     "settings.tab.general": ("常规", "一般", "General"),
     "settings.tab.overlay": ("显示", "顯示", "Overlay"),
     "settings.tab.advanced": ("高级", "進階", "Advanced"),
     "settings.tab.about": ("关于", "關於", "About"),
 
+    "general.target": ("监测对象", "監測對象", "What to monitor"),
+    "general.target.auto": (
+        "自动跟随我正在看的页面", "自動跟隨我正在看的頁面", "Follow whatever I am watching",
+    ),
+    "general.target.live": ("手动指定直播间", "手動指定直播間", "A live room I pick"),
+    "general.target.video": ("手动指定视频", "手動指定影片", "A video I pick"),
+    "general.video": ("视频号或链接", "影片編號或連結", "Video ID or URL"),
+    "general.video_hint": (
+        "支持 BV 号、av 号，或直接粘贴 https://www.bilibili.com/video/BV… （分P 用 ?p=2）。",
+        "支援 BV 號、av 號，或直接貼上 https://www.bilibili.com/video/BV…（分P 用 ?p=2）。",
+        "A BV id, an av number, or a https://www.bilibili.com/video/BV… URL (?p=2 for a part).",
+    ),
     "general.room": ("直播间号或链接", "直播間號或連結", "Room ID or URL"),
     "general.room_hint": (
         "支持粘贴 https://live.bilibili.com/123456 或直接填 123456；留空则只测网络延迟。",
@@ -73,6 +92,41 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "目前系統不支援自動設定開機啟動，請參考 README。",
         "Automatic autostart is unsupported here; see the README.",
     ),
+
+    "detect.group": ("自动检测", "自動偵測", "Auto-detection"),
+    "detect.history": (
+        "读取浏览器历史记录（只读）",
+        "讀取瀏覽器歷史紀錄（唯讀）",
+        "Read the browser history (read-only)",
+    ),
+    "detect.titles": (
+        "用窗口标题识别当前标签页",
+        "用視窗標題辨識目前分頁",
+        "Match open window titles (Windows)",
+    ),
+    "detect.bridge": (
+        "接收油猴脚本上报（最准）",
+        "接收油猴腳本回報（最準）",
+        "Accept userscript reports (most accurate)",
+    ),
+    "detect.bridge_port": ("脚本上报端口", "腳本回報連接埠", "Bridge port"),
+    "detect.window": ("历史记录时间窗口（分钟）", "歷史紀錄時間視窗（分鐘）", "History window (minutes)"),
+    "detect.follow_videos": ("也跟随普通视频", "也跟隨一般影片", "Follow ordinary videos too"),
+    "detect.interval": ("检测间隔（秒）", "偵測間隔（秒）", "Detection interval (s)"),
+    "detect.privacy": (
+        "检测只在你的电脑上进行：历史记录会被复制成临时文件后只读打开，只筛选 bilibili.com 的网址，"
+        "不会写回、不会上传，也不需要登录。不想用可以关掉这一项。",
+        "偵測只在你的電腦上進行：歷史紀錄會被複製成暫存檔後唯讀開啟，只篩選 bilibili.com 的網址，"
+        "不會寫回、不會上傳，也不需要登入。不想用可以關掉這一項。",
+        "Detection stays on your machine: the history file is copied, opened read-only and filtered "
+        "to bilibili.com URLs. Nothing is written back or uploaded, and no login is used. "
+        "Turn it off if you would rather not.",
+    ),
+    "detect.source.manual": ("手动", "手動", "manual"),
+    "detect.source.history": ("历史记录", "歷史紀錄", "history"),
+    "detect.source.history+title": ("当前标签页", "目前分頁", "current tab"),
+    "detect.source.bridge": ("脚本", "腳本", "userscript"),
+    "menu.auto_detect": ("自动跟随观看页面", "自動跟隨觀看頁面", "Follow what I watch"),
 
     "overlay.enabled": ("显示悬浮窗", "顯示懸浮視窗", "Show overlay window"),
     "overlay.anchor": ("位置模式", "位置模式", "Position mode"),
@@ -150,6 +204,12 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "{title}\n总延迟 {total}\n网络 {network} / 推流 {stream} / 显示 {display}\n{status}",
         "{title}\n總延遲 {total}\n網路 {network} / 推流 {stream} / 顯示 {display}\n{status}",
         "{title}\nTotal {total}\nNetwork {network} / Stream {stream} / Display {display}\n{status}",
+    ),
+    "tray.tooltip_video": (
+        "{title}\n视频总延迟 {total}\n网络 {network} / 起播 {stream} / 显示 {display}\n带宽 {speed}\n{status}",
+        "{title}\n影片總延遲 {total}\n網路 {network} / 起播 {stream} / 顯示 {display}\n頻寬 {speed}\n{status}",
+        "{title}\nVideo total {total}\nNetwork {network} / Startup {stream} / Display {display}\n"
+        "Speed {speed}\n{status}",
     ),
     "notice.hidden_hint": (
         "悬浮窗已隐藏，可从托盘图标重新打开。",
