@@ -127,6 +127,8 @@ PAGE = """<!doctype html>
   .row .k { color: #9aa3b5; }
   .row .v { font-variant-numeric: tabular-nums; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .extras { margin-bottom: 12px; }
+  .extras .row .v { font-weight: 600; }
   .stat { background: #171a22; border: 1px solid #2b303c; border-radius: 14px; padding: 12px 14px; }
   .stat .k { color: #9aa3b5; font-size: 12px; }
   .stat .v { font-size: 20px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
@@ -143,6 +145,7 @@ PAGE = """<!doctype html>
 <div class="sub" id="status">连接中…</div>
 <div id="body" hidden>
   <div class="card" id="breakdown"></div>
+  <div class="card extras" id="extras" hidden></div>
   <div class="card"><svg id="spark" viewBox="0 0 300 72" preserveAspectRatio="none"></svg></div>
   <div class="grid" id="stats"></div>
 </div>
@@ -194,6 +197,14 @@ function render(s) {
   $("breakdown").innerHTML = s.rows
     .map((r) => '<div class="row"><span class="k">' + r[0] + '</span><span class="v">' +
                 r[1] + "</span></div>")
+    .join("");
+  const extras = s.extras || [];
+  const extrasEl = $("extras");
+  extrasEl.hidden = extras.length === 0;
+  extrasEl.innerHTML = extras
+    .map((e) => '<div class="row"><span class="k">' + e.label +
+                '</span><span class="v ' + (e.level || "unknown") + '">' + e.value +
+                "</span></div>")
     .join("");
   spark(s.spark || []);
   $("stats").innerHTML = s.stats

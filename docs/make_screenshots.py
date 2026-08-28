@@ -25,7 +25,9 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from lagscope.config import Config  # noqa: E402
 from lagscope.i18n import set_language  # noqa: E402
-from lagscope.models import KIND_APP, KIND_VIDEO, LatencySample, RollingStats  # noqa: E402
+from lagscope.models import (  # noqa: E402
+    KIND_APP, KIND_TARGET, KIND_VIDEO, ExtraResult, LatencySample, RollingStats,
+)
 from lagscope.probes.display import DisplayProbe  # noqa: E402
 from lagscope.ui.icons import value_pixmap  # noqa: E402
 from lagscope.ui.overlay import OverlayWindow  # noqa: E402
@@ -96,9 +98,21 @@ def app_stats() -> tuple[LatencySample, RollingStats]:
     return sample, stats
 
 
-def shoot_overlay(name: str, config: Config, sample, stats, label="房间 21452505") -> None:
+DEMO_EXTRAS = [
+    ExtraResult(key="a", label="路由器", kind=KIND_TARGET, ident="192.168.1.1",
+                rtt_ms=2.1, ok=True),
+    ExtraResult(key="b", label="DNS 8.8.8.8", kind=KIND_TARGET, ident="8.8.8.8",
+                rtt_ms=28.0, ok=True),
+    ExtraResult(key="c", label="Discord 语音", kind=KIND_APP, ident="Discord.exe",
+                rtt_ms=180.0, ok=True),
+]
+
+
+def shoot_overlay(name: str, config: Config, sample, stats, label="房间 21452505",
+                  extras=()) -> None:
     window = OverlayWindow(config, DisplayProbe())
     window.show()
+    window.set_extras(list(extras))
     window.set_room_label(label)
     window.update_sample(sample, stats)
     QApplication.processEvents()
@@ -133,7 +147,7 @@ def main() -> int:
     app_config.thresholds.good_ms = 60
     app_config.thresholds.warn_ms = 150
     shoot_overlay("overlay-app.png", app_config, app_sample, app_series,
-                  label="应用 ValorantGame.exe")
+                  label="应用 ValorantGame.exe", extras=DEMO_EXTRAS)
 
     dialog = SettingsDialog(Config())
     dialog.room_edit.setText("https://live.bilibili.com/21452505")

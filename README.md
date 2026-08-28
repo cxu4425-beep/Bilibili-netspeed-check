@@ -31,6 +31,8 @@
 - **自動跟隨目前使用的程式**：切到哪個視窗就量哪個程式，不用每次設定。
 - **自訂伺服器位址**：直接填 `8.8.8.8`、遊戲伺服器、公司 VPN，先試 TCP、不通就 ping。
 - **全機上傳／下載速度**：每一筆樣本都附帶，一眼看出「是不是有別的東西在吃頻寬」。
+- **同時盯多個目標**：主要對象之外再掛 4 個（路由器／DNS／語音／自訂），
+  分辨「只有這個卡」還是「整條線都卡」。
 - **網路體檢**：一鍵拆出「你→路由器→電信商→伺服器」各段延遲與丟包，直接告訴你該怪誰
   （見[網路體檢](#-網路體檢告訴你是誰的錯)）。
 - **卡頓與延遲突增偵測**：探測失敗或延遲跳到平常的兩倍以上就記一次事件，
@@ -173,6 +175,25 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 > 讀的是自己電腦上、自己程式的連線表（Windows/Linux 直接可讀；macOS 對其他程式的連線可能需要權限，
 > 讀不到時會顯示「該應用當前沒有網絡連接」）。不注入、不抓封包、不看內容。
 
+
+### 同時盯好幾個目標
+
+主要對象旁邊還能再掛最多 **4 個附加監測**，一眼分辨「只有這個卡」還是「整條線都卡」：
+
+<div align="center"><img src="docs/images/overlay-app.png" width="260" alt="附加監測"></div>
+
+上圖：遊戲本身 49ms 正常、路由器 2ms 正常、DNS 28ms 正常，但 **Discord 語音 180ms 紅字**——
+問題出在語音服務，不是你的網路。這種判斷用單一數字是做不到的。
+
+設定 → 常規 → **同時監測（附加）**：
+
+- **＋路由器**：自動偵測你的閘道位址並加入（判斷「是不是家裡的問題」最快的一招）
+- **＋DNS**：加入 `8.8.8.8:53`（判斷「是不是整條外網都慢」）
+- **新增…**：自訂位址＋連接埠，或選一個程式
+
+**成本控制**：附加目標是**輪流**量的（每輪測一個），所以不管加幾個都不會拖慢主要數字；
+4 個目標在預設 2 秒間隔下，每個約 8 秒更新一次——足夠回答「現在整條線如何」。
+手機儀表板上也會一起顯示。
 
 ### 支援哪些 App？
 
@@ -437,6 +458,7 @@ lagscope --list-apps                  # 列出正在連網的程式（挑名字�
 | 顯示全機上傳／下載速度 | 每筆樣本附帶網速（可關）|
 | 卡頓／延遲突增時彈出提示 | 有冷卻時間，不會一直吵（可關）|
 | 手機儀表板：開關／端口／存取碼 | 讓同一網路的手機用瀏覽器看（唯讀，預設關）|
+| 同時監測（附加）| 最多 4 個附加目標，輪流量測，懸浮窗與手機頁面都會顯示 |
 | 直播間號或連結 | 要監測的直播間；自動模式下當作找不到頁面時的備援 |
 | 視頻號或連結 | 要監測的影片，支援 BV / av / 網址（`?p=` 指定分 P）|
 | 自動檢測：讀取官方PC客戶端正在播放的內容 | 直接讀客戶端自己的紀錄，全自動（可關）|
@@ -690,6 +712,13 @@ does the same from the terminal.
   them all periodically and the diagnostics show how the current one compares to the best.
 - **Room details**: popularity, category, uptime, quality name, codec and container.
 - 简体中文 / 繁體中文 / English, per-user settings, single instance per user.
+
+### Watch several things at once
+
+Beside the main target you can pin up to four more - the router, DNS, a voice app, any address -
+and they appear under the main figure with their own colours. That is what separates "only this
+game is laggy" from "the whole line is". They are measured in turn, one per round, so adding
+them never slows the main figure down. Quick-add buttons fill in your router and DNS for you.
 
 ### Network check: which segment is to blame
 

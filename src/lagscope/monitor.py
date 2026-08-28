@@ -19,7 +19,8 @@ from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from .config import Config, title_memory_path
 from .detect import AutoDetector
 from .models import (
-    KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO, LatencySample, WatchTarget,
+    KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO, ExtraResult, LatencySample,
+    WatchTarget,
 )
 from .probes.appnet import AppNetProbe
 from .probes.netspeed import NetSpeedProbe
@@ -50,6 +51,7 @@ class MonitorWorker(QObject):
     targetChanged = Signal(object)    # WatchTarget
     linesChanged = Signal(object)     # list[CdnLine] - CDN edges, fastest first
     diagnosisReady = Signal(object)   # (PathReport, verdict key, detail)
+    extraUpdated = Signal(object)     # ExtraResult - one side watch, refreshed
 
     def __init__(self, config: Config) -> None:
         super().__init__()
@@ -66,7 +68,9 @@ class MonitorWorker(QObject):
         self._stream: Optional[StreamProbe] = None
         self._video: Optional[VideoProbe] = None
         self._app = AppNetProbe()
+        self._extra_app = AppNetProbe()   # separate state: different target
         self._netspeed = NetSpeedProbe()
+        self._extra_index = 0
         self._detector: Optional[AutoDetector] = None
         self._timer: Optional[QTimer] = None
 
@@ -265,6 +269,7 @@ class MonitorWorker(QObject):
             LOG.exception("probe round failed")
             sample = LatencySample(ok=False, error=str(exc)[:200])
         self.sampleReady.emit(sample)
+        self._measure_next_extra()
         self._schedule_next(failed=not sample.ok)
 
     def _run_round(self) -> LatencySample:
@@ -335,6 +340,55 @@ class MonitorWorker(QObject):
             source=target.source,
             throughput_mbps=measurement.throughput_mbps,
             required_mbps=measurement.required_mbps,
+        )
+
+    def _measure_next_extra(self) -> None:
+        """Refresh one side watch per round, in turn.
+
+        Measuring all of them every round would cost more than the round
+        itself; taking turns keeps each one fresh enough to answer "is the
+        whole line bad?" without slowing the main figure down.
+        """
+        with self._lock:
+            extras = list(self._config.watch_extras)
+        if not extras:
+            self._extra_index = 0
+            return
+        self._extra_index %= len(extras)
+        entry = extras[self._extra_index]
+        self._extra_index = (self._extra_index + 1) % len(extras)
+
+        with self._lock:
+            timeout_s = self._config.probe.timeout_ms / 1000.0
+        try:
+            self.extraUpdated.emit(self._measure_extra(entry, timeout_s))
+        except Exception:
+            LOG.exception("side watch failed: %s", entry.get("ident"))
+
+    def _measure_extra(self, entry: dict, timeout_s: float) -> ExtraResult:
+        kind = entry.get("kind", "target")
+        ident = entry.get("ident", "")
+        port = int(entry.get("port") or 443)
+        label = entry.get("label") or ident
+        key = f"{kind}:{ident.lower()}:{port if kind == KIND_TARGET else ''}"
+
+        if kind == KIND_APP:
+            result = self._extra_app.measure(ident, timeout_s)
+            return ExtraResult(
+                key=key, label=label, kind=KIND_APP, ident=ident,
+                rtt_ms=result.rtt_ms, method=result.method,
+                ok=result.rtt_ms is not None, error=result.error,
+            )
+
+        rtt = tcp_rtt_ms(ident, port, timeout_s)
+        method = "tcp"
+        if rtt is None:
+            rtt = icmp_ping_ms(ident, timeout_s)
+            method = "icmp" if rtt is not None else "none"
+        return ExtraResult(
+            key=key, label=label, kind=KIND_TARGET, ident=ident,
+            rtt_ms=rtt, method=method, ok=rtt is not None,
+            error=None if rtt is not None else "unreachable",
         )
 
     def _with_netspeed(self, sample: LatencySample) -> LatencySample:

@@ -82,6 +82,7 @@ class MonitorApplication(QObject):
         self._lines: tuple = ("", [])
         self._events = EventLog()
         self._notifier = Notifier()
+        self._extras: dict = {}      # key -> ExtraResult, newest per side watch
         self._dashboard: Optional[DashboardServer] = None
 
         self._overlay = OverlayWindow(self._config, self._display)
@@ -118,6 +119,7 @@ class MonitorApplication(QObject):
         self.clipboardText.connect(self._worker.submitClipboard)
         self.diagnosisRequested.connect(self._worker.runDiagnosis)
         self._worker.diagnosisReady.connect(self._on_diagnosis)
+        self._worker.extraUpdated.connect(self._on_extra)
 
         # The clipboard belongs to the GUI thread, so it is polled here and the
         # text is handed to the worker, which does the parsing and any lookup.
@@ -439,6 +441,8 @@ class MonitorApplication(QObject):
         else:
             self._clipboard_timer.stop()
 
+        self._prune_extras()
+        self._overlay.set_extras(self._ordered_extras())
         self._apply_recording()
         self._apply_dashboard()
         self.configChanged.emit(copy.deepcopy(self._config))
@@ -512,6 +516,16 @@ class MonitorApplication(QObject):
             "rows": rows,
             "stats": stats,
             "spark": self._stats.spark_values(60),
+            "extras": [
+                {
+                    "label": extra.label,
+                    "value": format_ms(extra.rtt_ms) if extra.ok else "--",
+                    "level": level_for(extra.rtt_ms if extra.ok else None,
+                                       self._config.thresholds.good_ms,
+                                       self._config.thresholds.warn_ms),
+                }
+                for extra in self._ordered_extras()
+            ],
             "measured": bool(sample and not sample.estimated),
             "foot": f"{APP_NAME} {__version__} · {tr('label.jitter')} "
                     f"{format_ms(self._stats.jitter())} · "
@@ -539,6 +553,36 @@ class MonitorApplication(QObject):
             LOG.warning("could not save config: %s", exc)
 
     # ------------------------------------------------------------------ data
+    @Slot(object)
+    def _on_extra(self, result) -> None:
+        self._extras[result.key] = result
+        self._prune_extras()
+        self._overlay.set_extras(self._ordered_extras())
+        self._publish_dashboard()
+
+    def _prune_extras(self) -> None:
+        """Forget watches the user has removed from the settings."""
+        wanted = {
+            f"{entry.get('kind', 'target')}:{str(entry.get('ident', '')).lower()}:"
+            f"{entry.get('port') if entry.get('kind', 'target') == KIND_TARGET else ''}"
+            for entry in self._config.watch_extras
+        }
+        for key in list(self._extras):
+            if key not in wanted:
+                self._extras.pop(key, None)
+
+    def _ordered_extras(self) -> list:
+        """In the order the user arranged them, not the order they answered."""
+        ordered = []
+        for entry in self._config.watch_extras:
+            kind = entry.get("kind", "target")
+            port = entry.get("port") if kind == KIND_TARGET else ""
+            key = f"{kind}:{str(entry.get('ident', '')).lower()}:{port}"
+            result = self._extras.get(key)
+            if result is not None:
+                ordered.append(result)
+        return ordered
+
     @Slot(object)
     def _on_lines(self, payload) -> None:
         self._lines = payload
@@ -688,6 +732,12 @@ class MonitorApplication(QObject):
                 self._config.display.frames_in_flight, self._config.display.manual_offset_ms
             ),
             "events": self._events.summary(),
+            "extras": [
+                {"label": extra.label, "kind": extra.kind, "ident": extra.ident,
+                 "rtt_ms": extra.rtt_ms, "method": extra.method, "ok": extra.ok,
+                 "age_s": round(extra.age_s, 1), "error": extra.error}
+                for extra in self._ordered_extras()
+            ],
             "netspeed": {
                 "down_mbps": sample.down_mbps if sample else None,
                 "up_mbps": sample.up_mbps if sample else None,

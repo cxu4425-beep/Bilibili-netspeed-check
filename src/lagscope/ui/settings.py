@@ -8,8 +8,8 @@ from typing import Optional
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
-    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QSlider,
-    QSpinBox, QTabWidget, QVBoxLayout, QWidget,
+    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
+    QPushButton, QScrollArea, QSlider, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from .. import APP_NAME, REPO_URL, __version__
@@ -19,6 +19,56 @@ from ..probes.video import parse_video_target
 from ..i18n import LANGUAGE_NAMES, LANGUAGES, tr
 from .anchor import create_window_finder
 from .icons import app_icon
+
+
+class ExtraWatchDialog(QDialog):
+    """Add one side watch: an address to ping, or an application to follow."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("extras.dialog"))
+        form = QFormLayout(self)
+
+        self.kind_combo = QComboBox(self)
+        self.kind_combo.addItem(tr("extras.kind.target"), "target")
+        self.kind_combo.addItem(tr("extras.kind.app"), "app")
+        self.kind_combo.currentIndexChanged.connect(self._sync)
+        form.addRow(tr("extras.kind"), self.kind_combo)
+
+        self.ident_edit = QLineEdit(self)
+        self.ident_edit.setPlaceholderText("8.8.8.8 / Discord.exe")
+        form.addRow(tr("extras.ident"), self.ident_edit)
+
+        self.port_spin = QSpinBox(self)
+        self.port_spin.setRange(1, 65535)
+        self.port_spin.setValue(443)
+        form.addRow(tr("general.target_port"), self.port_spin)
+
+        self.label_edit = QLineEdit(self)
+        self.label_edit.setMaxLength(40)
+        form.addRow(tr("extras.label"), self.label_edit)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
+        buttons.button(QDialogButtonBox.Ok).setText(tr("button.ok"))
+        buttons.button(QDialogButtonBox.Cancel).setText(tr("button.cancel"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+        self._sync()
+
+    def _sync(self) -> None:
+        self.port_spin.setEnabled(self.kind_combo.currentData() == "target")
+
+    def entry(self) -> Optional[dict]:
+        ident = self.ident_edit.text().strip()
+        if not ident:
+            return None
+        return {
+            "kind": self.kind_combo.currentData() or "target",
+            "ident": ident,
+            "port": self.port_spin.value(),
+            "label": self.label_edit.text().strip() or ident,
+        }
 
 
 def _scrollable(page: QWidget) -> QScrollArea:
@@ -178,10 +228,102 @@ class SettingsDialog(QDialog):
         self.notify_check = QCheckBox(tr("general.notify"), page)
         form.addRow("", self.notify_check)
 
+        outer.addWidget(self._build_extras_box(page))
         outer.addWidget(general_box)
         outer.addWidget(self._build_web_box(page))
         outer.addStretch(1)
         return page
+
+    def _build_extras_box(self, parent: QWidget) -> QWidget:
+        box = QGroupBox(tr("extras.group"), parent)
+        layout = QVBoxLayout(box)
+
+        self.extras_list = QListWidget(box)
+        self.extras_list.setMaximumHeight(110)
+        layout.addWidget(self.extras_list)
+
+        buttons = QHBoxLayout()
+        add_button = QPushButton(tr("extras.add"), box)
+        add_button.clicked.connect(self._add_extra)
+        remove_button = QPushButton(tr("extras.remove"), box)
+        remove_button.clicked.connect(self._remove_extra)
+        router_button = QPushButton(tr("extras.add_router"), box)
+        router_button.clicked.connect(self._add_router)
+        dns_button = QPushButton(tr("extras.add_dns"), box)
+        dns_button.clicked.connect(self._add_dns)
+        self._extra_add_buttons = (add_button, router_button, dns_button)
+        for button in (add_button, remove_button, router_button, dns_button):
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+
+        hint = QLabel(tr("extras.hint"), box)
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: palette(mid);")
+        layout.addWidget(hint)
+        return box
+
+    def _refresh_extras(self) -> None:
+        from ..config import MAX_EXTRA_WATCHES
+
+        # At the limit the add buttons simply go grey; interrupting someone with
+        # a dialog to say "no" is worse than showing them they cannot.
+        full = len(self._extras) >= MAX_EXTRA_WATCHES
+        for button in self._extra_add_buttons:
+            button.setEnabled(not full)
+            button.setToolTip(tr("extras.full") if full else "")
+
+        self.extras_list.clear()
+        for entry in self._extras:
+            if entry["kind"] == "target":
+                detail = f"{entry['ident']}:{entry['port']}"
+            else:
+                detail = entry["ident"]
+            item = QListWidgetItem(f"{entry['label']}  —  {detail}")
+            item.setData(Qt.UserRole, entry)
+            self.extras_list.addItem(item)
+
+    def _append_extra(self, entry: dict) -> None:
+        from ..config import MAX_EXTRA_WATCHES
+
+        if len(self._extras) >= MAX_EXTRA_WATCHES:
+            return
+        key = (entry["kind"], entry["ident"].lower())
+        if any((item["kind"], item["ident"].lower()) == key for item in self._extras):
+            return
+        self._extras.append(entry)
+        self._refresh_extras()
+
+    def _add_extra(self) -> None:
+        dialog = ExtraWatchDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        entry = dialog.entry()
+        if entry is not None:
+            self._append_extra(entry)
+
+    def _remove_extra(self) -> None:
+        for item in self.extras_list.selectedItems():
+            entry = item.data(Qt.UserRole)
+            self._extras = [
+                other for other in self._extras
+                if not (other["kind"] == entry["kind"] and other["ident"] == entry["ident"])
+            ]
+        self._refresh_extras()
+
+    def _add_router(self) -> None:
+        from ..probes.path import default_gateway
+
+        gateway = default_gateway()
+        if not gateway:
+            QMessageBox.information(self, tr("extras.group"), tr("extras.no_router"))
+            return
+        self._append_extra({"kind": "target", "ident": gateway, "port": 80,
+                            "label": tr("extras.router")})
+
+    def _add_dns(self) -> None:
+        self._append_extra({"kind": "target", "ident": "8.8.8.8", "port": 53,
+                            "label": tr("extras.dns")})
 
     def _build_web_box(self, parent: QWidget) -> QWidget:
         box = QGroupBox(tr("web.group"), parent)
@@ -447,6 +589,8 @@ class SettingsDialog(QDialog):
         self.target_port_spin.setValue(self._config.target_port)
         self.netspeed_check.setChecked(self._config.show_netspeed)
         self.notify_check.setChecked(self._config.notify_enabled)
+        self._extras = [dict(entry) for entry in self._config.watch_extras]
+        self._refresh_extras()
         self.web_check.setChecked(self._config.web.enabled)
         self.web_port_spin.setValue(self._config.web.port)
         self.web_code_edit.setText(self._config.web.access_code)
@@ -599,6 +743,7 @@ class SettingsDialog(QDialog):
         config.target_port = self.target_port_spin.value()
         config.show_netspeed = self.netspeed_check.isChecked()
         config.notify_enabled = self.notify_check.isChecked()
+        config.watch_extras = [dict(entry) for entry in self._extras]
         config.web.enabled = self.web_check.isChecked()
         config.web.port = self.web_port_spin.value()
         config.web.access_code = self.web_code_edit.text().strip()

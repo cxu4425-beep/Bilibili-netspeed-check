@@ -208,6 +208,9 @@ class Config:
     target_host: str = ""           # host to ping in "target" mode
     target_port: int = 443
     show_netspeed: bool = True      # attach up/down speed to every sample
+    # Extra things to keep an eye on beside the main one: [{kind,ident,port,label}].
+    # "Is my game laggy, or is the whole line?" needs more than one number.
+    watch_extras: list = field(default_factory=list)
     notify_enabled: bool = True     # tray balloon when a stall or spike happens
     sample_window: int = 180
     autostart: bool = False
@@ -295,6 +298,7 @@ class Config:
         )[:32]
         if self.web.bind_host not in ("0.0.0.0", "127.0.0.1"):
             self.web.bind_host = "0.0.0.0"
+        self.watch_extras = _clean_extras(self.watch_extras)
         if self.manual_kind not in ("live", "video", "app", "target"):
             self.manual_kind = "live"
         self.target_port = int(_clamp(self.target_port, 1, 65535))
@@ -309,6 +313,40 @@ class Config:
         self.video_page = int(_clamp(self.video_page, 1, 10_000))
         self.version = CONFIG_VERSION
         return self
+
+
+MAX_EXTRA_WATCHES = 4
+
+
+def _clean_extras(entries: Any) -> list:
+    """Keep the extra watches to things that can actually be measured."""
+    if not isinstance(entries, list):
+        return []
+    cleaned = []
+    seen = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        kind = str(entry.get("kind") or "target")
+        if kind not in ("target", "app"):
+            continue
+        ident = str(entry.get("ident") or "").strip()
+        if not ident:
+            continue
+        port = int(_clamp(entry.get("port", 443), 1, 65535))
+        key = f"{kind}:{ident.lower()}:{port if kind == 'target' else ''}"
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append({
+            "kind": kind,
+            "ident": ident,
+            "port": port,
+            "label": str(entry.get("label") or "").strip()[:40] or ident,
+        })
+        if len(cleaned) >= MAX_EXTRA_WATCHES:
+            break
+    return cleaned
 
 
 def _clamp(value: Any, low: float, high: float) -> float:

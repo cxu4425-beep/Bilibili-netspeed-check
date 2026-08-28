@@ -49,6 +49,7 @@ class OverlayWindow(QWidget):
         self._sample: Optional[LatencySample] = None
         self._stats: Optional[RollingStats] = None
         self._status_text: str = tr("status.connecting")
+        self._extras: list = []
         self._room_label: str = ""
         self._drag_offset: Optional[QPoint] = None
         self._burst_remaining = 0
@@ -105,6 +106,8 @@ class OverlayWindow(QWidget):
                 height += 34
             if overlay.show_stats:
                 height += 20
+            if self._extras:
+                height += 6 + 15 * len(self._extras)
         self.setFixedSize(int(width * scale), int(height * scale))
 
     # --------------------------------------------------------------- placement
@@ -159,6 +162,14 @@ class OverlayWindow(QWidget):
 
     def set_status(self, text: str) -> None:
         self._status_text = text
+        self.update()
+
+    def set_extras(self, extras: list) -> None:
+        """The side watches shown under the main figure."""
+        changed = len(extras) != len(self._extras)
+        self._extras = list(extras)
+        if changed:
+            self._relayout()          # the card grows and shrinks with them
         self.update()
 
     def set_room_label(self, text: str) -> None:
@@ -327,7 +338,9 @@ class OverlayWindow(QWidget):
         if self._config.overlay.show_sparkline:
             y = self._paint_sparkline(painter, palette, scale, pad, y)
         if self._config.overlay.show_stats:
-            self._paint_stats(painter, palette, scale, pad, y)
+            y = self._paint_stats(painter, palette, scale, pad, y)
+        if self._extras:
+            self._paint_extras(painter, palette, scale, pad, y)
 
     def _subtitle(self) -> str:
         if self._sample is None:
@@ -441,3 +454,33 @@ class OverlayWindow(QWidget):
         elided = metrics.elidedText(text, Qt.ElideRight, int(self.width() - pad * 2))
         painter.drawText(QRectF(pad, y, self.width() - pad * 2, 16 * scale),
                          Qt.AlignLeft | Qt.AlignVCenter, elided)
+        return y + 16 * scale
+
+    def _paint_extras(self, painter: QPainter, palette: Palette, scale: float,
+                      pad: float, y: float) -> None:
+        """One line per side watch: name on the left, its own colour on the right."""
+        row_height = 15 * scale
+        y += 4 * scale
+        painter.setPen(QPen(QColor(palette.border), 1.0))
+        painter.drawLine(pad, y, self.width() - pad, y)
+        y += 2 * scale
+
+        painter.setFont(self._font(7.5 * scale))
+        metrics = QFontMetrics(painter.font())
+        for extra in self._extras[:4]:
+            value = format_ms(extra.rtt_ms) if extra.ok else "--"
+            level = level_for(extra.rtt_ms if extra.ok else None,
+                              self._config.thresholds.good_ms,
+                              self._config.thresholds.warn_ms)
+            value_width = metrics.horizontalAdvance(value)
+            label = metrics.elidedText(
+                extra.label, Qt.ElideRight,
+                max(24, int(self.width() - pad * 2 - value_width - 10 * scale)),
+            )
+            painter.setPen(QPen(QColor(palette.muted)))
+            painter.drawText(QRectF(pad, y, self.width() - pad * 2, row_height),
+                             Qt.AlignLeft | Qt.AlignVCenter, label)
+            painter.setPen(QPen(QColor(color_for_level(palette, level))))
+            painter.drawText(QRectF(pad, y, self.width() - pad * 2, row_height),
+                             Qt.AlignRight | Qt.AlignVCenter, value)
+            y += row_height

@@ -385,3 +385,110 @@ def test_a_configured_app_is_used_even_when_the_kind_says_live():
     config.manual_kind = "live"
     config.app_name = "game.exe"
     assert manual_target(config).kind == KIND_APP
+
+
+# ------------------------------------------------- watching several at once
+def _extra_worker(extras):
+    from lagscope.config import Config
+    from lagscope.monitor import MonitorWorker
+
+    config = Config()
+    config.detect.enabled = False
+    config.watch_extras = extras
+    worker = MonitorWorker(config.sanitized())
+    return worker
+
+
+def test_side_watches_are_measured_one_per_round(monkeypatch):
+    """All of them every round would cost more than the round itself."""
+    from lagscope import monitor as monitor_module
+
+    pinged = []
+    monkeypatch.setattr(monitor_module, "tcp_rtt_ms",
+                        lambda host, port, timeout: pinged.append(host) or 10.0)
+    worker = _extra_worker([
+        {"kind": "target", "ident": "a.example", "port": 443, "label": "A"},
+        {"kind": "target", "ident": "b.example", "port": 443, "label": "B"},
+    ])
+    seen = []
+    worker.extraUpdated.connect(seen.append)
+
+    worker._measure_next_extra()
+    worker._measure_next_extra()
+    worker._measure_next_extra()
+
+    assert pinged == ["a.example", "b.example", "a.example"]   # round robin
+    assert [result.label for result in seen] == ["A", "B", "A"]
+    assert all(result.ok and result.rtt_ms == 10.0 for result in seen)
+
+
+def test_a_side_watch_that_refuses_tcp_is_pinged(monkeypatch):
+    from lagscope import monitor as monitor_module
+
+    monkeypatch.setattr(monitor_module, "tcp_rtt_ms", lambda host, port, timeout: None)
+    monkeypatch.setattr(monitor_module, "icmp_ping_ms", lambda host, timeout: 22.0)
+    worker = _extra_worker([{"kind": "target", "ident": "game.example", "port": 7000,
+                             "label": "Game"}])
+    seen = []
+    worker.extraUpdated.connect(seen.append)
+
+    worker._measure_next_extra()
+
+    assert seen[0].method == "icmp" and seen[0].rtt_ms == 22.0
+
+
+def test_an_unreachable_side_watch_is_reported_not_dropped(monkeypatch):
+    from lagscope import monitor as monitor_module
+
+    monkeypatch.setattr(monitor_module, "tcp_rtt_ms", lambda host, port, timeout: None)
+    monkeypatch.setattr(monitor_module, "icmp_ping_ms", lambda host, timeout: None)
+    worker = _extra_worker([{"kind": "target", "ident": "down.example", "port": 443,
+                             "label": "Down"}])
+    seen = []
+    worker.extraUpdated.connect(seen.append)
+
+    worker._measure_next_extra()
+
+    assert not seen[0].ok and seen[0].error == "unreachable"
+    assert seen[0].label == "Down"        # still shown, so the outage is visible
+
+
+def test_an_application_side_watch_uses_its_own_probe(monkeypatch):
+    from lagscope.probes.appnet import AppMeasurement, Peer
+
+    worker = _extra_worker([{"kind": "app", "ident": "Discord.exe", "port": 443,
+                             "label": "Discord"}])
+    worker._extra_app = type("P", (), {
+        "measure": lambda self, name, timeout: AppMeasurement(
+            rtt_ms=44.0, method="icmp", peer=Peer("93.184.216.34", 50000, 1), process=name),
+    })()
+    seen = []
+    worker.extraUpdated.connect(seen.append)
+
+    worker._measure_next_extra()
+
+    assert seen[0].kind == "app" and seen[0].rtt_ms == 44.0
+
+
+def test_no_side_watches_means_no_work(monkeypatch):
+    from lagscope import monitor as monitor_module
+
+    calls = []
+    monkeypatch.setattr(monitor_module, "tcp_rtt_ms",
+                        lambda host, port, timeout: calls.append(host) or 1.0)
+    worker = _extra_worker([])
+
+    worker._measure_next_extra()
+
+    assert calls == []
+
+
+def test_each_side_watch_keeps_a_stable_key():
+    """The UI holds results by key, so it has to survive a re-measure."""
+    worker = _extra_worker([{"kind": "target", "ident": "A.Example", "port": 53, "label": "x"}])
+    entry = {"kind": "target", "ident": "A.Example", "port": 53, "label": "x"}
+
+    first = worker._measure_extra(entry, 0.01)
+    second = worker._measure_extra(entry, 0.01)
+
+    assert first.key == second.key == "target:a.example:53"

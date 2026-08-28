@@ -256,6 +256,30 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "detect.source.clipboard": ("复制的链接", "複製的連結", "copied link"),
     "detect.source.title": ("窗口标题", "視窗標題", "window title"),
     "menu.phone": ("手机网址…", "手機網址…", "Phone dashboard…"),
+    "extras.group": ("同时监测（附加）", "同時監測（附加）", "Also watch"),
+    "extras.hint": (
+        "除了主要对象，再盯几个目标，一眼看出「只有这个卡」还是「整条线都卡」。"
+        "最多 4 个，轮流测量所以不会拖慢主要数字。",
+        "除了主要對象，再盯幾個目標，一眼看出「只有這個卡」還是「整條線都卡」。"
+        "最多 4 個，輪流量測所以不會拖慢主要數字。",
+        "Watch a few more targets beside the main one, to tell \"only this is laggy\" from "
+        "\"the whole line is\". Up to four, measured in turn so the main figure stays fast.",
+    ),
+    "extras.add": ("新增…", "新增…", "Add…"),
+    "extras.remove": ("移除", "移除", "Remove"),
+    "extras.add_router": ("＋路由器", "＋路由器", "+ Router"),
+    "extras.add_dns": ("＋DNS", "＋DNS", "+ DNS"),
+    "extras.router": ("路由器", "路由器", "Router"),
+    "extras.dns": ("DNS", "DNS", "DNS"),
+    "extras.dialog": ("新增监测目标", "新增監測目標", "Add a watch"),
+    "extras.kind": ("类型", "類型", "Type"),
+    "extras.kind.target": ("服务器地址", "伺服器位址", "Server address"),
+    "extras.kind.app": ("应用程序", "應用程式", "Application"),
+    "extras.ident": ("地址／程序名", "位址／程式名", "Address or process"),
+    "extras.label": ("显示名称", "顯示名稱", "Label"),
+    "extras.full": ("最多只能加 4 个", "最多只能加 4 個", "Four is the limit"),
+    "extras.no_router": ("找不到路由器地址", "找不到路由器位址", "Could not find the router"),
+
     "web.group": ("手机仪表板", "手機儀表板", "Phone dashboard"),
     "web.enabled": (
         "让同一网络下的手机也能看", "讓同一網路下的手機也能看", "Let a phone on this network watch",

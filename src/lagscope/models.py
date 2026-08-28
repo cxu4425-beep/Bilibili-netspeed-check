@@ -46,6 +46,30 @@ class WatchTarget:
 
 
 @dataclass(frozen=True)
+class ExtraResult:
+    """One of the side-by-side watches shown under the main figure.
+
+    These exist to answer "is it just my game, or is the whole line bad?", so
+    they are deliberately cheap: one round trip each, measured in turn rather
+    than all at once.
+    """
+
+    key: str                      # stable identity, e.g. "target:8.8.8.8:53"
+    label: str = ""
+    kind: str = KIND_TARGET
+    ident: str = ""
+    rtt_ms: Optional[float] = None
+    method: str = "none"
+    ok: bool = False
+    ts: float = field(default_factory=time.time)
+    error: Optional[str] = None
+
+    @property
+    def age_s(self) -> float:
+        return max(0.0, time.time() - self.ts)
+
+
+@dataclass(frozen=True)
 class StreamMeasurement:
     """Result of a single live-stream or video probe."""
 
