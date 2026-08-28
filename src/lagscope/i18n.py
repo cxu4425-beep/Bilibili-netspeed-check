@@ -194,6 +194,25 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "detect.source.manual": ("手动", "手動", "manual"),
     "detect.source.clipboard": ("复制的链接", "複製的連結", "copied link"),
     "detect.source.title": ("窗口标题", "視窗標題", "window title"),
+    "menu.phone": ("手机网址…", "手機網址…", "Phone dashboard…"),
+    "web.group": ("手机仪表板", "手機儀表板", "Phone dashboard"),
+    "web.enabled": (
+        "让同一网络下的手机也能看", "讓同一網路下的手機也能看", "Let a phone on this network watch",
+    ),
+    "web.port": ("端口", "連接埠", "Port"),
+    "web.code": ("访问码（留空＝不需要）", "存取碼（留空＝不需要）", "Access code (empty = none)"),
+    "web.hint": (
+        "打开后，手机浏览器输入下面的网址就能看到同一份实时数字，不用装 App，iPhone 安卓都可以。"
+        "只读：手机上改不了任何设置。网址只在你的局域网内有效。",
+        "開啟後，手機瀏覽器輸入下面的網址就能看到同一份即時數字，不用裝 App，iPhone 安卓都可以。"
+        "唯讀：手機上改不了任何設定。網址只在你的區域網路內有效。",
+        "Open the address below in a phone browser to watch the same live numbers - no app to "
+        "install, iPhone and Android alike. Read-only: nothing can be changed from the phone, "
+        "and the address only works on your own network.",
+    ),
+    "web.url_label": ("手机上打开：", "手機上開啟：", "Open on your phone:"),
+    "web.off": ("未开启（在设置里打开）", "未開啟（在設定裡開啟）", "Not enabled (turn it on in Settings)"),
+    "web.copied": ("网址已复制到剪贴板", "網址已複製到剪貼簿", "Address copied to the clipboard"),
     "menu.read_clipboard": ("读取剪贴板里的链接", "讀取剪貼簿裡的連結", "Read link from clipboard"),
     "notice.clipboard_read": (
         "已读取剪贴板。若里面是B站链接，马上就会切过去。",

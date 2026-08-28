@@ -26,8 +26,9 @@ from .monitor import (
 from .probes.display import DisplayProbe
 from .recording import CsvRecorder
 from .single_instance import SingleInstance
+from .web import DashboardServer
 from .ui.icons import app_icon
-from .ui.theme import format_ms
+from .ui.theme import format_mbps, format_ms, level_for
 from .ui.overlay import OverlayWindow
 from .ui.settings import SettingsDialog
 from .ui.tray import TrayIcon
@@ -80,6 +81,7 @@ class MonitorApplication(QObject):
         self._lines: tuple = ("", [])
         self._events = EventLog()
         self._notifier = Notifier()
+        self._dashboard: Optional[DashboardServer] = None
 
         self._overlay = OverlayWindow(self._config, self._display)
         self._overlay.positionChanged.connect(self._on_overlay_moved)
@@ -127,6 +129,7 @@ class MonitorApplication(QObject):
         self._instance.activated.connect(self._on_second_instance)
 
         self._apply_recording()
+        self._apply_dashboard()
         app.aboutToQuit.connect(self._shutdown)
 
     # ------------------------------------------------------------------ start
@@ -164,6 +167,10 @@ class MonitorApplication(QObject):
         self._action_detect.setChecked(self._config.detect.enabled)
         self._action_detect.toggled.connect(self._set_auto_detect)
         self._menu.addAction(self._action_detect)
+
+        phone_action = QAction(tr("menu.phone"), self._menu)
+        phone_action.triggered.connect(self._show_phone_url)
+        self._menu.addAction(phone_action)
 
         clipboard_action = QAction(tr("menu.read_clipboard"), self._menu)
         clipboard_action.triggered.connect(self._read_clipboard_now)
@@ -308,6 +315,21 @@ class MonitorApplication(QObject):
         self._settings_dialog.raise_()
         self._settings_dialog.activateWindow()
 
+    def _show_phone_url(self) -> None:
+        """Show (and copy) the address to type into a phone browser."""
+        if self._dashboard is None:
+            QMessageBox.information(None, tr("web.group"), tr("web.off"))
+            return
+        urls = self._dashboard.urls()
+        if not urls:
+            QMessageBox.information(None, tr("web.group"), tr("web.off"))
+            return
+        QGuiApplication.clipboard().setText(urls[0])
+        QMessageBox.information(
+            None, tr("web.group"),
+            f"{tr('web.url_label')}\n\n" + "\n".join(urls) + f"\n\n{tr('web.copied')}",
+        )
+
     def _copy_diagnostics(self) -> None:
         QGuiApplication.clipboard().setText(self.diagnostics_text())
         if self._tray is not None:
@@ -369,9 +391,83 @@ class MonitorApplication(QObject):
             self._clipboard_timer.stop()
 
         self._apply_recording()
+        self._apply_dashboard()
         self.configChanged.emit(copy.deepcopy(self._config))
         self._save_config_now()
         self._update_status_text()
+
+    def _apply_dashboard(self) -> None:
+        """Start, restart or stop the phone dashboard to match the settings."""
+        web = self._config.web
+        if self._dashboard is not None:
+            same = (self._dashboard.port == web.port
+                    and self._dashboard.access_code == web.access_code
+                    and self._dashboard.bind_host == web.bind_host)
+            if web.enabled and same:
+                return
+            self._dashboard.stop()
+            self._dashboard = None
+        if not web.enabled:
+            return
+        server = DashboardServer(web.port, web.access_code, web.bind_host)
+        if server.start():
+            self._dashboard = server
+            self._publish_dashboard()
+        else:
+            LOG.warning("phone dashboard could not start on port %s", web.port)
+
+    def _publish_dashboard(self) -> None:
+        """Hand the current state to the dashboard in ready-to-render form."""
+        if self._dashboard is None:
+            return
+        sample = self._stats.last()
+        kind = sample.kind if sample else KIND_LIVE
+        value = sample.total_ms if (sample and sample.ok) else None
+        level = level_for(value, self._config.thresholds.good_ms,
+                          self._config.thresholds.warn_ms)
+
+        if kind == KIND_APP:
+            rows = [
+                (tr("label.latency"), format_ms(sample.network_ms if sample else None)),
+                (tr("label.connections"), str(sample.connections) if sample and sample.connections else "--"),
+                (tr("label.display"), format_ms(sample.display_ms if sample else None)),
+            ]
+        elif kind == KIND_TARGET:
+            rows = [
+                (tr("label.latency"), format_ms(sample.network_ms if sample else None)),
+                (tr("label.display"), format_ms(sample.display_ms if sample else None)),
+            ]
+        else:
+            second = tr("label.startup") if kind == KIND_VIDEO else tr("label.stream")
+            rows = [
+                (tr("label.network"), format_ms(sample.network_ms if sample else None)),
+                (second, format_ms(sample.stream_ms if sample else None)),
+                (tr("label.display"), format_ms(sample.display_ms if sample else None)),
+            ]
+
+        events = self._events.summary()
+        stats = [
+            (tr("label.avg"), format_ms(self._stats.avg())),
+            (tr("label.p95"), format_ms(self._stats.percentile(95))),
+            (tr("label.down"), format_mbps(sample.down_mbps if sample else None)),
+            (tr("label.up"), format_mbps(sample.up_mbps if sample else None)),
+        ]
+        self._dashboard.publish({
+            "ok": bool(sample and sample.ok),
+            "total_ms": value,
+            "level": level,
+            "status": self._status_line() or (
+                tr("label.measured") if (sample and not sample.estimated) else tr("label.estimated")
+            ),
+            "target": self._room_title or (sample.title if sample else ""),
+            "rows": rows,
+            "stats": stats,
+            "spark": self._stats.spark_values(60),
+            "measured": bool(sample and not sample.estimated),
+            "foot": f"{APP_NAME} {__version__} · {tr('label.jitter')} "
+                    f"{format_ms(self._stats.jitter())} · "
+                    f"{events['stalls'] + events['spikes']} / {events['window_min']}min",
+        })
 
     def _apply_recording(self) -> None:
         if self._config.recording.csv_enabled:
@@ -409,6 +505,7 @@ class MonitorApplication(QObject):
             self._tray.update_sample(sample, self._status_line())
         if self._recorder is not None:
             self._recorder.write(sample)
+        self._publish_dashboard()
 
     @Slot(str, str)
     def _on_status(self, status: str, detail: str) -> None:
@@ -585,6 +682,8 @@ class MonitorApplication(QObject):
             self._thread.terminate()
         if self._recorder is not None:
             self._recorder.close()
+        if self._dashboard is not None:
+            self._dashboard.stop()
         if self._tray is not None:
             self._tray.hide()
         self._instance.close()

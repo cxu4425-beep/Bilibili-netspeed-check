@@ -179,8 +179,52 @@ class SettingsDialog(QDialog):
         form.addRow("", self.notify_check)
 
         outer.addWidget(general_box)
+        outer.addWidget(self._build_web_box(page))
         outer.addStretch(1)
         return page
+
+    def _build_web_box(self, parent: QWidget) -> QWidget:
+        box = QGroupBox(tr("web.group"), parent)
+        form = QFormLayout(box)
+
+        self.web_check = QCheckBox(tr("web.enabled"), box)
+        self.web_check.toggled.connect(self._sync_web_state)
+        form.addRow("", self.web_check)
+
+        self.web_port_spin = QSpinBox(box)
+        self.web_port_spin.setRange(1024, 65535)
+        form.addRow(tr("web.port"), self.web_port_spin)
+
+        self.web_code_edit = QLineEdit(box)
+        self.web_code_edit.setMaxLength(32)
+        form.addRow(tr("web.code"), self.web_code_edit)
+
+        self.web_url_label = QLabel("", box)
+        self.web_url_label.setWordWrap(True)
+        self.web_url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        form.addRow(tr("web.url_label"), self.web_url_label)
+
+        hint = QLabel(tr("web.hint"), box)
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: palette(mid);")
+        form.addRow(hint)
+        self._web_box = box
+        return box
+
+    def _sync_web_state(self) -> None:
+        enabled = self.web_check.isChecked()
+        self.web_port_spin.setEnabled(enabled)
+        self.web_code_edit.setEnabled(enabled)
+        self._refresh_web_urls()
+
+    def _refresh_web_urls(self) -> None:
+        from ..web import dashboard_urls
+
+        if not self.web_check.isChecked():
+            self.web_url_label.setText(tr("web.off"))
+            return
+        urls = dashboard_urls(self.web_port_spin.value(), self.web_code_edit.text().strip())
+        self.web_url_label.setText("\n".join(urls) if urls else tr("web.off"))
 
     def _build_detect_box(self, parent: QWidget) -> QWidget:
         box = QGroupBox(tr("detect.group"), parent)
@@ -403,6 +447,9 @@ class SettingsDialog(QDialog):
         self.target_port_spin.setValue(self._config.target_port)
         self.netspeed_check.setChecked(self._config.show_netspeed)
         self.notify_check.setChecked(self._config.notify_enabled)
+        self.web_check.setChecked(self._config.web.enabled)
+        self.web_port_spin.setValue(self._config.web.port)
+        self.web_code_edit.setText(self._config.web.access_code)
         self.detect_client_check.setChecked(self._config.detect.use_client)
         self.detect_clipboard_check.setChecked(self._config.detect.use_clipboard)
         self.detect_titles_memory_check.setChecked(self._config.detect.remember_titles)
@@ -455,6 +502,7 @@ class SettingsDialog(QDialog):
 
         self._sync_anchor_state()
         self._sync_detect_state()
+        self._sync_web_state()
 
     def _reload_screens(self, selected: str) -> None:
         from PySide6.QtWidgets import QApplication
@@ -551,6 +599,9 @@ class SettingsDialog(QDialog):
         config.target_port = self.target_port_spin.value()
         config.show_netspeed = self.netspeed_check.isChecked()
         config.notify_enabled = self.notify_check.isChecked()
+        config.web.enabled = self.web_check.isChecked()
+        config.web.port = self.web_port_spin.value()
+        config.web.access_code = self.web_code_edit.text().strip()
         config.probe.interval_ms = self.interval_spin.value()
         config.sample_window = self.window_spin.value()
         config.language = self.language_combo.currentData() or "auto"

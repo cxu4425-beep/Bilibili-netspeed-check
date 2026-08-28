@@ -179,6 +179,16 @@ class DetectConfig:
 
 
 @dataclass
+class WebConfig:
+    """The read-only dashboard a phone on the same network can open."""
+
+    enabled: bool = False         # off until asked for: it opens a LAN port
+    port: int = 23125
+    access_code: str = ""         # empty means anyone on the LAN can look
+    bind_host: str = "0.0.0.0"    # the phone has to reach it, so not loopback
+
+
+@dataclass
 class ThresholdConfig:
     good_ms: float = 2000.0
     warn_ms: float = 5000.0
@@ -208,6 +218,7 @@ class Config:
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     thresholds: ThresholdConfig = field(default_factory=ThresholdConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
+    web: WebConfig = field(default_factory=WebConfig)
 
     # ---------------------------------------------------------------- loading
     @classmethod
@@ -278,6 +289,12 @@ class Config:
         self.detect.poll_interval_s = int(_clamp(self.detect.poll_interval_s, 2, 300))
         self.detect.bridge_port = int(_clamp(self.detect.bridge_port, 1024, 65535))
         self.detect.bridge_timeout_s = int(_clamp(self.detect.bridge_timeout_s, 10, 3600))
+        self.web.port = int(_clamp(self.web.port, 1024, 65535))
+        self.web.access_code = "".join(
+            ch for ch in str(self.web.access_code or "") if ch.isalnum()
+        )[:32]
+        if self.web.bind_host not in ("0.0.0.0", "127.0.0.1"):
+            self.web.bind_host = "0.0.0.0"
         if self.manual_kind not in ("live", "video", "app", "target"):
             self.manual_kind = "live"
         self.target_port = int(_clamp(self.target_port, 1, 65535))
@@ -337,6 +354,7 @@ _NESTED = {
     "recording": RecordingConfig,
     "thresholds": ThresholdConfig,
     "detect": DetectConfig,
+    "web": WebConfig,
 }
 
 

@@ -9,7 +9,7 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-app.png" width="232" alt="任意應用模式懸浮窗">
 <img src="docs/images/overlay-dark.png" width="232" alt="直播模式懸浮窗">
@@ -52,6 +52,7 @@
 - **位置完全自訂**：四個角落 + 水平/垂直偏移、縮放、透明度、三種主題、緊湊模式、滑鼠穿透、鎖定位置。
 - **適合長時間掛著**：資料窗口有上限、記憶體不長胖；探測失敗會指數退避；斷網恢復後自動接上；設定原子寫入不怕當機。
 - **統計資訊**：均值、P95、抖動、迷你折線圖，可選擇把每一筆樣本寫成 CSV（自動輪替）。
+- **手機也能看**：電腦開一個唯讀網頁，手機瀏覽器連進來就看得到同一份數字（見[用手機看](#-用手機看不用裝-app)）。
 - **多人可用**：不需要帳號或 Cookie，設定存在各自的使用者目錄，同一台電腦不同使用者互不干擾。
 - **免登入、無遙測**：只呼叫瀏覽器打開直播間時同樣的公開 API。
 - **完整介面**：所有選項都在設定視窗裡，不用手改設定檔；打包好的 exe 雙擊即用。
@@ -241,6 +242,34 @@ Minecraft（`javaw.exe`）、OBS 推流、任何下載工具……
 
 ---
 
+## 📱 用手機看（不用裝 App）
+
+<div align="center"><img src="docs/images/phone-dashboard.png" width="300" alt="手機儀表板"></div>
+
+電腦跑 LagScope，手機開個網頁就能看到**同一份即時數字**——iPhone、Android 都可以，不用裝任何東西。
+適合「電腦在客廳、人在沙發」，或打遊戲時把手機擱旁邊當儀表板。
+
+1. 設定 → 常規 → **手機儀表板** → 勾「讓同一網路下的手機也能看」
+2. 想要的話填一組**存取碼**（建議填，四位數就夠）
+3. 下面會直接顯示網址，例如 `http://192.168.1.20:23125/?key=4321`
+   （托盤選單的「手機網址…」也會顯示並自動複製）
+4. 手機和電腦連同一個 Wi-Fi，瀏覽器輸入那個網址即可
+
+畫面上有：總延遲大字（依門檻變色）、分項、折線圖、均值／P95／上下行、抖動與卡頓次數，每 2 秒自動更新。
+
+**安全性：**
+
+- 預設**關閉**，要自己打開才會開埠。
+- **唯讀**——手機上改不了任何設定，也控制不了監視器，整個服務只有兩個 GET 端點。
+- 只在你的**區域網路**內有效（沒有做任何對外轉發）；填了存取碼後，沒有碼就只會拿到 403。
+- 網頁是**完全自包含**的，不載入任何外部資源，所以在沒有網際網路的區網裡也能開。
+
+> 想在手機上跑完整的 LagScope（懸浮窗＋任意 App 延遲）目前做不到：Android 從 10 開始就不讓
+> App 讀別的程式的連線表（要 root 或做成 VPN 服務），iOS 更是連懸浮窗都不允許。
+> 所以手機這邊是「看電腦量到的數字」，而不是「在手機上量手機」。
+
+---
+
 ## 🔎 自動跟隨我正在看的頁面
 
 監視器用幾個**各自獨立、都可以單獨關掉**的來源判斷你在看什麼，優先順序由高到低：
@@ -373,6 +402,7 @@ lagscope --list-apps                  # 列出正在連網的程式（挑名字�
 | 服務器地址 / 端口 | 「自定義服務器地址」模式要量的目標 |
 | 顯示全機上傳／下載速度 | 每筆樣本附帶網速（可關）|
 | 卡頓／延遲突增時彈出提示 | 有冷卻時間，不會一直吵（可關）|
+| 手機儀表板：開關／端口／存取碼 | 讓同一網路的手機用瀏覽器看（唯讀，預設關）|
 | 直播間號或連結 | 要監測的直播間；自動模式下當作找不到頁面時的備援 |
 | 視頻號或連結 | 要監測的影片，支援 BV / av / 網址（`?p=` 指定分 P）|
 | 自動檢測：讀取官方PC客戶端正在播放的內容 | 直接讀客戶端自己的紀錄，全自動（可關）|
@@ -626,6 +656,18 @@ does the same from the terminal.
   them all periodically and the diagnostics show how the current one compares to the best.
 - **Room details**: popularity, category, uptime, quality name, codec and container.
 - 简体中文 / 繁體中文 / English, per-user settings, single instance per user.
+
+### Watch from your phone
+
+Turn on **Settings → General → Phone dashboard** and open the shown address in a phone browser
+on the same Wi-Fi - the same live numbers, on iPhone and Android, with nothing to install. It is
+**read-only** (two GET endpoints, nothing can be changed from the phone), off by default, LAN
+only, and can require an access code. The page is fully self-contained, so it works on a network
+with no internet at all.
+
+Running the full LagScope *on* a phone is not possible: since Android 10 an app cannot read
+another app's connection table without root or a VPN service, and iOS allows no overlay over
+other apps at all. The phone shows what the PC measures.
 
 ### Auto-detection
 
