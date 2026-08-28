@@ -19,6 +19,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--room", metavar="ID_OR_URL", help="live room id or URL to monitor")
     parser.add_argument("--video", metavar="ID_OR_URL", help="video (BV/av id or URL) to monitor")
+    parser.add_argument("--app", metavar="NAME", help="measure any application by process name")
+    parser.add_argument("--app-foreground", action="store_true",
+                        help="measure whichever application is in the foreground")
+    parser.add_argument("--ping", metavar="HOST", help="measure a server address directly")
+    parser.add_argument("--ping-port", type=int, default=None, metavar="PORT",
+                        help="port to use with --ping (default 443)")
+    parser.add_argument("--list-apps", action="store_true",
+                        help="list the applications that currently hold connections, then exit")
     parser.add_argument("--detect", dest="detect", action="store_true",
                         help="follow whatever Bilibili page you are watching")
     parser.add_argument("--no-detect", dest="detect", action="store_false",
@@ -82,6 +90,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         config.video_page = page
         config.manual_kind = "video"
         config.detect.enabled = False
+    if args.app or args.app_foreground:
+        config.manual_kind = "app"
+        config.app_name = args.app or ""
+        config.app_follow_foreground = bool(args.app_foreground)
+        config.detect.enabled = False
+    if args.ping:
+        config.manual_kind = "target"
+        config.target_host = args.ping
+        if args.ping_port:
+            config.target_port = args.ping_port
+        config.detect.enabled = False
     if args.detect is not None:
         config.detect.enabled = args.detect
     if args.client_dir:
@@ -94,6 +113,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         config.overlay.enabled = False
     config = config.sanitized()
     set_language(config.language)
+
+    if args.list_apps:
+        return _list_apps()
 
     if args.detect_report:
         return _detect_report(config)
@@ -124,7 +146,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def _probe_once(config) -> int:
     """Headless single measurement - handy for troubleshooting and scripting."""
-    from .models import KIND_NETWORK, KIND_VIDEO, LatencySample
+    from .models import KIND_APP, KIND_NETWORK, KIND_TARGET, KIND_VIDEO, LatencySample
     from .probes.network import HttpClient, tcp_rtt_ms
     from .probes.stream import StreamProbe
     from .probes.video import VideoProbe
@@ -133,6 +155,36 @@ def _probe_once(config) -> int:
     timeout_s = config.probe.timeout_ms / 1000.0
     client = HttpClient(timeout_s=timeout_s)
     try:
+        if target.kind == KIND_APP:
+            from .probes.appnet import AppNetProbe
+
+            result = AppNetProbe().measure(target.ident, timeout_s)
+            sample = LatencySample(
+                network_ms=result.rtt_ms, total_ms=result.rtt_ms, ok=result.rtt_ms is not None,
+                kind=KIND_APP, method=result.method, title=target.ident,
+                host=str(result.peer) if result.peer else "",
+                connections=result.connections, error=result.error,
+            )
+            print(json.dumps(_with_target(sample, target), indent=2, ensure_ascii=False))
+            return 0 if sample.ok else 1
+
+        if target.kind == KIND_TARGET:
+            from .probes.network import icmp_ping_ms
+
+            port = int(target.page or 443)
+            rtt = tcp_rtt_ms(target.ident, port, timeout_s)
+            method = "tcp" if rtt is not None else "icmp"
+            if rtt is None:
+                rtt = icmp_ping_ms(target.ident, timeout_s)
+            sample = LatencySample(
+                network_ms=rtt, total_ms=rtt, ok=rtt is not None, kind=KIND_TARGET,
+                method=method if rtt is not None else "none",
+                host=f"{target.ident}:{port}", title=target.ident,
+                error=None if rtt is not None else "unreachable",
+            )
+            print(json.dumps(_with_target(sample, target), indent=2, ensure_ascii=False))
+            return 0 if sample.ok else 1
+
         rtt = tcp_rtt_ms(config.probe.rtt_host, config.probe.rtt_port, timeout_s)
         if target.kind == KIND_NETWORK:
             sample = LatencySample(
@@ -171,13 +223,26 @@ def _probe_once(config) -> int:
                 required_mbps=result.required_mbps,
                 error=result.error,
             )
-        payload = sample.to_dict()
-        payload["target"] = {"kind": target.kind, "id": target.ident, "page": target.page,
-                             "source": target.source}
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(json.dumps(_with_target(sample, target), indent=2, ensure_ascii=False))
         return 0 if sample.ok else 1
     finally:
         client.close()
+
+
+def _list_apps() -> int:
+    """Show which programs are on the network, so one can be named with --app."""
+    from .probes.appnet import list_apps
+
+    apps = list_apps()
+    if not apps:
+        print("No application with open connections was found.", file=sys.stderr)
+        return 1
+    width = max(len(app.name) for app in apps)
+    print(f"{'APPLICATION'.ljust(width)}  SOCKETS  PIDS")
+    for app in apps:
+        pids = ",".join(str(pid) for pid in app.pids[:4])
+        print(f"{app.name.ljust(width)}  {app.connections:>7}  {pids}")
+    return 0
 
 
 def _detect_report(config) -> int:
@@ -202,27 +267,29 @@ def _detect_report(config) -> int:
     return 0 if report.get("result") else 1
 
 
-def _probe_target(config):
-    """Same target rules as the GUI: detected first, configured second."""
-    from .detect import AutoDetector
-    from .models import KIND_LIVE, KIND_NETWORK, KIND_VIDEO, WatchTarget
+def _with_target(sample, target) -> dict:
+    payload = sample.to_dict()
+    payload["target"] = {"kind": target.kind, "id": target.ident, "page": target.page,
+                         "source": target.source}
+    return payload
 
+
+def _probe_target(config):
+    """Same rules the GUI uses, with detection resolved right now."""
+    from .detect import AutoDetector
+    from .targets import resolve_target
+
+    def foreground_app() -> str:
+        from .ui.anchor import create_window_finder
+
+        return create_window_finder().foreground_process()
+
+    detector = None
     if config.detect.enabled:
         detector = AutoDetector(config.detect)
-        try:
-            detected = detector.poll(force=True)
-        finally:
+    try:
+        return resolve_target(config, detector, foreground_app, force_detect=True)
+    finally:
+        if detector is not None:
             detector.close()
-        if detected is not None and not detected.is_empty:
-            if detected.kind != KIND_VIDEO or config.detect.follow_videos:
-                return detected
 
-    if config.manual_kind == KIND_VIDEO and config.video_id:
-        return WatchTarget(kind=KIND_VIDEO, ident=config.video_id, page=config.video_page,
-                               source="manual")
-    if config.room_id:
-        return WatchTarget(kind=KIND_LIVE, ident=config.room_id, source="manual")
-    if config.video_id:
-        return WatchTarget(kind=KIND_VIDEO, ident=config.video_id, page=config.video_page,
-                               source="manual")
-    return WatchTarget(kind=KIND_NETWORK, source="manual")

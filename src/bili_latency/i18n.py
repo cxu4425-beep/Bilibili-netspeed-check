@@ -19,6 +19,7 @@ _current = "zh_CN"
 STRINGS: dict[str, tuple[str, str, str]] = {
     "app.title": ("哔哩哔哩延迟监视器", "嗶哩嗶哩延遲監視器", "Bilibili Latency Monitor"),
     "app.short": ("B站延迟", "B站延遲", "Bili Latency"),
+    "app.short_generic": ("网络延迟", "網路延遲", "Latency"),
 
     "menu.show_overlay": ("显示悬浮窗", "顯示懸浮視窗", "Show overlay"),
     "menu.lock": ("锁定位置", "鎖定位置", "Lock position"),
@@ -44,6 +45,12 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "label.video": ("视频", "影片", "Video"),
     "label.startup": ("起播", "起播", "Startup"),
     "label.speed": ("带宽", "頻寬", "Speed"),
+    "label.latency": ("延迟", "延遲", "Latency"),
+    "label.connections": ("连接数", "連線數", "Sockets"),
+    "label.app": ("应用", "應用", "App"),
+    "label.target": ("目标", "目標", "Target"),
+    "label.down": ("下载", "下載", "Down"),
+    "label.up": ("上传", "上傳", "Up"),
     "label.measured": ("实测", "實測", "measured"),
     "label.estimated": ("估算", "估算", "estimated"),
     "label.auto": ("自动", "自動", "auto"),
@@ -56,6 +63,11 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "status.network_only": ("仅网络模式", "僅網路模式", "Network-only mode"),
 
     "status.no_video": ("未设置视频", "未設定影片", "No video configured"),
+    "status.no_app": ("未选择应用", "未選擇應用", "No app selected"),
+    "status.no_connections": (
+        "该应用当前没有网络连接", "該應用目前沒有網路連線", "That app has no connections right now",
+    ),
+    "status.unreachable": ("目标无法连通", "目標無法連通", "Target unreachable"),
     "status.detecting": ("正在识别观看页面…", "正在辨識觀看頁面…", "Looking for what you are watching…"),
 
     "settings.title": ("设置", "設定", "Settings"),
@@ -70,6 +82,32 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     ),
     "general.target.live": ("手动指定直播间", "手動指定直播間", "A live room I pick"),
     "general.target.video": ("手动指定视频", "手動指定影片", "A video I pick"),
+    "general.target.app": ("任意应用程序（游戏／通话／浏览器…）", "任意應用程式（遊戲／通話／瀏覽器…）",
+                           "Any application (games, calls, browsers…)"),
+    "general.target.custom": ("自定义服务器地址", "自訂伺服器位址", "A server address I type"),
+    "general.app_name": ("应用程序", "應用程式", "Application"),
+    "general.app_follow": (
+        "自动跟随当前使用的程序", "自動跟隨目前使用的程式", "Follow whichever app is in front",
+    ),
+    "general.app_hint": (
+        "选一个正在联网的程序，监视器会找出它连的服务器并持续测延迟；"
+        "UDP 的游戏会自动改用 ping。",
+        "選一個正在連網的程式，監視器會找出它連的伺服器並持續測延遲；"
+        "UDP 的遊戲會自動改用 ping。",
+        "Pick a program that is on the network: the monitor finds the servers it talks to and "
+        "keeps timing them, falling back to ping for UDP games.",
+    ),
+    "general.app_refresh": ("刷新列表", "重新整理", "Refresh"),
+    "general.target_host": ("服务器地址", "伺服器位址", "Server address"),
+    "general.target_port": ("端口", "連接埠", "Port"),
+    "general.target_hint": (
+        "例如游戏服务器、公司 VPN、8.8.8.8。先试 TCP，连不上就用 ping。",
+        "例如遊戲伺服器、公司 VPN、8.8.8.8。先試 TCP，連不上就用 ping。",
+        "A game server, a VPN gateway, 8.8.8.8 - TCP first, ping if that is refused.",
+    ),
+    "general.netspeed": (
+        "显示全机上传／下载速度", "顯示全機上傳／下載速度", "Show machine upload / download speed",
+    ),
     "general.video": ("视频号或链接", "影片編號或連結", "Video ID or URL"),
     "general.video_hint": (
         "支持 BV 号、av 号，或直接粘贴 https://www.bilibili.com/video/BV… （分P 用 ?p=2）。",
@@ -244,6 +282,24 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "{title}\n影片總延遲 {total}\n網路 {network} / 起播 {stream} / 顯示 {display}\n頻寬 {speed}\n{status}",
         "{title}\nVideo total {total}\nNetwork {network} / Startup {stream} / Display {display}\n"
         "Speed {speed}\n{status}",
+    ),
+    "tray.tooltip_app": (
+        "{title}\n延迟 {total}\n服务器 {host}\n连接 {conns}   ↓{down} ↑{up}\n{status}",
+        "{title}\n延遲 {total}\n伺服器 {host}\n連線 {conns}   ↓{down} ↑{up}\n{status}",
+        "{title}\nLatency {total}\nServer {host}\nSockets {conns}   ↓{down} ↑{up}\n{status}",
+    ),
+    "notice.stall": (
+        "监测中断：连不上服务器，正在重试…",
+        "監測中斷：連不上伺服器，正在重試…",
+        "Lost the server — retrying…",
+    ),
+    "notice.spike": (
+        "延迟突增：{value}（平常约 {baseline}）",
+        "延遲突增：{value}（平常約 {baseline}）",
+        "Latency spike: {value} (normally around {baseline})",
+    ),
+    "general.notify": (
+        "卡顿／延迟突增时弹出提示", "卡頓／延遲突增時彈出提示", "Notify me about stalls and spikes",
     ),
     "notice.hidden_hint": (
         "悬浮窗已隐藏，可从托盘图标重新打开。",

@@ -155,7 +155,10 @@ class AutoDetector:
 
         now = time.monotonic()
         interval = max(2, int(config.poll_interval_s))
-        if not force and (now - self._last_scan) < interval:
+        # _last_scan is 0.0 until the first scan; monotonic() is uptime, so
+        # comparing against it directly would skip that first scan on a machine
+        # that has only just booted.
+        if not force and self._last_scan and (now - self._last_scan) < interval:
             return self._last_target
         self._last_scan = now
 

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QMenu, QSystemTrayIcon, QWidget
 from .. import APP_NAME
 from ..config import Config
 from ..i18n import tr
-from ..models import KIND_VIDEO, LatencySample
+from ..models import KIND_APP, KIND_LIVE, KIND_TARGET, KIND_VIDEO, LatencySample
 from .icons import app_icon, value_icon
 from .theme import (
     color_for_level, format_mbps, format_ms, format_ms_short, level_for, palette_for,
@@ -50,7 +50,9 @@ class TrayIcon(QSystemTrayIcon):
                 self._last_key = key
                 self.setIcon(value_icon(text, color))
 
-        is_video = sample is not None and sample.kind == KIND_VIDEO
+        kind = sample.kind if sample else KIND_LIVE
+        is_video = kind == KIND_VIDEO
+        is_app = kind in (KIND_APP, KIND_TARGET)
         fields = {
             "title": sample.title if (sample and sample.title) else APP_NAME,
             "total": format_ms(value),
@@ -61,4 +63,13 @@ class TrayIcon(QSystemTrayIcon):
         }
         if is_video:
             fields["speed"] = format_mbps(sample.throughput_mbps)
-        self.setToolTip(tr("tray.tooltip_video" if is_video else "tray.tooltip", **fields))
+            key = "tray.tooltip_video"
+        elif is_app:
+            fields["host"] = (sample.host if sample and sample.host else "--")
+            fields["conns"] = str(sample.connections) if (sample and sample.connections) else "--"
+            fields["down"] = format_mbps(sample.down_mbps if sample else None)
+            fields["up"] = format_mbps(sample.up_mbps if sample else None)
+            key = "tray.tooltip_app"
+        else:
+            key = "tray.tooltip"
+        self.setToolTip(tr(key, **fields))

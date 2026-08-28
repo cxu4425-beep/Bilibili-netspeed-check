@@ -15,7 +15,11 @@ from . import APP_NAME, REPO_URL, __version__
 from .autostart import get_autostart, is_supported as autostart_supported, set_autostart
 from .config import Config, app_config_dir
 from .i18n import set_language, tr
-from .models import KIND_LIVE, KIND_NETWORK, KIND_VIDEO, LatencySample, RollingStats, WatchTarget
+from .events import SPIKE, STALL, EventLog, Notifier
+from .models import (
+    KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO, LatencySample, RollingStats,
+    WatchTarget,
+)
 from .monitor import (
     MonitorWorker, STATUS_ERROR, STATUS_NO_ROOM, STATUS_OFFLINE, STATUS_OK, STATUS_PAUSED,
 )
@@ -23,6 +27,7 @@ from .probes.display import DisplayProbe
 from .recording import CsvRecorder
 from .single_instance import SingleInstance
 from .ui.icons import app_icon
+from .ui.theme import format_ms
 from .ui.overlay import OverlayWindow
 from .ui.settings import SettingsDialog
 from .ui.tray import TrayIcon
@@ -62,6 +67,10 @@ class MonitorApplication(QObject):
         self._paused = False
         self._room_title = ""
         self._target: Optional[WatchTarget] = None
+        self._room_info = None
+        self._lines: tuple = ("", [])
+        self._events = EventLog()
+        self._notifier = Notifier()
 
         self._overlay = OverlayWindow(self._config, self._display)
         self._overlay.positionChanged.connect(self._on_overlay_moved)
@@ -89,6 +98,7 @@ class MonitorApplication(QObject):
         self._worker.statusChanged.connect(self._on_status)
         self._worker.roomInfoChanged.connect(self._on_room_info)
         self._worker.targetChanged.connect(self._on_target)
+        self._worker.linesChanged.connect(self._on_lines)
         self._thread.started.connect(self._worker.start)
         self.configChanged.connect(self._worker.applyConfig)
         self.pauseRequested.connect(self._worker.setPaused)
@@ -376,7 +386,14 @@ class MonitorApplication(QObject):
 
     # ------------------------------------------------------------------ data
     @Slot(object)
+    def _on_lines(self, payload) -> None:
+        self._lines = payload
+
+    @Slot(object)
     def _on_sample(self, sample: LatencySample) -> None:
+        event = self._events.observe(sample)
+        if event is not None:
+            self._announce(event)
         self._stats.append(sample)
         self._overlay.update_sample(sample, self._stats)
         if self._tray is not None:
@@ -390,8 +407,22 @@ class MonitorApplication(QObject):
         self._status_detail = detail
         self._update_status_text()
 
+    def _announce(self, event) -> None:
+        """One tray balloon per problem, never one per sample."""
+        if self._tray is None or not self._config.notify_enabled:
+            return
+        if not self._notifier.should_notify():
+            return
+        if event.kind == STALL:
+            text = tr("notice.stall")
+        else:
+            text = tr("notice.spike", value=format_ms(event.value_ms),
+                      baseline=format_ms(event.baseline_ms))
+        self._tray.showMessage(APP_NAME, text, app_icon(), 5000)
+
     @Slot(object)
     def _on_room_info(self, info) -> None:
+        self._room_info = info
         if info is not None and self._target is not None and self._target.kind == KIND_LIVE:
             self._room_title = f"{tr('label.room')} {info.room_id}"
             self._overlay.set_room_label(self._room_title)
@@ -498,6 +529,24 @@ class MonitorApplication(QObject):
             "display": self._display.snapshot(
                 self._config.display.frames_in_flight, self._config.display.manual_offset_ms
             ),
+            "events": self._events.summary(),
+            "netspeed": {
+                "down_mbps": sample.down_mbps if sample else None,
+                "up_mbps": sample.up_mbps if sample else None,
+            },
+            "cdn_lines": {
+                "current": self._lines[0],
+                "measured": [
+                    {"host": line.host, "rtt_ms": line.rtt_ms} for line in (self._lines[1] or [])
+                ],
+            },
+            "room": None if self._room_info is None else {
+                "id": self._room_info.room_id,
+                "title": self._room_info.title,
+                "online": self._room_info.online,
+                "area": self._room_info.area,
+                "live_seconds": self._room_info.live_seconds(),
+            },
             "config_dir": str(app_config_dir()),
         }
         return json.dumps(payload, indent=2, ensure_ascii=False)

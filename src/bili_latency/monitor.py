@@ -11,20 +11,27 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from dataclasses import replace
 from typing import Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from .config import Config, title_memory_path
 from .detect import AutoDetector
-from .models import KIND_LIVE, KIND_NETWORK, KIND_VIDEO, LatencySample, WatchTarget
-from .probes.network import HttpClient, tcp_rtt_ms
+from .models import (
+    KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO, LatencySample, WatchTarget,
+)
+from .probes.appnet import AppNetProbe
+from .probes.netspeed import NetSpeedProbe
+from .probes.network import HttpClient, icmp_ping_ms, tcp_rtt_ms
 from .probes.stream import RoomInfo, StreamProbe
 from .probes.video import VideoProbe
+from .targets import resolve_target
 
 LOG = logging.getLogger(__name__)
 
 CLOCK_SYNC_INTERVAL_S = 60.0
+LINE_COMPARE_INTERVAL_S = 120.0
 CLOCK_SYNC_URL = "https://api.live.bilibili.com/room/v1/Room/get_info?room_id=1"
 
 STATUS_OK = "ok"
@@ -41,6 +48,7 @@ class MonitorWorker(QObject):
     statusChanged = Signal(str, str)  # status key, detail text
     roomInfoChanged = Signal(object)  # RoomInfo | None
     targetChanged = Signal(object)    # WatchTarget
+    linesChanged = Signal(object)     # list[CdnLine] - CDN edges, fastest first
 
     def __init__(self, config: Config) -> None:
         super().__init__()
@@ -56,6 +64,8 @@ class MonitorWorker(QObject):
         self._client: Optional[HttpClient] = None
         self._stream: Optional[StreamProbe] = None
         self._video: Optional[VideoProbe] = None
+        self._app = AppNetProbe()
+        self._netspeed = NetSpeedProbe()
         self._detector: Optional[AutoDetector] = None
         self._timer: Optional[QTimer] = None
 
@@ -158,6 +168,7 @@ class MonitorWorker(QObject):
             playurl_refresh_s=config.probe.playurl_refresh_s,
         )
         self._video = VideoProbe(self._client, playurl_refresh_s=config.probe.playurl_refresh_s)
+        self._netspeed.reset()
         if self._detector is None:
             self._detector = AutoDetector(config.detect, memory_path=title_memory_path())
         else:
@@ -188,22 +199,7 @@ class MonitorWorker(QObject):
     # ----------------------------------------------------------------- target
     def current_target(self, config: Config) -> WatchTarget:
         """What to measure this round: detected first, configured second."""
-        if config.detect.enabled and self._detector is not None:
-            detected = self._detector.poll()
-            if detected is not None and not detected.is_empty:
-                if detected.kind != KIND_VIDEO or config.detect.follow_videos:
-                    return detected
-
-        if config.manual_kind == KIND_VIDEO and config.video_id:
-            return WatchTarget(kind=KIND_VIDEO, ident=config.video_id, page=config.video_page,
-                               source="manual")
-        if config.room_id:
-            return WatchTarget(kind=KIND_LIVE, ident=config.room_id, source="manual")
-        # Whichever one is filled in wins when the preferred kind is empty.
-        if config.video_id:
-            return WatchTarget(kind=KIND_VIDEO, ident=config.video_id, page=config.video_page,
-                               source="manual")
-        return WatchTarget(kind=KIND_NETWORK, source="manual")
+        return resolve_target(config, self._detector, self._foreground_app)
 
     def _sync_target(self, target: WatchTarget) -> None:
         if target.same_content(self._target):
@@ -214,6 +210,8 @@ class MonitorWorker(QObject):
             self._stream.set_room(target.ident)
         elif target.kind == KIND_VIDEO:
             self._video.set_target(target.ident, target.page)
+        elif target.kind == KIND_APP:
+            self._app.set_target(target.ident)
         LOG.info("watching %s %s (source: %s)", target.kind, target.ident or "-", target.source)
         self.targetChanged.emit(target)
 
@@ -226,7 +224,7 @@ class MonitorWorker(QObject):
             self._schedule_next(False)
             return
         try:
-            sample = self._run_round()
+            sample = self._with_netspeed(self._run_round())
         except Exception as exc:  # never let the loop die on a bad round
             LOG.exception("probe round failed")
             sample = LatencySample(ok=False, error=str(exc)[:200])
@@ -251,6 +249,11 @@ class MonitorWorker(QObject):
         if target.kind == KIND_NETWORK:
             return self._network_only_sample(config, display_ms, display_component, timeout_s)
 
+        if target.kind == KIND_APP:
+            return self._app_sample(target, display_ms, display_component, timeout_s)
+        if target.kind == KIND_TARGET:
+            return self._target_sample(target, display_ms, display_component, timeout_s)
+
         if target.kind == KIND_VIDEO:
             rtt_ms = self._video.endpoint_rtt_ms(timeout_s)
             measurement = self._video.measure(target.ident, target.page)
@@ -258,6 +261,7 @@ class MonitorWorker(QObject):
             rtt_ms = self._stream.endpoint_rtt_ms(timeout_s)
             measurement = self._stream.measure(target.ident)
             self.roomInfoChanged.emit(self._stream.room_info)
+            self._compare_lines_if_due(timeout_s)
         if rtt_ms is None:
             rtt_ms = tcp_rtt_ms(config.probe.rtt_host, config.probe.rtt_port, timeout_s)
 
@@ -297,6 +301,80 @@ class MonitorWorker(QObject):
             required_mbps=measurement.required_mbps,
         )
 
+    def _with_netspeed(self, sample: LatencySample) -> LatencySample:
+        """Attach the machine's current up/down speed to any sample."""
+        with self._lock:
+            enabled = self._config.show_netspeed
+        if not enabled:
+            return sample
+        speed = self._netspeed.sample()
+        if not speed.ok:
+            return sample
+        return replace(sample, up_mbps=speed.up_mbps, down_mbps=speed.down_mbps)
+
+    def _foreground_app(self) -> str:
+        """Process name of the window in front, for "follow whatever I use"."""
+        try:
+            from .ui.anchor import create_window_finder
+
+            return create_window_finder().foreground_process()
+        except Exception as exc:  # pragma: no cover - platform dependent
+            LOG.debug("foreground process unavailable: %s", exc)
+            return ""
+
+    def _app_sample(self, target: WatchTarget, display_ms: Optional[float],
+                    display_component: Optional[float], timeout_s: float) -> LatencySample:
+        """Latency of any application, via the servers it is connected to."""
+        measurement = self._app.measure(target.ident, timeout_s)
+        if measurement.rtt_ms is None:
+            self._emit_status(STATUS_ERROR, measurement.error or "")
+            return LatencySample(
+                ok=False, kind=KIND_APP, method=measurement.method, title=target.ident,
+                source=target.source, connections=measurement.connections,
+                display_ms=display_ms, error=measurement.error,
+            )
+        self._emit_status(STATUS_OK, "")
+        return LatencySample(
+            network_ms=measurement.rtt_ms,
+            display_ms=display_ms,
+            total_ms=measurement.rtt_ms + (display_component or 0.0),
+            ok=True,
+            kind=KIND_APP,
+            method=measurement.method,
+            host=str(measurement.peer) if measurement.peer else "",
+            title=target.ident,
+            source=target.source,
+            connections=measurement.connections,
+        )
+
+    def _target_sample(self, target: WatchTarget, display_ms: Optional[float],
+                       display_component: Optional[float], timeout_s: float) -> LatencySample:
+        """Latency to a host the user named: game server, DNS, anything."""
+        port = int(target.page or 443)
+        rtt_ms = tcp_rtt_ms(target.ident, port, timeout_s)
+        method = "tcp"
+        if rtt_ms is None:
+            rtt_ms = icmp_ping_ms(target.ident, timeout_s)
+            method = "icmp" if rtt_ms is not None else "none"
+        if rtt_ms is None:
+            self._emit_status(STATUS_ERROR, "unreachable")
+            return LatencySample(ok=False, kind=KIND_TARGET, method="none",
+                                 host=f"{target.ident}:{port}", title=target.ident,
+                                 source=target.source, display_ms=display_ms,
+                                 error="unreachable")
+        self._emit_status(STATUS_OK, "")
+        return LatencySample(
+            network_ms=rtt_ms,
+            display_ms=display_ms,
+            total_ms=rtt_ms + (display_component or 0.0),
+            ok=True,
+            kind=KIND_TARGET,
+            method=method,
+            host=f"{target.ident}:{port}",
+            title=target.ident,
+            source=target.source,
+        )
+
     def _network_only_sample(self, config: Config, display_ms: Optional[float],
                              display_component: Optional[float], timeout_s: float) -> LatencySample:
         rtt_ms = tcp_rtt_ms(config.probe.rtt_host, config.probe.rtt_port, timeout_s)
@@ -314,6 +392,18 @@ class MonitorWorker(QObject):
             source="manual",
             error=None if rtt_ms is not None else "network unreachable",
         )
+
+    def _compare_lines_if_due(self, timeout_s: float) -> None:
+        """Time the other CDN edges now and then, so a slow one is visible."""
+        if self._stream is None:
+            return
+        try:
+            lines = self._stream.lines_if_due(timeout_s, LINE_COMPARE_INTERVAL_S)
+        except Exception as exc:  # comparing lines is a bonus, never fatal
+            LOG.debug("line comparison failed: %s", exc)
+            return
+        if lines:
+            self.linesChanged.emit((self._stream.current_host, lines))
 
     def _sync_clock_if_due(self, timeout_s: float) -> None:
         now = time.monotonic()

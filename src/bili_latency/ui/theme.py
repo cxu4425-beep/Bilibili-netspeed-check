@@ -89,6 +89,19 @@ def format_mbps(value: Optional[float], placeholder: str = "--") -> str:
     return f"{value / 1000:.2f} Gbps"
 
 
+def format_mbps_short(value: Optional[float], placeholder: str = "--") -> str:
+    """Speed for the cramped stats row: ``820k`` / ``44M`` / ``1.2G``."""
+    if value is None:
+        return placeholder
+    if value < 1:
+        return f"{value * 1000:.0f}k"
+    if value < 100:
+        return f"{value:.1f}M"
+    if value < 1000:
+        return f"{value:.0f}M"
+    return f"{value / 1000:.1f}G"
+
+
 def format_ms_short(value: Optional[float], placeholder: str = "--") -> str:
     """Compact form used inside the tray icon (max 4 glyphs)."""
     if value is None:

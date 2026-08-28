@@ -89,6 +89,8 @@ class SettingsDialog(QDialog):
         self.target_combo.addItem(tr("general.target.auto"), "auto")
         self.target_combo.addItem(tr("general.target.live"), "live")
         self.target_combo.addItem(tr("general.target.video"), "video")
+        self.target_combo.addItem(tr("general.target.app"), "app")
+        self.target_combo.addItem(tr("general.target.custom"), "target")
         self.target_combo.currentIndexChanged.connect(self._sync_detect_state)
         target_form.addRow(tr("general.target"), self.target_combo)
 
@@ -107,6 +109,36 @@ class SettingsDialog(QDialog):
         video_hint.setWordWrap(True)
         video_hint.setStyleSheet("color: palette(mid);")
         target_form.addRow(video_hint)
+
+        # --- any application -------------------------------------------------
+        self.app_combo = QComboBox(target_box)
+        self.app_combo.setEditable(True)          # a game that is not running yet
+        self.app_refresh_button = QPushButton(tr("general.app_refresh"), target_box)
+        self.app_refresh_button.clicked.connect(self._reload_apps)
+        app_row = QHBoxLayout()
+        app_row.addWidget(self.app_combo, 1)
+        app_row.addWidget(self.app_refresh_button)
+        target_form.addRow(tr("general.app_name"), app_row)
+        self.app_follow_check = QCheckBox(tr("general.app_follow"), target_box)
+        self.app_follow_check.toggled.connect(self._sync_target_state)
+        target_form.addRow("", self.app_follow_check)
+        app_hint = QLabel(tr("general.app_hint"), target_box)
+        app_hint.setWordWrap(True)
+        app_hint.setStyleSheet("color: palette(mid);")
+        target_form.addRow(app_hint)
+
+        # --- a server address the user types ---------------------------------
+        self.target_host_edit = QLineEdit(target_box)
+        self.target_host_edit.setPlaceholderText("8.8.8.8")
+        target_form.addRow(tr("general.target_host"), self.target_host_edit)
+        self.target_port_spin = QSpinBox(target_box)
+        self.target_port_spin.setRange(1, 65535)
+        target_form.addRow(tr("general.target_port"), self.target_port_spin)
+        target_hint = QLabel(tr("general.target_hint"), target_box)
+        target_hint.setWordWrap(True)
+        target_hint.setStyleSheet("color: palette(mid);")
+        target_form.addRow(target_hint)
+
         outer.addWidget(target_box)
 
         outer.addWidget(self._build_detect_box(page))
@@ -141,6 +173,10 @@ class SettingsDialog(QDialog):
         form.addRow("", self.tray_check)
         self.tray_value_check = QCheckBox(tr("tray.show_value"), page)
         form.addRow("", self.tray_value_check)
+        self.netspeed_check = QCheckBox(tr("general.netspeed"), page)
+        form.addRow("", self.netspeed_check)
+        self.notify_check = QCheckBox(tr("general.notify"), page)
+        form.addRow("", self.notify_check)
 
         outer.addWidget(general_box)
         outer.addStretch(1)
@@ -361,6 +397,12 @@ class SettingsDialog(QDialog):
         self.target_combo.setCurrentIndex(max(0, self.target_combo.findData(mode)))
         self.room_edit.setText(self._config.room_id)
         self.video_edit.setText(self._config.video_id)
+        self._reload_apps(self._config.app_name)
+        self.app_follow_check.setChecked(self._config.app_follow_foreground)
+        self.target_host_edit.setText(self._config.target_host)
+        self.target_port_spin.setValue(self._config.target_port)
+        self.netspeed_check.setChecked(self._config.show_netspeed)
+        self.notify_check.setChecked(self._config.notify_enabled)
         self.detect_client_check.setChecked(self._config.detect.use_client)
         self.detect_clipboard_check.setChecked(self._config.detect.use_clipboard)
         self.detect_titles_memory_check.setChecked(self._config.detect.remember_titles)
@@ -437,15 +479,58 @@ class SettingsDialog(QDialog):
         self.window_note.setVisible(mode == "window" and not self._window_following_available)
 
     def _sync_detect_state(self) -> None:
-        auto = self.target_combo.currentData() == "auto"
+        mode = self.target_combo.currentData()
+        auto = mode == "auto"
         self._detect_box.setEnabled(auto)
         self.detect_port_spin.setEnabled(auto and self.detect_bridge_check.isChecked())
+        self._sync_target_state()
+
+    def _sync_target_state(self) -> None:
+        """Only show the fields that matter for the chosen mode."""
+        mode = self.target_combo.currentData()
+        bilibili = mode in ("auto", "live", "video")
+        self.room_edit.setEnabled(mode in ("auto", "live"))
+        self.video_edit.setEnabled(mode in ("auto", "video"))
+        following = self.app_follow_check.isChecked()
+        self.app_combo.setEnabled(mode == "app" and not following)
+        self.app_refresh_button.setEnabled(mode == "app" and not following)
+        self.app_follow_check.setEnabled(mode == "app")
+        self.target_host_edit.setEnabled(mode == "target")
+        self.target_port_spin.setEnabled(mode == "target")
+        del bilibili
+
+    def _chosen_app(self) -> str:
+        """The picker shows "name (sockets)"; the process name is the item data."""
+        index = self.app_combo.currentIndex()
+        text = (self.app_combo.currentText() or "").strip()
+        if index >= 0 and text == self.app_combo.itemText(index):
+            return (self.app_combo.itemData(index) or text).strip()
+        return text
+
+    def _reload_apps(self, selected: str = "") -> None:
+        """Fill the picker with the programs that currently hold connections."""
+        from ..probes.appnet import list_apps
+
+        current = selected or self.app_combo.currentText()
+        self.app_combo.clear()
+        try:
+            apps = list_apps()
+        except Exception:      # a locked-down machine must not break the dialog
+            apps = []
+        for app in apps:
+            self.app_combo.addItem(f"{app.name}  ({app.connections})", app.name)
+        if current:
+            index = self.app_combo.findData(current)
+            if index >= 0:
+                self.app_combo.setCurrentIndex(index)
+            else:
+                self.app_combo.setEditText(current)
 
     def to_config(self) -> Config:
         config = copy.deepcopy(self._config)
         mode = self.target_combo.currentData() or "auto"
         config.detect.enabled = mode == "auto"
-        if mode in ("live", "video"):
+        if mode in ("live", "video", "app", "target"):
             config.manual_kind = mode
         config.detect.use_client = self.detect_client_check.isChecked()
         config.detect.use_clipboard = self.detect_clipboard_check.isChecked()
@@ -460,6 +545,12 @@ class SettingsDialog(QDialog):
 
         config.room_id = parse_room_id(self.room_edit.text())
         config.video_id, config.video_page = parse_video_target(self.video_edit.text())
+        config.app_name = self._chosen_app()
+        config.app_follow_foreground = self.app_follow_check.isChecked()
+        config.target_host = self.target_host_edit.text().strip()
+        config.target_port = self.target_port_spin.value()
+        config.show_netspeed = self.netspeed_check.isChecked()
+        config.notify_enabled = self.notify_check.isChecked()
         config.probe.interval_ms = self.interval_spin.value()
         config.sample_window = self.window_spin.value()
         config.language = self.language_combo.currentData() or "auto"

@@ -20,13 +20,14 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from ..config import Config
 from ..i18n import tr
-from ..models import KIND_VIDEO, LatencySample, RollingStats
+from ..models import KIND_APP, KIND_LIVE, KIND_TARGET, KIND_VIDEO, LatencySample, RollingStats
 from ..probes.display import DisplayProbe
 from .anchor import (
     WindowFinder, WindowRect, clamp_to_rect, compute_anchor_position, create_window_finder,
 )
 from .theme import (
-    Palette, color_for_level, format_mbps, format_ms, level_for, palette_for,
+    Palette, color_for_level, format_mbps, format_mbps_short, format_ms, level_for,
+    palette_for,
 )
 
 FRAME_BURST_INTERVAL_MS = 30_000
@@ -295,7 +296,7 @@ class OverlayWindow(QWidget):
         painter.drawEllipse(QRectF(pad, y + 2 * scale, dot, dot))
         painter.setPen(QPen(QColor(palette.muted)))
         painter.setFont(self._font(8 * scale, bold=True))
-        header = tr("app.short")
+        header = self._header_text()
         painter.drawText(QRectF(pad + dot + 6 * scale, y - 2 * scale, self.width(), 16 * scale),
                          Qt.AlignLeft | Qt.AlignVCenter, header)
         if self._room_label:
@@ -335,25 +336,50 @@ class OverlayWindow(QWidget):
             return self._status_text
         return tr("label.estimated") if self._sample.estimated else tr("label.measured")
 
+    def _header_text(self) -> str:
+        """The app is general purpose now: only say "B站" when that is what it is."""
+        kind = self._sample.kind if self._sample else KIND_LIVE
+        if kind in (KIND_LIVE, KIND_VIDEO):
+            return tr("app.short")
+        return tr("app.short_generic")
+
+    def _breakdown_rows(self) -> list:
+        """The three detail lines, which say different things per target kind."""
+        sample = self._sample
+        kind = sample.kind if sample else KIND_LIVE
+        network = format_ms(sample.network_ms if sample else None)
+        display = format_ms(sample.display_ms if sample else None)
+
+        if kind == KIND_APP:
+            peers = str(sample.connections) if (sample and sample.connections) else "--"
+            return [
+                (tr("label.latency"), network),
+                (tr("label.connections"), peers),
+                (tr("label.display"), display),
+            ]
+        if kind == KIND_TARGET:
+            return [
+                (tr("label.latency"), network),
+                (tr("label.display"), display),
+            ]
+        second = tr("label.startup") if kind == KIND_VIDEO else tr("label.stream")
+        return [
+            (tr("label.network"), network),
+            (second, format_ms(sample.stream_ms if sample else None)),
+            (tr("label.display"), display),
+        ]
+
     def _paint_breakdown(self, painter: QPainter, palette: Palette, scale: float,
                          pad: float, y: float) -> float:
-        # A VOD has no live edge: that row is the start-up delay instead.
-        is_video = self._sample is not None and self._sample.kind == KIND_VIDEO
-        rows = [
-            (tr("label.network"), self._sample.network_ms if self._sample else None),
-            (tr("label.startup") if is_video else tr("label.stream"),
-             self._sample.stream_ms if self._sample else None),
-            (tr("label.display"), self._sample.display_ms if self._sample else None),
-        ]
         painter.setFont(self._font(8 * scale))
         row_height = 17 * scale
-        for label, value in rows:
+        for label, value in self._breakdown_rows():
             painter.setPen(QPen(QColor(palette.muted)))
             painter.drawText(QRectF(pad, y, self.width() - pad * 2, row_height),
                              Qt.AlignLeft | Qt.AlignVCenter, label)
             painter.setPen(QPen(QColor(palette.foreground)))
             painter.drawText(QRectF(pad, y, self.width() - pad * 2, row_height),
-                             Qt.AlignRight | Qt.AlignVCenter, format_ms(value))
+                             Qt.AlignRight | Qt.AlignVCenter, value)
             y += row_height
         return y + 3 * scale
 
@@ -398,9 +424,16 @@ class OverlayWindow(QWidget):
             f"{tr('label.p95')} {format_ms(self._stats.percentile(95))}",
             f"{tr('label.jitter')} {format_ms(self._stats.jitter())}",
         ]
-        if self._sample is not None and self._sample.throughput_mbps:
+        sample = self._sample
+        if sample is not None and sample.throughput_mbps:
             # For a video, download speed is what decides whether it stalls.
-            parts = parts[:2] + [f"{tr('label.speed')} {format_mbps(self._sample.throughput_mbps)}"]
+            parts = parts[:2] + [f"{tr('label.speed')} {format_mbps(sample.throughput_mbps)}"]
+        elif sample is not None and (sample.down_mbps is not None or sample.up_mbps is not None):
+            # Otherwise show what the whole machine is pushing through the line.
+            parts = parts[:1] + [
+                f"↓{format_mbps_short(sample.down_mbps)}",
+                f"↑{format_mbps_short(sample.up_mbps)}",
+            ]
         text = "   ".join(parts)
         painter.setFont(self._font(7 * scale))
         painter.setPen(QPen(QColor(palette.muted)))

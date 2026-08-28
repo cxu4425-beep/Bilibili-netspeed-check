@@ -63,6 +63,10 @@ class WindowFinder:
         """Title of the window the user is working in right now."""
         return ""
 
+    def foreground_process(self) -> str:
+        """Executable name behind the foreground window (empty where unsupported)."""
+        return ""
+
     def find(self, keyword: str) -> Optional[WindowRect]:
         keyword = (keyword or "").strip().lower()
         if not keyword:
@@ -127,6 +131,22 @@ class Win32WindowFinder(WindowFinder):
             return buffer.value or ""
         except OSError as exc:
             LOG.debug("GetForegroundWindow failed: %s", exc)
+            return ""
+
+    def foreground_process(self) -> str:  # pragma: no cover - Windows only
+        try:
+            import psutil
+
+            hwnd = self._user32.GetForegroundWindow()
+            if not hwnd:
+                return ""
+            pid = ctypes.c_ulong(0)
+            self._user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if not pid.value:
+                return ""
+            return psutil.Process(pid.value).name() or ""
+        except Exception as exc:
+            LOG.debug("foreground process lookup failed: %s", exc)
             return ""
 
 

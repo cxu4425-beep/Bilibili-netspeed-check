@@ -1,0 +1,341 @@
+"""Monitoring any application: throughput, per-app peers, stalls and spikes."""
+
+import time
+
+import pytest
+
+from bili_latency.events import SPIKE, STALL, EventLog, Notifier
+from bili_latency.models import KIND_APP, LatencySample
+from bili_latency.probes import appnet
+from bili_latency.probes.appnet import AppNetProbe, Peer, list_apps, peers_for
+from bili_latency.probes.netspeed import NetSpeedProbe
+
+
+# ------------------------------------------------------------------- netspeed
+class FakeCounters:
+    def __init__(self, values):
+        self.values = values
+        self.calls = 0
+
+    def __call__(self, pernic=True):
+        entry = self.values[min(self.calls, len(self.values) - 1)]
+        self.calls += 1
+        return entry
+
+
+def _nic(sent, recv):
+    class Entry:
+        bytes_sent = sent
+        bytes_recv = recv
+    return Entry()
+
+
+def test_first_sample_only_sets_the_baseline(monkeypatch):
+    probe = NetSpeedProbe()
+    monkeypatch.setattr(appnet.psutil, "net_io_counters",
+                        FakeCounters([{"eth0": _nic(1000, 2000)}]))
+    assert probe.sample().ok is False
+
+
+def test_speed_is_the_delta_over_the_interval(monkeypatch):
+    probe = NetSpeedProbe()
+    counters = FakeCounters([
+        {"eth0": _nic(0, 0)},
+        {"eth0": _nic(125_000, 1_250_000)},     # 1 Mbit up, 10 Mbit down in 1 s
+    ])
+    monkeypatch.setattr(appnet.psutil, "net_io_counters", counters)
+
+    probe.sample()
+    probe._last_ts -= 1.0                        # pretend a second has passed
+    speed = probe.sample()
+
+    assert speed.ok
+    assert speed.up_mbps == pytest.approx(1.0, abs=0.02)
+    assert speed.down_mbps == pytest.approx(10.0, abs=0.2)
+
+
+def test_loopback_and_virtual_adapters_are_ignored(monkeypatch):
+    probe = NetSpeedProbe()
+    counters = FakeCounters([
+        {"lo": _nic(0, 0), "docker0": _nic(0, 0), "eth0": _nic(0, 0)},
+        {"lo": _nic(10 ** 9, 10 ** 9), "docker0": _nic(10 ** 9, 10 ** 9), "eth0": _nic(125_000, 0)},
+    ])
+    monkeypatch.setattr(appnet.psutil, "net_io_counters", counters)
+
+    probe.sample()
+    probe._last_ts -= 1.0
+    speed = probe.sample()
+
+    assert speed.up_mbps == pytest.approx(1.0, abs=0.02)   # only eth0 counted
+    assert speed.down_mbps == pytest.approx(0.0, abs=0.01)
+
+
+def test_a_counter_reset_does_not_report_a_negative_speed(monkeypatch):
+    probe = NetSpeedProbe()
+    counters = FakeCounters([{"eth0": _nic(10_000, 10_000)}, {"eth0": _nic(5, 5)}])
+    monkeypatch.setattr(appnet.psutil, "net_io_counters", counters)
+
+    probe.sample()
+    probe._last_ts -= 1.0
+    assert probe.sample().ok is False        # re-baselined instead
+
+
+def test_missing_counters_are_reported_not_raised(monkeypatch):
+    probe = NetSpeedProbe()
+
+    def boom(pernic=True):
+        raise OSError("no such device")
+
+    monkeypatch.setattr(appnet.psutil, "net_io_counters", boom)
+    assert probe.sample().error == "counters unavailable"
+
+
+# --------------------------------------------------------------------- peers
+class FakeConn:
+    def __init__(self, pid, ip, port):
+        self.pid = pid
+        self.raddr = type("Addr", (), {"ip": ip, "port": port})() if ip else None
+
+
+def _patch_conns(monkeypatch, conns, names):
+    monkeypatch.setattr(appnet.psutil, "net_connections", lambda kind="inet": conns)
+    monkeypatch.setattr(appnet, "_process_names", lambda: names)
+
+
+def test_public_servers_rank_above_lan_peers(monkeypatch):
+    _patch_conns(monkeypatch, [
+        FakeConn(10, "192.168.1.5", 445),
+        FakeConn(10, "93.184.216.34", 443),
+        FakeConn(10, "93.184.216.34", 443),
+    ], {10: "game.exe"})
+
+    peers = peers_for("game.exe")
+
+    assert str(peers[0]) == "93.184.216.34:443"
+    assert peers[0].connections == 2
+    assert peers[0].is_public and not peers[1].is_public
+
+
+def test_peers_are_matched_on_a_partial_name(monkeypatch):
+    _patch_conns(monkeypatch, [FakeConn(10, "93.184.216.34", 443)], {10: "ValorantGame.exe"})
+    assert peers_for("valorant")
+    assert peers_for("notrunning") == []
+
+
+def test_connections_without_a_remote_end_are_skipped(monkeypatch):
+    _patch_conns(monkeypatch, [FakeConn(10, None, 0)], {10: "game.exe"})
+    assert peers_for("game.exe") == []
+
+
+def test_apps_are_listed_busiest_first(monkeypatch):
+    _patch_conns(monkeypatch, [
+        FakeConn(10, "93.184.216.34", 443),
+        FakeConn(11, "93.184.216.34", 443),
+        FakeConn(11, "93.184.216.35", 443),
+    ], {10: "quiet.exe", 11: "busy.exe"})
+
+    apps = list_apps()
+
+    assert [app.name for app in apps] == ["busy.exe", "quiet.exe"]
+    assert apps[0].connections == 2
+
+
+def test_an_unreadable_connection_table_is_not_fatal(monkeypatch):
+    def boom(kind="inet"):
+        raise PermissionError("root required")
+
+    monkeypatch.setattr(appnet.psutil, "net_connections", boom)
+    assert list_apps() == []
+    assert peers_for("game.exe") == []
+
+
+# ------------------------------------------------------------------ app probe
+def test_the_busiest_peer_is_timed_over_tcp(monkeypatch):
+    _patch_conns(monkeypatch, [FakeConn(10, "93.184.216.34", 443)], {10: "game.exe"})
+    monkeypatch.setattr(appnet, "tcp_rtt_ms", lambda ip, port, timeout: 24.0)
+
+    result = AppNetProbe().measure("game.exe")
+
+    assert result.rtt_ms == 24.0 and result.method == "tcp"
+    assert str(result.peer) == "93.184.216.34:443" and result.connections == 1
+
+
+def test_a_udp_server_falls_back_to_ping(monkeypatch):
+    _patch_conns(monkeypatch, [FakeConn(10, "93.184.216.34", 7000)], {10: "game.exe"})
+    monkeypatch.setattr(appnet, "tcp_rtt_ms", lambda ip, port, timeout: None)
+    pings = []
+    monkeypatch.setattr(appnet, "icmp_ping_ms",
+                        lambda ip, timeout: pings.append(ip) or 31.5)
+
+    probe = AppNetProbe()
+    first = probe.measure("game.exe")
+    second = probe.measure("game.exe")
+
+    assert first.method == "icmp" and first.rtt_ms == 31.5
+    assert second.method == "icmp"
+    assert len(pings) == 2          # and TCP is not retried for that peer
+
+
+def test_an_app_with_no_connections_says_so(monkeypatch):
+    _patch_conns(monkeypatch, [], {})
+    assert AppNetProbe().measure("game.exe").error == "no-connections"
+
+
+def test_no_app_selected():
+    assert AppNetProbe().measure("").error == "no-app"
+
+
+def test_a_peer_that_answers_nothing_is_reported(monkeypatch):
+    _patch_conns(monkeypatch, [FakeConn(10, "93.184.216.34", 7000)], {10: "game.exe"})
+    monkeypatch.setattr(appnet, "tcp_rtt_ms", lambda ip, port, timeout: None)
+    monkeypatch.setattr(appnet, "icmp_ping_ms", lambda ip, timeout: None)
+
+    result = AppNetProbe().measure("game.exe")
+
+    assert result.rtt_ms is None and result.peers and "no reply" in result.error
+
+
+@pytest.mark.parametrize(
+    "ip,public",
+    [("93.184.216.34", True), ("192.168.1.4", False), ("127.0.0.1", False),
+     ("10.0.0.8", False), ("169.254.1.1", False), ("not-an-ip", False)],
+)
+def test_public_address_detection(ip, public):
+    assert Peer(ip=ip, port=443).is_public is public
+
+
+# --------------------------------------------------------------------- events
+def _ok(total_ms, ts=None):
+    return LatencySample(total_ms=total_ms, ok=True, kind=KIND_APP, ts=ts or time.time())
+
+
+def test_a_failed_probe_is_one_stall_not_one_per_retry():
+    log = EventLog()
+    first = log.observe(LatencySample(ok=False, error="timeout"))
+    second = log.observe(LatencySample(ok=False, error="timeout"))
+
+    assert first is not None and first.kind == STALL
+    assert second is None
+    assert log.count(STALL) == 1
+
+
+def test_recovering_then_failing_again_is_a_second_stall():
+    log = EventLog()
+    log.observe(LatencySample(ok=False))
+    log.observe(_ok(40))
+    log.observe(LatencySample(ok=False))
+    assert log.count(STALL) == 2
+
+
+def test_a_jump_above_the_baseline_is_a_spike():
+    log = EventLog(spike_factor=2.0, min_baseline_samples=5)
+    for _ in range(10):
+        assert log.observe(_ok(40)) is None
+    event = log.observe(_ok(400))
+
+    assert event is not None and event.kind == SPIKE
+    assert event.baseline_ms == pytest.approx(40)
+    assert log.count(SPIKE) == 1
+
+
+def test_a_spike_does_not_become_the_new_normal():
+    log = EventLog(spike_factor=2.0, min_baseline_samples=5)
+    for _ in range(10):
+        log.observe(_ok(40))
+    for _ in range(5):
+        log.observe(_ok(400))
+    assert log.baseline() == pytest.approx(40)
+
+
+def test_no_spikes_before_there_is_a_baseline():
+    log = EventLog(min_baseline_samples=10)
+    assert log.observe(_ok(40)) is None
+    assert log.observe(_ok(4000)) is None       # nothing to compare against yet
+
+
+def test_old_events_fall_out_of_the_window():
+    log = EventLog(window_s=60)
+    log.observe(LatencySample(ok=False, ts=time.time() - 3600))
+    assert log.count() == 0
+    assert log.summary()["stalls"] == 0
+
+
+def test_summary_reports_what_happened():
+    log = EventLog(min_baseline_samples=3)
+    for _ in range(5):
+        log.observe(_ok(50))
+    log.observe(_ok(500))
+
+    summary = log.summary()
+
+    assert summary["spikes"] == 1 and summary["stalls"] == 0
+    assert summary["baseline_ms"] == pytest.approx(50)
+    assert summary["last"]["kind"] == SPIKE
+
+
+def test_notifications_are_rate_limited():
+    notifier = Notifier(cooldown_s=300)
+    now = time.time()
+
+    assert notifier.should_notify(now)
+    assert not notifier.should_notify(now + 10)
+    assert notifier.should_notify(now + 400)
+
+
+# ------------------------------------------------- one place decides the target
+def test_the_gui_and_the_cli_agree_on_the_target():
+    """The rule lived in two places once and drifted; it must stay shared."""
+    from bili_latency.config import Config
+    from bili_latency.models import KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO
+    from bili_latency.targets import manual_target
+
+    config = Config()
+    config.detect.enabled = False
+
+    config.manual_kind = "app"
+    config.app_name = "game.exe"
+    assert manual_target(config).kind == KIND_APP
+
+    config.manual_kind = "target"
+    config.target_host = "8.8.8.8"
+    config.target_port = 53
+    target = manual_target(config)
+    assert target.kind == KIND_TARGET and target.page == 53
+
+    config.manual_kind = "video"
+    config.video_id = "BV1"
+    config.video_page = 3
+    assert manual_target(config).page == 3
+
+    config.manual_kind = "live"
+    config.room_id = "123"
+    assert manual_target(config).kind == KIND_LIVE
+
+    empty = Config()
+    empty.detect.enabled = False
+    assert manual_target(empty).kind == KIND_NETWORK
+
+
+def test_follow_foreground_uses_the_frontmost_process():
+    from bili_latency.config import Config
+    from bili_latency.targets import manual_target
+
+    config = Config()
+    config.manual_kind = "app"
+    config.app_follow_foreground = True
+    config.app_name = "fallback.exe"
+
+    assert manual_target(config, lambda: "Discord.exe").ident == "Discord.exe"
+    # nothing in the foreground: the configured name still applies
+    assert manual_target(config, lambda: "").ident == "fallback.exe"
+
+
+def test_a_configured_app_is_used_even_when_the_kind_says_live():
+    from bili_latency.config import Config
+    from bili_latency.models import KIND_APP
+    from bili_latency.targets import manual_target
+
+    config = Config()
+    config.manual_kind = "live"
+    config.app_name = "game.exe"
+    assert manual_target(config).kind == KIND_APP

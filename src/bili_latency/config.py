@@ -162,7 +162,14 @@ class Config:
     room_id: str = ""
     video_id: str = ""              # BV id (or avNNN), used when manual_kind is "video"
     video_page: int = 1             # which part (P) of that video
-    manual_kind: str = "live"       # what to watch when auto-detection is off or idle
+    # live | video | app | target - what to watch when auto-detection is off
+    manual_kind: str = "live"
+    app_name: str = ""              # process to follow in "app" mode (e.g. game.exe)
+    app_follow_foreground: bool = False   # or just follow whatever app is in front
+    target_host: str = ""           # host to ping in "target" mode
+    target_port: int = 443
+    show_netspeed: bool = True      # attach up/down speed to every sample
+    notify_enabled: bool = True     # tray balloon when a stall or spike happens
     sample_window: int = 180
     autostart: bool = False
     overlay: OverlayConfig = field(default_factory=OverlayConfig)
@@ -242,8 +249,11 @@ class Config:
         self.detect.poll_interval_s = int(_clamp(self.detect.poll_interval_s, 2, 300))
         self.detect.bridge_port = int(_clamp(self.detect.bridge_port, 1024, 65535))
         self.detect.bridge_timeout_s = int(_clamp(self.detect.bridge_timeout_s, 10, 3600))
-        if self.manual_kind not in ("live", "video"):
+        if self.manual_kind not in ("live", "video", "app", "target"):
             self.manual_kind = "live"
+        self.target_port = int(_clamp(self.target_port, 1, 65535))
+        self.target_host = str(self.target_host or "").strip()
+        self.app_name = str(self.app_name or "").strip()
         self.room_id = parse_room_id(self.room_id)
         # A pasted URL carries its own part number; keep it.
         pasted_page = parse_video_page(self.video_id)

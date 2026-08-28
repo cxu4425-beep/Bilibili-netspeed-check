@@ -11,7 +11,11 @@ from typing import Deque, Iterable, Optional
 
 KIND_LIVE = "live"
 KIND_VIDEO = "video"
+KIND_APP = "app"          # any application, measured through its own connections
+KIND_TARGET = "target"    # a host the user named (game server, DNS, anything)
 KIND_NETWORK = "network"
+
+WATCHABLE_KINDS = (KIND_LIVE, KIND_VIDEO, KIND_APP, KIND_TARGET)
 
 
 @dataclass(frozen=True)
@@ -100,6 +104,10 @@ class LatencySample:
     source: str = "manual"
     throughput_mbps: Optional[float] = None
     required_mbps: Optional[float] = None
+    # Whole-machine throughput, attached to every sample whatever is watched.
+    up_mbps: Optional[float] = None
+    down_mbps: Optional[float] = None
+    connections: int = 0          # how many sockets the watched app holds open
     error: Optional[str] = None
 
     def to_dict(self) -> dict:

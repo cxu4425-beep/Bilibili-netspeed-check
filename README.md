@@ -2,27 +2,39 @@
 
 <img src="assets/icon.png" width="96" alt="Bilibili Latency Monitor">
 
-# 哔哩哔哩延迟监视器 · Bilibili Latency Monitor
+# 延遲監視器 · Latency Monitor
 
-**即時顯示 B 站「伺服器 → 你的電腦 → 螢幕」的延遲，常駐在狀態列或直播畫面旁。**
-**會自動跟著你正在看的直播間／影片走，一般影片也能測。**
+**任何程式的即時延遲都能看：遊戲、通話、瀏覽器、下載——常駐在狀態列或畫面角落。**
+**對 B 站另外做了深度支援：自動跟著你正在看的直播間／影片，量到「伺服器 → 電腦 → 螢幕」。**
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English
 
 [功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
 
-<img src="docs/images/overlay-dark.png" width="232" alt="深色主題懸浮窗">
+<img src="docs/images/overlay-app.png" width="232" alt="任意應用模式懸浮窗">
+<img src="docs/images/overlay-dark.png" width="232" alt="直播模式懸浮窗">
 <img src="docs/images/overlay-video.png" width="232" alt="影片模式懸浮窗">
-<img src="docs/images/overlay-light.png" width="232" alt="淺色主題懸浮窗">
 <img src="docs/images/overlay-compact.png" width="212" alt="緊湊模式">
 
-<em>左起：直播模式、影片模式（起播＋頻寬）、淺色主題、緊湊模式</em>
+<em>左起：任意應用（延遲＋連線數＋上下行）、B 站直播、B 站影片（起播＋頻寬）、緊湊模式</em>
 
 </div>
 
 ---
 
 ## ✨ 功能
+
+### 任何程式都能測（不限 B 站）
+
+- **選一個程式**（遊戲、Discord、瀏覽器、下載器…），監視器會找出**它實際連的伺服器**並持續測延遲；
+  UDP 的遊戲連不上 TCP 時自動改用 ping。順便顯示它開了幾條連線。
+- **自動跟隨目前使用的程式**：切到哪個視窗就量哪個程式，不用每次設定。
+- **自訂伺服器位址**：直接填 `8.8.8.8`、遊戲伺服器、公司 VPN，先試 TCP、不通就 ping。
+- **全機上傳／下載速度**：每一筆樣本都附帶，一眼看出「是不是有別的東西在吃頻寬」。
+- **卡頓與延遲突增偵測**：探測失敗或延遲跳到平常的兩倍以上就記一次事件，
+  可選擇彈出提示（有冷卻時間，不會一直吵）。
+
+### B 站深度支援
 
 - **自動跟隨你在看的頁面**：不用每次手動貼房間號，換直播間、換影片、換分頁都會自己切過去
   （見[自動偵測](#-自動跟隨我正在看的頁面)），也可以隨時關掉改成手動指定。
@@ -31,6 +43,9 @@
 - **直播與一般影片都能測**：直播量的是離直播邊緣有多遠；一般影片量的是
   **起播延遲**與**頻寬餘量**（線路撐不撐得住這個畫質、會不會轉圈）。
 - **即時延遲監測**：每 2 秒（可調）量一次，總延遲 + 網路 / 推流 / 顯示三段分項。
+- **CDN 線路比較**：B 站同一個直播間會發好幾個節點，監視器會定期把每條線都測一遍，
+  在診斷資訊裡告訴你目前這條多快、最快的是哪一條。
+- **直播間詳情**：人氣、分區、開播時長、畫質名稱、編碼、格式，全都看得到。
 - **常駐兩種形態，可同時開**
   - **狀態列（系統匣）圖示**：圖示上直接畫出目前的毫秒數，滑鼠移上去看完整分項。
   - **懸浮窗**：永遠置頂、半透明，可**自由拖曳**、**吸附螢幕角落**，或**跟隨 B 站視窗**移動。
@@ -117,20 +132,43 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 3. 想手動指定的話：在圖示或懸浮窗上按右鍵 → **設定…** → 把「監測對象」改成
    「手動指定直播間」或「手動指定視頻」，再填內容。
 
-**監測對象**三種模式：
+**監測對象**五種模式（設定 → 常規 → 監測對象）：
 
 | 模式 | 說明 |
 | --- | --- |
-| **自動跟隨我正在看的頁面**（預設）| 自動偵測你在看哪個直播間／影片，換頁就跟著換 |
+| **自動跟隨我正在看的頁面**（預設）| 自動偵測你在看哪個 B 站直播間／影片，換頁就跟著換 |
 | **手動指定直播間** | 只量你填的那個直播間，不受瀏覽器影響 |
 | **手動指定視頻** | 只量你填的那支影片（可指定分 P）|
+| **任意應用程序** | 選一個程式（遊戲、通話、瀏覽器…），量它**實際連的伺服器** |
+| **自定義服務器地址** | 直接填 IP／網域＋連接埠，例如遊戲伺服器、`8.8.8.8` |
 
 填寫格式都很寬鬆：
 
 - 直播間：`21452505`、`https://live.bilibili.com/21452505`，或整段網址貼上。
 - 影片：`BV1GJ411x7h7`、`av170001`、`https://www.bilibili.com/video/BV1GJ411x7h7?p=2`（分 P 用 `?p=`）。
+- 應用程式：從下拉選單挑（會列出正在連網的程式和它的連線數），或直接打 `game.exe`；
+  也可以勾「自動跟隨當前使用的程序」，切到哪個視窗就量哪個。
 
-兩個都留空、又關掉自動偵測時，進入**僅網路模式**，只量到 B 站伺服器的網路延遲。
+全部留空、又關掉自動偵測時，進入**僅網路模式**，只量到 B 站伺服器的網路延遲。
+
+### 量任何程式（遊戲／通話／下載…）
+
+1. 設定 → 常規 → 監測對象 → **任意應用程序**
+2. 從下拉選單選你的程式（例如 `ValorantGame.exe`、`Discord.exe`、`chrome.exe`），
+   按「刷新列表」可以重新掃描；程式還沒開的話直接把名字打進去也行。
+3. 確定。懸浮窗會變成：**延遲 / 連接數 / 顯示**，統計列顯示 **↓下載 ↑上傳**。
+
+它是怎麼量的：從系統的連線表找出**這個程式現在連著哪些伺服器**，挑連線數最多的那個公網位址，
+每輪對它計時一次 TCP 交握。很多遊戲走 UDP，TCP 連不上時會自動改用系統 `ping`（不需要管理員權限）。
+
+| 你會看到 | 意思 |
+| --- | --- |
+| 延遲 | 到該程式伺服器的往返時間（TCP 或 ping）|
+| 連接數 | 這個程式目前開著幾條連線 |
+| ↓ / ↑ | 整台電腦的下載／上傳速度，用來判斷「是不是有別的東西在吃頻寬」|
+
+> 讀的是自己電腦上、自己程式的連線表（Windows/Linux 直接可讀；macOS 對其他程式的連線可能需要權限，
+> 讀不到時會顯示「該應用當前沒有網絡連接」）。不注入、不抓封包、不看內容。
 
 ### 直播和影片量的東西不一樣
 
@@ -264,6 +302,10 @@ bili-latency --probe-once --room 21452505 # 不開視窗，量一次印出 JSON 
 bili-latency --probe-once --detect        # 量「我現在正在看的那個頁面」一次
 bili-latency --detect-report              # 列出各偵測來源在你機器上讀到什麼（排查用）
 bili-latency --client-dir "D:\bili"       # 客戶端裝在別處時，指定它的資料夾（可重複）
+bili-latency --app ValorantGame.exe       # 量某個程式的延遲
+bili-latency --app-foreground             # 量目前最前面那個程式
+bili-latency --ping 8.8.8.8               # 量某個位址（用 --ping-port 指定連接埠）
+bili-latency --list-apps                  # 列出正在連網的程式（挑名字用）
 ```
 
 `--probe-once` 很適合排查問題或寫成腳本定時記錄：
@@ -294,7 +336,11 @@ bili-latency --client-dir "D:\bili"       # 客戶端裝在別處時，指定它
 
 | 項目 | 說明 |
 | --- | --- |
-| 監測對象 | 自動跟隨 / 手動指定直播間 / 手動指定視頻 |
+| 監測對象 | 自動跟隨 / 直播間 / 視頻 / 任意應用程序 / 自定義服務器地址 |
+| 應用程序 | 「任意應用程序」模式要量哪個程式，可勾自動跟隨前景程式 |
+| 服務器地址 / 端口 | 「自定義服務器地址」模式要量的目標 |
+| 顯示全機上傳／下載速度 | 每筆樣本附帶網速（可關）|
+| 卡頓／延遲突增時彈出提示 | 有冷卻時間，不會一直吵（可關）|
 | 直播間號或連結 | 要監測的直播間；自動模式下當作找不到頁面時的備援 |
 | 視頻號或連結 | 要監測的影片，支援 BV / av / 網址（`?p=` 指定分 P）|
 | 自動檢測：讀取官方PC客戶端正在播放的內容 | 直接讀客戶端自己的紀錄，全自動（可關）|
@@ -440,8 +486,12 @@ src/bili_latency/
 ├── i18n.py           简体 / 繁體 / English 字串表
 ├── recording.py      CSV 紀錄與輪替
 ├── autostart.py      三個平台的開機自動啟動
+├── targets.py        決定「這一輪要量什麼」（GUI 與命令列共用）
+├── events.py         卡頓／延遲突增事件與通知冷卻
 ├── probes/
-│   ├── network.py    TCP RTT、TTFB、時鐘偏移
+│   ├── network.py    TCP RTT、TTFB、ICMP ping、時鐘偏移
+│   ├── appnet.py     任意程式：連線表 → 伺服器 → 往返時間
+│   ├── netspeed.py   全機上傳／下載速度
 │   ├── stream.py     直播 playurl API、m3u8 解析、FLV tag 解析
 │   ├── video.py      影片 view/playurl API、Range 測速與起播延遲
 │   └── display.py    影格週期與顯示延遲估算
@@ -481,12 +531,27 @@ MIT License，詳見 [LICENSE](LICENSE)。
 
 # English
 
-**Bilibili Latency Monitor** shows, in real time, how far behind a Bilibili stream is —
-from the server, through your machine, to your screen — in an always-on-top overlay
-and/or a status-bar (tray) icon that draws the number right on itself. It follows
-whatever you are watching, live rooms and ordinary videos alike.
+**Latency Monitor** shows, in real time, the latency of **any application** — a game, a
+voice call, a browser, a download — in an always-on-top overlay and/or a status-bar
+(tray) icon that draws the number right on itself. Bilibili gets extra depth on top:
+it follows whatever you are watching (live rooms and ordinary videos alike) and
+measures server → client → screen.
 
 ### Highlights
+
+**Any application**
+
+- Pick a program and the monitor finds **the servers it is actually connected to**, then
+  times them every round — falling back to `ping` for UDP games. It also shows how many
+  sockets that program holds open.
+- **Follow the foreground app**: whatever window you switch to is what gets measured.
+- **A server address you type**: a game server, a VPN gateway, `8.8.8.8`.
+- **Machine upload / download speed** on every sample, so you can see when something else
+  is eating the line.
+- **Stall and spike detection**: a failed probe, or latency jumping past twice its recent
+  normal, is recorded as an event and can raise one (rate-limited) notification.
+
+**Bilibili**
 
 - **Follows what you watch**: no pasting room ids — it detects the live room or video
   you have open and switches with you (see [Auto-detection](#auto-detection)).
@@ -498,6 +563,9 @@ whatever you are watching, live rooms and ordinary videos alike.
 - Built for long sessions: bounded memory, exponential backoff, atomic config writes, auto recovery.
 - Stats (avg / p95 / jitter or speed), a sparkline, and optional CSV logging with rotation.
 - **No account, no cookies, no telemetry** — only the public endpoints a browser already calls.
+- **CDN line comparison**: the same room is served from several edges; the monitor times
+  them all periodically and the diagnostics show how the current one compares to the best.
+- **Room details**: popularity, category, uptime, quality name, codec and container.
 - 简体中文 / 繁體中文 / English, per-user settings, single instance per user.
 
 ### Auto-detection
@@ -561,6 +629,10 @@ bili-latency --no-detect                   # never auto-detect
 bili-latency --no-tray                     # overlay only
 bili-latency --config-dir /media/usb/cfg   # portable settings
 bili-latency --probe-once --detect         # one JSON measurement of what you are watching
+bili-latency --app ValorantGame.exe        # measure any application
+bili-latency --app-foreground              # measure whatever app is in front
+bili-latency --ping 8.8.8.8 --ping-port 53 # measure a server address
+bili-latency --list-apps                   # which programs are on the network right now
 ```
 
 ### How the number is computed

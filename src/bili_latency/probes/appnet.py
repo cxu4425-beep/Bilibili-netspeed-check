@@ -1,0 +1,190 @@
+"""Latency for any application, not just Bilibili.
+
+Given a process (picked by name, or whatever is in the foreground), this finds
+the servers it is actually talking to and times the round trip to the busiest
+one. Nothing is injected into the process and no packets are captured: the
+connection table is public information about the user's own processes, and the
+round trip is measured by connecting to the same endpoint the app uses.
+
+Games and voice apps often sit on UDP, where a TCP handshake proves nothing, so
+the probe falls back to ICMP (the system ``ping`` command) for those.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import logging
+from dataclasses import dataclass, field
+from typing import Optional
+
+from .network import icmp_ping_ms, tcp_rtt_ms
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover - psutil is a hard dependency
+    psutil = None  # type: ignore
+
+LOG = logging.getLogger(__name__)
+
+MAX_PEERS = 8
+
+
+@dataclass(frozen=True)
+class Peer:
+    ip: str
+    port: int
+    connections: int = 1
+
+    @property
+    def is_public(self) -> bool:
+        try:
+            address = ipaddress.ip_address(self.ip)
+        except ValueError:
+            return False
+        return not (address.is_private or address.is_loopback or address.is_link_local
+                    or address.is_multicast or address.is_reserved)
+
+    def __str__(self) -> str:
+        return f"{self.ip}:{self.port}"
+
+
+@dataclass(frozen=True)
+class AppInfo:
+    name: str
+    pids: tuple = ()
+    connections: int = 0
+
+
+@dataclass(frozen=True)
+class AppMeasurement:
+    rtt_ms: Optional[float] = None
+    method: str = "none"          # tcp | icmp | none
+    peer: Optional[Peer] = None
+    peers: tuple = ()
+    connections: int = 0
+    process: str = ""
+    error: Optional[str] = None
+
+
+def _process_names() -> dict:
+    """pid -> process name, tolerating processes that vanish mid-scan."""
+    names = {}
+    if psutil is None:
+        return names
+    for process in psutil.process_iter(["name"]):
+        try:
+            names[process.pid] = process.info.get("name") or ""
+        except Exception:  # pragma: no cover - race with process exit
+            continue
+    return names
+
+
+def list_apps(min_connections: int = 1) -> list:
+    """Applications that currently hold network connections, busiest first."""
+    if psutil is None:
+        return []
+    try:
+        connections = psutil.net_connections(kind="inet")
+    except Exception as exc:
+        LOG.debug("connection table unavailable: %s", exc)
+        return []
+
+    names = _process_names()
+    grouped: dict = {}
+    for entry in connections:
+        if entry.pid is None or not entry.raddr:
+            continue
+        name = names.get(entry.pid) or f"pid {entry.pid}"
+        pids, count = grouped.get(name, (set(), 0))
+        pids.add(entry.pid)
+        grouped[name] = (pids, count + 1)
+
+    apps = [
+        AppInfo(name=name, pids=tuple(sorted(pids)), connections=count)
+        for name, (pids, count) in grouped.items()
+        if count >= min_connections
+    ]
+    apps.sort(key=lambda app: app.connections, reverse=True)
+    return apps
+
+
+def peers_for(process_name: str) -> list:
+    """Remote endpoints one application is connected to, busiest first."""
+    if psutil is None or not process_name:
+        return []
+    wanted = process_name.strip().lower()
+    try:
+        connections = psutil.net_connections(kind="inet")
+    except Exception as exc:
+        LOG.debug("connection table unavailable: %s", exc)
+        return []
+
+    names = _process_names()
+    counted: dict = {}
+    for entry in connections:
+        if entry.pid is None or not entry.raddr:
+            continue
+        name = (names.get(entry.pid) or "").lower()
+        if wanted not in name and wanted != f"pid {entry.pid}":
+            continue
+        key = (entry.raddr.ip, entry.raddr.port)
+        counted[key] = counted.get(key, 0) + 1
+
+    peers = [Peer(ip=ip, port=port, connections=count) for (ip, port), count in counted.items()]
+    # Public servers first: a LAN or loopback peer says nothing about the line.
+    peers.sort(key=lambda peer: (peer.is_public, peer.connections), reverse=True)
+    return peers[:MAX_PEERS]
+
+
+class AppNetProbe:
+    """Times the round trip to the server an application is talking to."""
+
+    def __init__(self) -> None:
+        self._process = ""
+        self._icmp_only: set = set()
+
+    def set_target(self, process_name: str) -> None:
+        if process_name != self._process:
+            self._process = process_name
+            self._icmp_only.clear()
+
+    @property
+    def process(self) -> str:
+        return self._process
+
+    def measure(self, process_name: Optional[str] = None, timeout_s: float = 4.0) -> AppMeasurement:
+        process_name = process_name or self._process
+        if not process_name:
+            return AppMeasurement(error="no-app")
+        if psutil is None:
+            return AppMeasurement(process=process_name, error="psutil unavailable")
+
+        peers = peers_for(process_name)
+        if not peers:
+            return AppMeasurement(process=process_name, peers=(), error="no-connections")
+
+        total = sum(peer.connections for peer in peers)
+        for peer in peers:
+            rtt, method = self._time_peer(peer, timeout_s)
+            if rtt is not None:
+                return AppMeasurement(
+                    rtt_ms=rtt, method=method, peer=peer, peers=tuple(peers),
+                    connections=total, process=process_name,
+                )
+        return AppMeasurement(
+            peers=tuple(peers), connections=total, process=process_name,
+            error="no reply from the app's servers",
+        )
+
+    def _time_peer(self, peer: Peer, timeout_s: float) -> tuple:
+        """TCP first; ICMP for endpoints that never answer a handshake (UDP)."""
+        key = str(peer)
+        if key not in self._icmp_only:
+            rtt = tcp_rtt_ms(peer.ip, peer.port, timeout_s)
+            if rtt is not None:
+                return rtt, "tcp"
+            self._icmp_only.add(key)
+        rtt = icmp_ping_ms(peer.ip, timeout_s)
+        if rtt is not None:
+            return rtt, "icmp"
+        return None, "none"

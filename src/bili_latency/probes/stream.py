@@ -44,10 +44,42 @@ class RoomInfo:
     live_status: int = 0          # 0 offline, 1 live, 2 looping a recording
     title: str = ""
     uid: int = 0
+    online: int = 0               # the "popularity" number the room shows
+    area_name: str = ""
+    parent_area_name: str = ""
+    live_start: str = ""          # "YYYY-MM-DD HH:MM:SS", empty when offline
 
     @property
     def is_live(self) -> bool:
         return self.live_status == 1
+
+    @property
+    def area(self) -> str:
+        parts = [part for part in (self.parent_area_name, self.area_name) if part]
+        return " / ".join(parts)
+
+    def live_seconds(self, now: Optional[float] = None) -> Optional[int]:
+        """How long the stream has been up, from the room's start time."""
+        if not self.live_start or self.live_start.startswith("0000"):
+            return None
+        try:
+            started = datetime.strptime(self.live_start, "%Y-%m-%d %H:%M:%S").timestamp()
+        except ValueError:
+            return None
+        elapsed = (time.time() if now is None else now) - started
+        return int(elapsed) if elapsed >= 0 else None
+
+
+@dataclass(frozen=True)
+class CdnLine:
+    """One CDN edge this room is available on."""
+
+    host: str
+    rtt_ms: Optional[float] = None
+
+    @property
+    def reachable(self) -> bool:
+        return self.rtt_ms is not None
 
 
 @dataclass(frozen=True)
@@ -226,6 +258,9 @@ class StreamProbe:
         self._endpoints_fetched_at: float = 0.0
         self._room_info: Optional[RoomInfo] = None
         self._clock_offset_ms: float = 0.0
+        self._lines: list = []
+        self._lines_checked_at = 0.0
+        self._quality_desc: dict = {}
 
     # -------------------------------------------------------------- room data
     def set_room(self, room_id: str) -> None:
@@ -237,6 +272,8 @@ class StreamProbe:
         self._endpoints = []
         self._endpoints_fetched_at = 0.0
         self._room_info = None
+        self._lines = []
+        self._lines_checked_at = 0.0
 
     def set_clock_offset_ms(self, offset_ms: Optional[float]) -> None:
         if offset_ms is not None and abs(offset_ms) < 86_400_000:
@@ -256,6 +293,10 @@ class StreamProbe:
             live_status=int(data.get("live_status") or 0),
             title=str(data.get("title") or ""),
             uid=int(data.get("uid") or 0),
+            online=int(data.get("online") or 0),
+            area_name=str(data.get("area_name") or ""),
+            parent_area_name=str(data.get("parent_area_name") or ""),
+            live_start=str(data.get("live_time") or ""),
         )
         self._room_info = info
         return info
@@ -275,6 +316,7 @@ class StreamProbe:
         payload = self.client.get_json(PLAYURL_URL, params=params)
         if payload.get("code") != 0:
             raise StreamError(str(payload.get("message") or payload.get("msg") or "playurl failed"))
+        self._quality_desc = parse_quality_names(payload)
         endpoints = parse_playurl(payload)
         if not endpoints:
             raise StreamError("no playable stream in response")
@@ -341,6 +383,9 @@ class StreamProbe:
             "window_s": playlist.window_s,
             "media_sequence": playlist.media_sequence,
             "format": endpoint.fmt,
+            "codec": endpoint.codec,
+            "qn": endpoint.qn,
+            "quality": self._quality_desc.get(endpoint.qn, ""),
         }
 
         if edge_epoch is not None:
@@ -426,6 +471,55 @@ class StreamProbe:
         parsed = urlparse(endpoint.url)
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
         return tcp_rtt_ms(endpoint.host, port, timeout_s)
+
+    def compare_lines(self, timeout_s: float = 4.0, max_hosts: int = 6) -> list:
+        """Time every CDN edge this room is offered on, fastest first.
+
+        Bilibili hands out several hosts for the same stream and the player just
+        takes the first one; when that edge is slow, this is what shows it.
+        """
+        seen: dict = {}
+        for endpoint in self._endpoints:
+            host = endpoint.host
+            if not host or host in seen:
+                continue
+            parsed = urlparse(endpoint.url)
+            seen[host] = parsed.port or (443 if parsed.scheme == "https" else 80)
+            if len(seen) >= max_hosts:
+                break
+        results = []
+        for host, port in seen.items():
+            results.append(CdnLine(host=host, rtt_ms=tcp_rtt_ms(host, port, timeout_s)))
+        reachable = [line for line in results if line.rtt_ms is not None]
+        unreachable = [line for line in results if line.rtt_ms is None]
+        reachable.sort(key=lambda line: line.rtt_ms)
+        self._lines = reachable + unreachable
+        self._lines_checked_at = time.monotonic()
+        return self._lines
+
+    def lines_if_due(self, timeout_s: float = 4.0, interval_s: float = 60.0) -> list:
+        """Refresh the line comparison at most once per ``interval_s``."""
+        now = time.monotonic()
+        if self._lines and (now - self._lines_checked_at) < interval_s:
+            return self._lines
+        return self.compare_lines(timeout_s)
+
+    @property
+    def current_host(self) -> str:
+        endpoint = self.choose_endpoint(self._endpoints)
+        return endpoint.host if endpoint else ""
+
+
+def parse_quality_names(payload: dict) -> dict:
+    """qn -> human name ("原画", "高清") from the playurl response."""
+    names = {}
+    data = payload.get("data") or {}
+    for entry in (data.get("playurl_info") or {}).get("playurl", {}).get("g_qn_desc") or []:
+        try:
+            names[int(entry.get("qn"))] = str(entry.get("desc") or "")
+        except (TypeError, ValueError):
+            continue
+    return names
 
 
 def parse_playurl(payload: dict) -> list[StreamEndpoint]:

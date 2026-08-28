@@ -234,3 +234,121 @@ def test_clock_sync_is_rate_limited():
     worker._stream.clock_offset_ms = None
     worker._run_round()                     # second round is inside the window
     assert worker._stream.clock_offset_ms is None
+
+
+# --------------------------------------------------- any app / custom target
+def test_an_app_target_is_measured_through_its_own_connections(monkeypatch):
+    from bili_latency.models import KIND_APP
+    from bili_latency.probes.appnet import AppMeasurement, Peer
+
+    config = _config(room_id="")
+    config.manual_kind = "app"
+    config.app_name = "game.exe"
+    worker = _worker(config)
+    worker._app = type("P", (), {
+        "measure": lambda self, name, timeout: AppMeasurement(
+            rtt_ms=24.0, method="tcp", peer=Peer("93.184.216.34", 443, 4),
+            connections=4, process=name),
+        "set_target": lambda self, name: None,
+    })()
+    worker.setDisplayLatency(16.0)
+
+    sample = worker._run_round()
+
+    assert sample.ok and sample.kind == KIND_APP
+    assert sample.network_ms == 24.0
+    assert sample.total_ms == pytest.approx(40.0)
+    assert sample.host == "93.184.216.34:443" and sample.connections == 4
+    assert sample.title == "game.exe"
+
+
+def test_an_app_with_no_connections_is_a_failed_sample(monkeypatch):
+    from bili_latency.probes.appnet import AppMeasurement
+
+    config = _config(room_id="")
+    config.manual_kind = "app"
+    config.app_name = "game.exe"
+    worker = _worker(config)
+    worker._app = type("P", (), {
+        "measure": lambda self, name, timeout: AppMeasurement(
+            process=name, error="no-connections"),
+        "set_target": lambda self, name: None,
+    })()
+
+    sample = worker._run_round()
+
+    assert not sample.ok and sample.error == "no-connections"
+
+
+def test_a_custom_target_is_pinged(monkeypatch):
+    from bili_latency.models import KIND_TARGET
+
+    config = _config(room_id="")
+    config.manual_kind = "target"
+    config.target_host = "8.8.8.8"
+    config.target_port = 53
+    worker = _worker(config)
+    monkeypatch.setattr("bili_latency.monitor.tcp_rtt_ms", lambda host, port, timeout: 12.0)
+    worker.setDisplayLatency(16.0)
+
+    sample = worker._run_round()
+
+    assert sample.ok and sample.kind == KIND_TARGET
+    assert sample.host == "8.8.8.8:53" and sample.method == "tcp"
+    assert sample.total_ms == pytest.approx(28.0)
+
+
+def test_a_custom_target_falls_back_to_ping(monkeypatch):
+    config = _config(room_id="")
+    config.manual_kind = "target"
+    config.target_host = "game.example.com"
+    worker = _worker(config)
+    monkeypatch.setattr("bili_latency.monitor.tcp_rtt_ms", lambda host, port, timeout: None)
+    monkeypatch.setattr("bili_latency.monitor.icmp_ping_ms", lambda host, timeout: 30.0)
+
+    sample = worker._run_round()
+
+    assert sample.ok and sample.method == "icmp" and sample.network_ms == 30.0
+
+
+def test_an_unreachable_target_is_reported(monkeypatch):
+    config = _config(room_id="")
+    config.manual_kind = "target"
+    config.target_host = "nowhere.invalid"
+    worker = _worker(config)
+    monkeypatch.setattr("bili_latency.monitor.tcp_rtt_ms", lambda host, port, timeout: None)
+    monkeypatch.setattr("bili_latency.monitor.icmp_ping_ms", lambda host, timeout: None)
+
+    sample = worker._run_round()
+
+    assert not sample.ok and sample.error == "unreachable"
+
+
+def test_machine_speed_is_stamped_onto_any_sample(monkeypatch):
+    from bili_latency.probes.netspeed import NetSpeed
+
+    worker = _worker(_config(), live=StreamMeasurement(stream_ms=1000.0, method="hls-pdt"))
+    worker._netspeed = type("S", (), {
+        "sample": lambda self: NetSpeed(up_mbps=2.0, down_mbps=50.0, interval_s=2.0),
+        "reset": lambda self: None,
+    })()
+
+    sample = worker._with_netspeed(worker._run_round())
+
+    assert sample.down_mbps == 50.0 and sample.up_mbps == 2.0
+
+
+def test_machine_speed_can_be_turned_off():
+    from bili_latency.probes.netspeed import NetSpeed
+
+    config = _config()
+    config.show_netspeed = False
+    worker = _worker(config, live=StreamMeasurement(stream_ms=1000.0, method="hls-pdt"))
+    worker._netspeed = type("S", (), {
+        "sample": lambda self: NetSpeed(up_mbps=2.0, down_mbps=50.0),
+        "reset": lambda self: None,
+    })()
+
+    sample = worker._with_netspeed(worker._run_round())
+
+    assert sample.down_mbps is None

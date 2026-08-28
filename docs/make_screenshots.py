@@ -25,7 +25,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from bili_latency.config import Config  # noqa: E402
 from bili_latency.i18n import set_language  # noqa: E402
-from bili_latency.models import KIND_VIDEO, LatencySample, RollingStats  # noqa: E402
+from bili_latency.models import KIND_APP, KIND_VIDEO, LatencySample, RollingStats  # noqa: E402
 from bili_latency.probes.display import DisplayProbe  # noqa: E402
 from bili_latency.ui.icons import value_pixmap  # noqa: E402
 from bili_latency.ui.overlay import OverlayWindow  # noqa: E402
@@ -74,6 +74,28 @@ def video_stats() -> tuple[LatencySample, RollingStats]:
     return sample, stats
 
 
+def app_stats() -> tuple[LatencySample, RollingStats]:
+    stats = RollingStats(120)
+    sample = LatencySample()
+    for index in range(60):
+        total = 42 + math.sin(index / 5.0) * 9 + (index % 4)
+        sample = LatencySample(
+            network_ms=total - 33.2,
+            display_ms=33.2,
+            total_ms=total,
+            ok=True,
+            kind=KIND_APP,
+            method="tcp",
+            host="93.184.216.34:443",
+            title="ValorantGame.exe",
+            connections=6,
+            up_mbps=1.9,
+            down_mbps=48.3,
+        )
+        stats.append(sample)
+    return sample, stats
+
+
 def shoot_overlay(name: str, config: Config, sample, stats, label="房间 21452505") -> None:
     window = OverlayWindow(config, DisplayProbe())
     window.show()
@@ -105,6 +127,13 @@ def main() -> int:
     video_sample, video_series = video_stats()
     shoot_overlay("overlay-video.png", Config(), video_sample, video_series,
                   label="视频 【4K】测试影片标题 P2")
+
+    app_sample, app_series = app_stats()
+    app_config = Config()
+    app_config.thresholds.good_ms = 60
+    app_config.thresholds.warn_ms = 150
+    shoot_overlay("overlay-app.png", app_config, app_sample, app_series,
+                  label="应用 ValorantGame.exe")
 
     dialog = SettingsDialog(Config())
     dialog.room_edit.setText("https://live.bilibili.com/21452505")

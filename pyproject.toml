@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bili-latency-monitor"
 dynamic = ["version"]
-description = "Real-time Bilibili live latency monitor: server -> client -> screen, in an overlay or the status bar."
+description = "Real-time latency monitor for any app, with deep Bilibili live/video support: server -> client -> screen, in an overlay or the status bar."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
-keywords = ["bilibili", "latency", "live", "overlay", "monitor", "延迟", "直播"]
+keywords = ["bilibili", "latency", "live", "overlay", "monitor", "ping", "network", "gaming", "延迟", "直播", "网速"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: X11 Applications :: Qt",
@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
     "PySide6-Essentials>=6.5,<7",
     "requests>=2.28",
+    "psutil>=5.9",
 ]
 
 [project.urls]

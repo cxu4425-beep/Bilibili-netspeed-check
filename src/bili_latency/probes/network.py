@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import email.utils
+import re
 import socket
+import subprocess
+import sys
 import time
 from typing import Optional, Tuple
 from urllib.parse import urlparse
@@ -54,6 +57,44 @@ def tcp_rtt_ms(host: str, port: int = 443, timeout_s: float = 4.0) -> Optional[f
                 sock.close()
             except OSError:
                 pass
+
+
+_PING_TIME_RE = re.compile(
+    r"(?:time|時間|时间|tempo|Zeit|temps)\s*[=<]\s*([\d.,]+)\s*m?s", re.IGNORECASE
+)
+
+
+def icmp_ping_ms(host: str, timeout_s: float = 2.0) -> Optional[float]:
+    """Round trip via the system ``ping``, for servers that ignore TCP (UDP games).
+
+    No raw sockets, so no administrator rights are needed. Returns ``None`` when
+    the host does not answer or ping is unavailable.
+    """
+    if not host:
+        return None
+    timeout_ms = max(200, int(timeout_s * 1000))
+    if sys.platform.startswith("win"):
+        command = ["ping", "-n", "1", "-w", str(timeout_ms), host]
+        creationflags = 0x08000000  # CREATE_NO_WINDOW: never flash a console
+    else:
+        command = ["ping", "-c", "1", "-W", str(max(1, int(timeout_s))), host]
+        creationflags = 0
+    try:
+        completed = subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout_s + 2.0,
+            creationflags=creationflags,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    match = _PING_TIME_RE.search(completed.stdout or "")
+    if match is None:
+        return None
+    try:
+        return float(match.group(1).replace(",", "."))
+    except ValueError:
+        return None
 
 
 def clock_offset_ms(server_date_header: str, local_recv_epoch: float, rtt_ms: Optional[float]) -> Optional[float]:
