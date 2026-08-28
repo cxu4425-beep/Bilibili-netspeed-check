@@ -1,7 +1,7 @@
 import pytest
 
-from bili_latency.probes.display import DisplayProbe
-from bili_latency.probes.network import clock_offset_ms, host_port_from_url, tcp_rtt_ms
+from lagscope.probes.display import DisplayProbe
+from lagscope.probes.network import clock_offset_ms, host_port_from_url, tcp_rtt_ms
 
 
 @pytest.mark.parametrize(

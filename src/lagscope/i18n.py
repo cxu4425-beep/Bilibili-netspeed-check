@@ -17,7 +17,7 @@ _current = "zh_CN"
 
 # key: (zh_CN, zh_TW, en)
 STRINGS: dict[str, tuple[str, str, str]] = {
-    "app.title": ("哔哩哔哩延迟监视器", "嗶哩嗶哩延遲監視器", "Bilibili Latency Monitor"),
+    "app.title": ("哔哩哔哩延迟监视器", "嗶哩嗶哩延遲監視器", "LagScope"),
     "app.short": ("B站延迟", "B站延遲", "Bili Latency"),
     "app.short_generic": ("网络延迟", "網路延遲", "Latency"),
 

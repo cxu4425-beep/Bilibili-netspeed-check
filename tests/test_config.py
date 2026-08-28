@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from bili_latency.config import Config, app_config_dir, config_path, parse_room_id
+from lagscope.config import Config, app_config_dir, config_path, parse_room_id
 
 
 @pytest.mark.parametrize(

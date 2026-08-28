@@ -1,8 +1,8 @@
 import pytest
 
-from bili_latency.models import KIND_VIDEO
-from bili_latency.probes.stream import StreamError
-from bili_latency.probes.video import (
+from lagscope.models import KIND_VIDEO
+from lagscope.probes.stream import StreamError
+from lagscope.probes.video import (
     VideoInfo, VideoProbe, VideoStream, choose_video_stream, parse_playurl_video,
     parse_video_id, parse_video_page, parse_video_target, parse_view,
 )

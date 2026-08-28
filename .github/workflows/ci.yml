@@ -46,4 +46,4 @@ jobs:
         run: python -m pytest tests -q
 
       - name: Import check (headless start-up path)
-        run: python -c "import sys; sys.path.insert(0, 'src'); import bili_latency.app, bili_latency.cli; print('imports ok')"
+        run: python -c "import sys; sys.path.insert(0, 'src'); import lagscope.app, lagscope.cli; print('imports ok')"

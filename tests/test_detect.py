@@ -9,15 +9,15 @@ import urllib.request
 
 import pytest
 
-from bili_latency.config import DetectConfig
-from bili_latency.detect import client as client_source
-from bili_latency.detect import clipboard as clipboard_source
-from bili_latency.detect import history as history_source
-from bili_latency.detect import titles as title_source
-from bili_latency.detect.bridge import BridgeServer
-from bili_latency.detect.manager import AutoDetector
-from bili_latency.detect.urls import is_bilibili, target_from_url
-from bili_latency.models import KIND_LIVE, KIND_VIDEO
+from lagscope.config import DetectConfig
+from lagscope.detect import client as client_source
+from lagscope.detect import clipboard as clipboard_source
+from lagscope.detect import history as history_source
+from lagscope.detect import titles as title_source
+from lagscope.detect.bridge import BridgeServer
+from lagscope.detect.manager import AutoDetector
+from lagscope.detect.urls import is_bilibili, target_from_url
+from lagscope.models import KIND_LIVE, KIND_VIDEO
 
 
 # ----------------------------------------------------------------------- URLs

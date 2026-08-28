@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec: one windowed executable, no console window.
 
-Build with:  pyinstaller packaging/bili_latency.spec --noconfirm
+Build with:  pyinstaller packaging/lagscope.spec --noconfirm
 """
 
 import sys
@@ -28,7 +28,7 @@ a = Analysis(
     pathex=[str(ROOT / "src")],
     binaries=[],
     datas=[],
-    hiddenimports=["bili_latency", "bili_latency.app", "bili_latency.cli"],
+    hiddenimports=["lagscope", "lagscope.app", "lagscope.cli"],
     hookspath=[],
     runtime_hooks=[],
     excludes=EXCLUDES,
@@ -42,7 +42,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="BiliLatencyMonitor",
+    name="LagScope",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -60,9 +60,9 @@ if sys.platform == "darwin":
     ICON_ICNS = ROOT / "assets" / "icon.icns"
     app = BUNDLE(
         exe,
-        name="BiliLatencyMonitor.app",
+        name="LagScope.app",
         icon=str(ICON_ICNS) if ICON_ICNS.exists() else None,
-        bundle_identifier="com.bili-latency-monitor",
+        bundle_identifier="com.lagscope",
         info_plist={
             "LSUIElement": True,          # menu-bar app, no dock icon
             "NSHighResolutionCapable": True,

@@ -1,7 +1,7 @@
 import csv
 
-from bili_latency.models import LatencySample
-from bili_latency.recording import HEADER, CsvRecorder
+from lagscope.models import LatencySample
+from lagscope.recording import HEADER, CsvRecorder
 
 
 def test_writes_a_header_once_and_appends_rows(tmp_path):

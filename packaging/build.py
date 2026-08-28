@@ -3,8 +3,8 @@
 
     python packaging/build.py
 
-Output lands in dist/ (BiliLatencyMonitor.exe on Windows,
-BiliLatencyMonitor.app on macOS, BiliLatencyMonitor elsewhere).
+Output lands in dist/ (LagScope.exe on Windows,
+LagScope.app on macOS, LagScope elsewhere).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def main() -> int:
 
     command = [
         sys.executable, "-m", "PyInstaller",
-        str(ROOT / "packaging" / "bili_latency.spec"),
+        str(ROOT / "packaging" / "lagscope.spec"),
         "--noconfirm",
         "--distpath", str(ROOT / "dist"),
         "--workpath", str(ROOT / "build"),

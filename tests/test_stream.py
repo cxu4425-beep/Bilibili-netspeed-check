@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from bili_latency.probes.stream import (
+from lagscope.probes.stream import (
     FlvTagParser, StreamEndpoint, StreamError, StreamProbe, parse_m3u8,
     parse_playurl, parse_program_date_time,
 )

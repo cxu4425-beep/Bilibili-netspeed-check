@@ -1,5 +1,5 @@
 @echo off
-REM One-click Windows build: creates dist\BiliLatencyMonitor.exe
+REM One-click Windows build: creates dist\LagScope.exe
 setlocal
 cd /d "%~dp0.."
 
@@ -17,5 +17,5 @@ if errorlevel 1 (
 )
 
 echo.
-echo Built: dist\BiliLatencyMonitor.exe
+echo Built: dist\LagScope.exe
 pause

@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Bilibili Latency Monitor Bridge / 哔哩哔哩延迟监视器桥接
-// @namespace    https://github.com/cxu4425-beep/Bilibili-netspeed-check
+// @name         LagScope Bridge / 哔哩哔哩延迟监视器桥接
+// @namespace    https://github.com/cxu4425-beep/LagScope
 // @version      1.0.0
-// @description  Tells the local Bilibili Latency Monitor which room or video you are watching. 把你正在看的直播间/视频告诉本机的延迟监视器。
-// @author       Bilibili Latency Monitor contributors
+// @description  Tells the local LagScope which room or video you are watching. 把你正在看的直播间/视频告诉本机的延迟监视器。
+// @author       LagScope contributors
 // @license      MIT
 // @match        https://live.bilibili.com/*
 // @match        https://www.bilibili.com/video/*

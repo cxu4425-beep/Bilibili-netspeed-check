@@ -26,11 +26,11 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            asset: BiliLatencyMonitor-windows-x64.zip
+            asset: LagScope-windows-x64.zip
           - os: macos-latest
-            asset: BiliLatencyMonitor-macos-arm64.zip
+            asset: LagScope-macos-arm64.zip
           - os: ubuntu-latest
-            asset: BiliLatencyMonitor-linux-x64.tar.gz
+            asset: LagScope-linux-x64.tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -61,19 +61,19 @@ jobs:
         run: |
           Copy-Item README.md dist/
           Copy-Item LICENSE dist/
-          Compress-Archive -Path dist/BiliLatencyMonitor.exe, dist/README.md, dist/LICENSE -DestinationPath ${{ matrix.asset }}
+          Compress-Archive -Path dist/LagScope.exe, dist/README.md, dist/LICENSE -DestinationPath ${{ matrix.asset }}
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
           cp README.md LICENSE dist/
-          cd dist && zip -r ../${{ matrix.asset }} BiliLatencyMonitor.app README.md LICENSE
+          cd dist && zip -r ../${{ matrix.asset }} LagScope.app README.md LICENSE
 
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
           cp README.md LICENSE dist/
-          tar -czf ${{ matrix.asset }} -C dist BiliLatencyMonitor README.md LICENSE
+          tar -czf ${{ matrix.asset }} -C dist LagScope README.md LICENSE
 
       - uses: actions/upload-artifact@v4
         with:

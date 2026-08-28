@@ -10,13 +10,14 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 from dataclasses import dataclass, field, asdict, fields
 from pathlib import Path
 from typing import Any, Optional
 
-from . import APP_ID, APP_NAME
+from . import APP_ID, APP_NAME, LEGACY_APP_ID, LEGACY_APP_NAME
 from .probes.video import parse_video_id, parse_video_page
 
 CONFIG_VERSION = 1
@@ -25,20 +26,48 @@ _ROOM_URL_RE = re.compile(r"live\.bilibili\.com/(?:blanc/|h5/)?(\d+)", re.IGNORE
 _DIGITS_RE = re.compile(r"^\d{1,12}$")
 
 
+def _config_dir_for(app_name: str, app_id: str) -> Path:
+    """Where a per-user config folder lives on this platform."""
+    if sys.platform.startswith("win"):
+        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / app_name
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app_name
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    return (Path(xdg) if xdg else Path.home() / ".config") / app_id
+
+
 def app_config_dir() -> Path:
     """Return (and create) this user's config directory."""
-    override = os.environ.get("BILI_LATENCY_CONFIG_DIR")
+    override = os.environ.get("LAGSCOPE_CONFIG_DIR")
     if override:
         base = Path(override).expanduser()
-    elif sys.platform.startswith("win"):
-        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / APP_NAME
-    elif sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support" / APP_NAME
-    else:
-        xdg = os.environ.get("XDG_CONFIG_HOME")
-        base = (Path(xdg) if xdg else Path.home() / ".config") / APP_ID
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+    base = _config_dir_for(APP_NAME, APP_ID)
+    if not base.exists():
+        _migrate_legacy_config(base)
     base.mkdir(parents=True, exist_ok=True)
     return base
+
+
+def _migrate_legacy_config(target: Path) -> None:
+    """Carry settings over from the pre-rename folder, once.
+
+    The app was called "Bilibili Latency Monitor" up to 1.1.1; an upgrade should
+    not silently reset someone's overlay position and room.
+    """
+    source = _config_dir_for(LEGACY_APP_NAME, LEGACY_APP_ID)
+    if not source.is_dir() or source == target:
+        return
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        for name in ("config.json", "titles.json"):
+            old = source / name
+            if old.is_file():
+                shutil.copy2(old, target / name)
+    except OSError:
+        # A failed migration just means starting from defaults, never a crash.
+        pass
 
 
 def config_path() -> Path:

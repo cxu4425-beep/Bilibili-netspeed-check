@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from bili_latency.detect import client as client_source
+from lagscope.detect import client as client_source
 
 
 def _chromium_db(path, rows):

@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("BILI_LATENCY_CONFIG_DIR", tempfile.mkdtemp(prefix="bili-shots-"))
+os.environ.setdefault("LAGSCOPE_CONFIG_DIR", tempfile.mkdtemp(prefix="lagscope-shots-"))
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -23,13 +23,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from PySide6.QtGui import QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from bili_latency.config import Config  # noqa: E402
-from bili_latency.i18n import set_language  # noqa: E402
-from bili_latency.models import KIND_APP, KIND_VIDEO, LatencySample, RollingStats  # noqa: E402
-from bili_latency.probes.display import DisplayProbe  # noqa: E402
-from bili_latency.ui.icons import value_pixmap  # noqa: E402
-from bili_latency.ui.overlay import OverlayWindow  # noqa: E402
-from bili_latency.ui.settings import SettingsDialog  # noqa: E402
+from lagscope.config import Config  # noqa: E402
+from lagscope.i18n import set_language  # noqa: E402
+from lagscope.models import KIND_APP, KIND_VIDEO, LatencySample, RollingStats  # noqa: E402
+from lagscope.probes.display import DisplayProbe  # noqa: E402
+from lagscope.ui.icons import value_pixmap  # noqa: E402
+from lagscope.ui.overlay import OverlayWindow  # noqa: E402
+from lagscope.ui.settings import SettingsDialog  # noqa: E402
 
 OUT = ROOT / "docs" / "images"
 

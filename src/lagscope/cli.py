@@ -14,7 +14,7 @@ from . import APP_NAME, __version__
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="bili-latency",
+        prog="lagscope",
         description=f"{APP_NAME} - measure Bilibili live delay from server to client to screen.",
     )
     parser.add_argument("--room", metavar="ID_OR_URL", help="live room id or URL to monitor")
@@ -60,7 +60,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.config_dir:
-        os.environ["BILI_LATENCY_CONFIG_DIR"] = args.config_dir
+        os.environ["LAGSCOPE_CONFIG_DIR"] = args.config_dir
 
     # Imported after the config dir override so paths resolve correctly.
     from .config import Config, parse_room_id

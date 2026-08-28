@@ -21,7 +21,7 @@ import struct  # noqa: E402
 from PySide6.QtCore import QBuffer  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from bili_latency.ui.icons import app_pixmap  # noqa: E402
+from lagscope.ui.icons import app_pixmap  # noqa: E402
 
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 

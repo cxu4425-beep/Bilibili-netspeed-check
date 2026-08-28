@@ -1,4 +1,4 @@
-"""``python -m bili_latency``."""
+"""``python -m lagscope``."""
 
 from .cli import main
 

@@ -11,7 +11,7 @@ there give the current room or video away without asking the user for anything:
 Both are read-only and filtered down to Bilibili ids before anything is kept.
 Where the client stores its data differs between versions, so the folders are
 discovered rather than hard-coded, extra folders can be added in the config,
-and ``bili-latency --detect-report`` prints what was actually found on this
+and ``lagscope --detect-report`` prints what was actually found on this
 machine.
 """
 

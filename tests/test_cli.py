@@ -1,6 +1,6 @@
 import pytest
 
-from bili_latency.cli import build_parser, main
+from lagscope.cli import build_parser, main
 
 
 def test_parser_accepts_the_documented_flags():

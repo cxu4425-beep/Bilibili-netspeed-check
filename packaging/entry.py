@@ -6,7 +6,7 @@ not resolve; this thin wrapper imports the package the normal way.
 
 import sys
 
-from bili_latency.cli import main
+from lagscope.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

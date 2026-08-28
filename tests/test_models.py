@@ -1,4 +1,4 @@
-from bili_latency.models import LatencySample, RollingStats
+from lagscope.models import LatencySample, RollingStats
 
 
 def _stats(values, maxlen=100):

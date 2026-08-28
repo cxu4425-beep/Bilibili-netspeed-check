@@ -2,11 +2,11 @@
 
 import pytest
 
-from bili_latency.config import Config
-from bili_latency.models import (
+from lagscope.config import Config
+from lagscope.models import (
     KIND_LIVE, KIND_NETWORK, KIND_VIDEO, NetworkMeasurement, StreamMeasurement, WatchTarget,
 )
-from bili_latency.monitor import STATUS_ERROR, STATUS_NO_ROOM, STATUS_OFFLINE, STATUS_OK, MonitorWorker
+from lagscope.monitor import STATUS_ERROR, STATUS_NO_ROOM, STATUS_OFFLINE, STATUS_OK, MonitorWorker
 
 
 class FakeClient:
@@ -160,7 +160,7 @@ def test_a_configured_video_is_used_when_no_room_is_set():
 
 # ------------------------------------------------------------- network-only
 def test_network_only_mode_without_a_target(monkeypatch):
-    monkeypatch.setattr("bili_latency.monitor.tcp_rtt_ms", lambda *a, **k: 21.0)
+    monkeypatch.setattr("lagscope.monitor.tcp_rtt_ms", lambda *a, **k: 21.0)
     worker = _worker(_config(room_id=""))
     worker.setDisplayLatency(16.0)
 
@@ -172,7 +172,7 @@ def test_network_only_mode_without_a_target(monkeypatch):
 
 
 def test_network_only_mode_marks_an_unreachable_network(monkeypatch):
-    monkeypatch.setattr("bili_latency.monitor.tcp_rtt_ms", lambda *a, **k: None)
+    monkeypatch.setattr("lagscope.monitor.tcp_rtt_ms", lambda *a, **k: None)
     worker = _worker(_config(room_id=""))
 
     sample = worker._run_round()
@@ -238,8 +238,8 @@ def test_clock_sync_is_rate_limited():
 
 # --------------------------------------------------- any app / custom target
 def test_an_app_target_is_measured_through_its_own_connections(monkeypatch):
-    from bili_latency.models import KIND_APP
-    from bili_latency.probes.appnet import AppMeasurement, Peer
+    from lagscope.models import KIND_APP
+    from lagscope.probes.appnet import AppMeasurement, Peer
 
     config = _config(room_id="")
     config.manual_kind = "app"
@@ -263,7 +263,7 @@ def test_an_app_target_is_measured_through_its_own_connections(monkeypatch):
 
 
 def test_an_app_with_no_connections_is_a_failed_sample(monkeypatch):
-    from bili_latency.probes.appnet import AppMeasurement
+    from lagscope.probes.appnet import AppMeasurement
 
     config = _config(room_id="")
     config.manual_kind = "app"
@@ -281,14 +281,14 @@ def test_an_app_with_no_connections_is_a_failed_sample(monkeypatch):
 
 
 def test_a_custom_target_is_pinged(monkeypatch):
-    from bili_latency.models import KIND_TARGET
+    from lagscope.models import KIND_TARGET
 
     config = _config(room_id="")
     config.manual_kind = "target"
     config.target_host = "8.8.8.8"
     config.target_port = 53
     worker = _worker(config)
-    monkeypatch.setattr("bili_latency.monitor.tcp_rtt_ms", lambda host, port, timeout: 12.0)
+    monkeypatch.setattr("lagscope.monitor.tcp_rtt_ms", lambda host, port, timeout: 12.0)
     worker.setDisplayLatency(16.0)
 
     sample = worker._run_round()
@@ -303,8 +303,8 @@ def test_a_custom_target_falls_back_to_ping(monkeypatch):
     config.manual_kind = "target"
     config.target_host = "game.example.com"
     worker = _worker(config)
-    monkeypatch.setattr("bili_latency.monitor.tcp_rtt_ms", lambda host, port, timeout: None)
-    monkeypatch.setattr("bili_latency.monitor.icmp_ping_ms", lambda host, timeout: 30.0)
+    monkeypatch.setattr("lagscope.monitor.tcp_rtt_ms", lambda host, port, timeout: None)
+    monkeypatch.setattr("lagscope.monitor.icmp_ping_ms", lambda host, timeout: 30.0)
 
     sample = worker._run_round()
 
@@ -316,8 +316,8 @@ def test_an_unreachable_target_is_reported(monkeypatch):
     config.manual_kind = "target"
     config.target_host = "nowhere.invalid"
     worker = _worker(config)
-    monkeypatch.setattr("bili_latency.monitor.tcp_rtt_ms", lambda host, port, timeout: None)
-    monkeypatch.setattr("bili_latency.monitor.icmp_ping_ms", lambda host, timeout: None)
+    monkeypatch.setattr("lagscope.monitor.tcp_rtt_ms", lambda host, port, timeout: None)
+    monkeypatch.setattr("lagscope.monitor.icmp_ping_ms", lambda host, timeout: None)
 
     sample = worker._run_round()
 
@@ -325,7 +325,7 @@ def test_an_unreachable_target_is_reported(monkeypatch):
 
 
 def test_machine_speed_is_stamped_onto_any_sample(monkeypatch):
-    from bili_latency.probes.netspeed import NetSpeed
+    from lagscope.probes.netspeed import NetSpeed
 
     worker = _worker(_config(), live=StreamMeasurement(stream_ms=1000.0, method="hls-pdt"))
     worker._netspeed = type("S", (), {
@@ -339,7 +339,7 @@ def test_machine_speed_is_stamped_onto_any_sample(monkeypatch):
 
 
 def test_machine_speed_can_be_turned_off():
-    from bili_latency.probes.netspeed import NetSpeed
+    from lagscope.probes.netspeed import NetSpeed
 
     config = _config()
     config.show_netspeed = False

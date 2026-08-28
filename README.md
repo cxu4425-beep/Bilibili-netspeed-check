@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/icon.png" width="96" alt="Bilibili Latency Monitor">
+<img src="assets/icon.png" width="96" alt="LagScope">
 
-# 延遲監視器 · Latency Monitor
+# LagScope · 延遲監視器
 
 **任何程式的即時延遲都能看：遊戲、通話、瀏覽器、下載——常駐在狀態列或畫面角落。**
 **對 B 站另外做了深度支援：自動跟著你正在看的直播間／影片，量到「伺服器 → 電腦 → 螢幕」。**
@@ -69,25 +69,25 @@
 
 ### 方式一：下載現成的執行檔（最簡單，Windows 推薦）
 
-1. 打開 [Releases](https://github.com/cxu4425-beep/Bilibili-netspeed-check/releases) 頁面。
+1. 打開 [Releases](https://github.com/cxu4425-beep/LagScope/releases) 頁面。
 2. 下載對應系統的壓縮檔：
-   - Windows：`BiliLatencyMonitor-windows-x64.zip`
-   - macOS：`BiliLatencyMonitor-macos-arm64.zip`
-   - Linux：`BiliLatencyMonitor-linux-x64.tar.gz`
-3. 解壓縮後直接執行 `BiliLatencyMonitor`（Windows 是 `BiliLatencyMonitor.exe`）。
+   - Windows：`LagScope-windows-x64.zip`
+   - macOS：`LagScope-macos-arm64.zip`
+   - Linux：`LagScope-linux-x64.tar.gz`
+3. 解壓縮後直接執行 `LagScope`（Windows 是 `LagScope.exe`）。
    免安裝、不寫登錄檔（除非你自己勾選「開機自動啟動」）。
 
 > Windows SmartScreen 可能提示「未知發行者」——這是沒有付費程式碼簽章憑證的開源程式的正常現象，
 > 點「其他資訊 → 仍要執行」即可。不放心的話請用方式二／方式三自行打包。
 >
 > macOS 首次開啟若提示「無法驗證開發者」，在「系統設定 → 隱私權與安全性」按「仍要打開」，
-> 或執行 `xattr -dr com.apple.quarantine BiliLatencyMonitor.app`。
+> 或執行 `xattr -dr com.apple.quarantine LagScope.app`。
 
 ### 方式二：從原始碼執行（跨平台，需要 Python 3.9+）
 
 ```bash
-git clone https://github.com/cxu4425-beep/Bilibili-netspeed-check.git
-cd Bilibili-netspeed-check
+git clone https://github.com/cxu4425-beep/LagScope.git
+cd LagScope
 
 python -m venv .venv
 # Windows:        .venv\Scripts\activate
@@ -101,7 +101,7 @@ python run.py                   # 直接跑，不用安裝
 
 ```bash
 pip install -e .
-bili-latency                    # 之後在任何目錄都能啟動
+lagscope                    # 之後在任何目錄都能啟動
 ```
 
 Linux 若缺少 Qt 依賴，先裝：
@@ -169,6 +169,34 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 
 > 讀的是自己電腦上、自己程式的連線表（Windows/Linux 直接可讀；macOS 對其他程式的連線可能需要權限，
 > 讀不到時會顯示「該應用當前沒有網絡連接」）。不注入、不抓封包、不看內容。
+
+
+### 支援哪些 App？
+
+**沒有白名單——任何會連網的程式都能量。** 監視器讀的是系統的連線表，只要那個程式開著網路連線就抓得到，
+不需要為它做任何適配。下面列的是常見例子和它們的進程名稱，方便你在選單裡對號入座：
+
+| App | 進程名稱（Windows）| 測到的是 | 走 UDP？|
+| --- | --- | --- | --- |
+| **Discord** | `Discord.exe` | 語音／訊息伺服器 | 語音是 → 自動用 ping |
+| **Zoom** | `Zoom.exe` | 會議媒體伺服器 | 是 → 自動用 ping |
+| **VALORANT** | `VALORANT-Win64-Shipping.exe` | 對戰伺服器 | 是 → 自動用 ping |
+| **League of Legends** | `League of Legends.exe` | 對戰伺服器 | 是 → 自動用 ping |
+| **Chrome / Edge** | `chrome.exe` / `msedge.exe` | 目前連線最多的那個網站 | 否（TCP）|
+| **微信 WeChat** | `WeChat.exe` | 微信長連線伺服器 | 否（TCP）|
+| **QQ** | `QQ.exe` | QQ 伺服器 | 部分是 |
+| **原神 Genshin Impact** | `YuanShen.exe`（國服）／ `GenshinImpact.exe`（國際服）| 遊戲伺服器 | 是 → 自動用 ping |
+| **網易雲音樂** | `cloudmusic.exe` | 音樂 CDN | 否（TCP）|
+| **騰訊會議 Tencent Meeting** | `wemeetapp.exe` | 會議伺服器 | 是 → 自動用 ping |
+
+其他常見的也一樣可以：Steam（`steam.exe`）、Telegram、Spotify、迅雷、釘釘、CS2（`cs2.exe`）、
+Minecraft（`javaw.exe`）、OBS 推流、任何下載工具……
+
+**進程名稱會因版本、國服／國際服、安裝方式而不同**，所以不用死記：設定裡按「刷新列表」會列出
+**目前正在連網的程式和它們的連線數**，直接挑就好；命令列則是 `LagScope.exe --list-apps`。
+
+> **B 站客戶端**不用走這裡——用「自動跟隨」或直播間／影片模式，量到的是真正的**播放延遲**，
+> 比單純的伺服器往返時間有用得多。
 
 ### 直播和影片量的東西不一樣
 
@@ -239,7 +267,7 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 **先跑一次這個確認你的客戶端讀不讀得到：**
 
 ```bash
-bili-latency --detect-report          # 打包版：BiliLatencyMonitor.exe --detect-report
+lagscope --detect-report          # 打包版：LagScope.exe --detect-report
 ```
 
 它會列出找到的客戶端資料夾、讀到的房間號、視窗標題等等。如果 `client.folders` 是空的，
@@ -279,7 +307,7 @@ bili-latency --detect-report          # 打包版：BiliLatencyMonitor.exe --det
 
 1. 瀏覽器安裝 [Tampermonkey](https://www.tampermonkey.net/)（或 Violentmonkey）。
 2. 安裝本專案的
-   [`extras/bilibili-latency-bridge.user.js`](extras/bilibili-latency-bridge.user.js)
+   [`extras/bililagscope-bridge.user.js`](extras/bililagscope-bridge.user.js)
    （在 GitHub 上點檔案 → Raw，油猴會自動跳出安裝視窗）。
 3. 監視器裡：**設定 → 常規 → 自動檢測 → 勾選「接收油猴腳本上報」**，端口保持一致（預設 23124）。
 
@@ -289,23 +317,23 @@ bili-latency --detect-report          # 打包版：BiliLatencyMonitor.exe --det
 ### 命令列參數
 
 ```bash
-bili-latency --room 21452505              # 啟動時直接指定直播間（並關閉自動偵測）
-bili-latency --video BV1GJ411x7h7         # 指定影片；也可貼整段網址（?p=2 指定分P）
-bili-latency --detect                     # 強制開啟自動跟隨
-bili-latency --no-detect                  # 強制關閉自動跟隨
-bili-latency --lang zh_TW                 # 指定介面語言 (auto / zh_CN / zh_TW / en)
-bili-latency --no-overlay                 # 只留狀態列圖示
-bili-latency --no-tray                    # 只留懸浮窗
-bili-latency --config-dir D:\bili-cfg     # 攜帶式：設定寫到指定資料夾
-bili-latency --reset-config               # 用預設值啟動（不刪除原本的設定檔）
-bili-latency --probe-once --room 21452505 # 不開視窗，量一次印出 JSON 後結束
-bili-latency --probe-once --detect        # 量「我現在正在看的那個頁面」一次
-bili-latency --detect-report              # 列出各偵測來源在你機器上讀到什麼（排查用）
-bili-latency --client-dir "D:\bili"       # 客戶端裝在別處時，指定它的資料夾（可重複）
-bili-latency --app ValorantGame.exe       # 量某個程式的延遲
-bili-latency --app-foreground             # 量目前最前面那個程式
-bili-latency --ping 8.8.8.8               # 量某個位址（用 --ping-port 指定連接埠）
-bili-latency --list-apps                  # 列出正在連網的程式（挑名字用）
+lagscope --room 21452505              # 啟動時直接指定直播間（並關閉自動偵測）
+lagscope --video BV1GJ411x7h7         # 指定影片；也可貼整段網址（?p=2 指定分P）
+lagscope --detect                     # 強制開啟自動跟隨
+lagscope --no-detect                  # 強制關閉自動跟隨
+lagscope --lang zh_TW                 # 指定介面語言 (auto / zh_CN / zh_TW / en)
+lagscope --no-overlay                 # 只留狀態列圖示
+lagscope --no-tray                    # 只留懸浮窗
+lagscope --config-dir D:\bili-cfg     # 攜帶式：設定寫到指定資料夾
+lagscope --reset-config               # 用預設值啟動（不刪除原本的設定檔）
+lagscope --probe-once --room 21452505 # 不開視窗，量一次印出 JSON 後結束
+lagscope --probe-once --detect        # 量「我現在正在看的那個頁面」一次
+lagscope --detect-report              # 列出各偵測來源在你機器上讀到什麼（排查用）
+lagscope --client-dir "D:\bili"       # 客戶端裝在別處時，指定它的資料夾（可重複）
+lagscope --app ValorantGame.exe       # 量某個程式的延遲
+lagscope --app-foreground             # 量目前最前面那個程式
+lagscope --ping 8.8.8.8               # 量某個位址（用 --ping-port 指定連接埠）
+lagscope --list-apps                  # 列出正在連網的程式（挑名字用）
 ```
 
 `--probe-once` 很適合排查問題或寫成腳本定時記錄：
@@ -381,9 +409,9 @@ bili-latency --list-apps                  # 列出正在連網的程式（挑名
 
 | 系統 | 路徑 |
 | --- | --- |
-| Windows | `%APPDATA%\Bilibili Latency Monitor\config.json` |
-| macOS | `~/Library/Application Support/Bilibili Latency Monitor/config.json` |
-| Linux | `~/.config/bili-latency-monitor/config.json` |
+| Windows | `%APPDATA%\LagScope\config.json` |
+| macOS | `~/Library/Application Support/LagScope/config.json` |
+| Linux | `~/.config/lagscope/config.json` |
 
 日誌與 CSV 在同目錄的 `logs/` 底下。選單的「打開配置目錄」會直接幫你開啟。
 用 `--config-dir` 可以指定到 USB 隨身碟，做成攜帶式版本。
@@ -406,7 +434,7 @@ bili-latency --list-apps                  # 列出正在連網的程式（挑名
 **Q：我用的是官方 Windows 客戶端，不用網頁版，可以用嗎？要手動複製連結嗎？**
 A：可以用，而且**正常情況下不用手動做任何事**。客戶端是 Chromium 核心，會在自己的
 資料夾裡留下瀏覽紀錄，監視器直接讀那份就知道你在看哪個直播間。
-先跑 `bili-latency --detect-report` 確認讀不讀得到；讀不到再用「分享 → 複製連結」當備援，
+先跑 `lagscope --detect-report` 確認讀不讀得到；讀不到再用「分享 → 複製連結」當備援，
 或直接手動指定房間號。詳見[上面這一節](#用官方-pc-客戶端的話不用瀏覽器也可以)。
 
 **Q：自動偵測沒反應／認錯頁面？**
@@ -422,7 +450,7 @@ A：依序檢查：
 A：可以理解，所以它是可以關的：設定 → 常規 → 自動檢測 → 取消「讀取瀏覽器歷史記錄」。
 程式只會複製歷史檔後**唯讀**開啟、只撈網址含 `bilibili.com` 的列、只留房間號／BV 號在記憶體，
 不寫回、不上傳、不需要登入。相關程式碼在
-[`src/bili_latency/detect/history.py`](src/bili_latency/detect/history.py)，歡迎自己看過再決定。
+[`src/lagscope/detect/history.py`](src/lagscope/detect/history.py)，歡迎自己看過再決定。
 
 **Q：一般影片的「延遲」是什麼意思？**
 A：錄播沒有直播邊緣，所以量的是**起播延遲**（現在開播要等多久才有畫面）加上顯示延遲，
@@ -477,7 +505,7 @@ python assets/make_icon.py         # 重新產生圖示
 專案結構：
 
 ```
-src/bili_latency/
+src/lagscope/
 ├── cli.py            命令列進入點（run.py 只是免安裝的啟動器）
 ├── app.py            主程式：串起懸浮窗、狀態列、設定、監測執行緒
 ├── monitor.py        監測迴圈（獨立執行緒，含退避與時鐘校正）
@@ -512,7 +540,7 @@ src/bili_latency/
     └── theme.py      配色與數字格式化
 
 extras/
-└── bilibili-latency-bridge.user.js   選用的油猴腳本（最準的自動偵測來源）
+└── bililagscope-bridge.user.js   選用的油猴腳本（最準的自動偵測來源）
 ```
 
 歡迎 issue 與 PR。送 PR 前請先跑過 `python -m pytest tests -q`。
@@ -551,6 +579,28 @@ measures server → client → screen.
 - **Stall and spike detection**: a failed probe, or latency jumping past twice its recent
   normal, is recorded as an event and can raise one (rate-limited) notification.
 
+**Which apps are supported?** There is no whitelist - anything that opens a network
+connection works, because the monitor reads the system connection table rather than
+adapting to each program. Common examples and their Windows process names:
+
+| App | Process | UDP? |
+| --- | --- | --- |
+| Discord | `Discord.exe` | voice is - falls back to ping |
+| Zoom | `Zoom.exe` | yes - ping |
+| VALORANT | `VALORANT-Win64-Shipping.exe` | yes - ping |
+| League of Legends | `League of Legends.exe` | yes - ping |
+| Chrome / Edge | `chrome.exe` / `msedge.exe` | no (TCP) |
+| WeChat 微信 | `WeChat.exe` | no (TCP) |
+| QQ | `QQ.exe` | partly |
+| Genshin Impact 原神 | `YuanShen.exe` / `GenshinImpact.exe` | yes - ping |
+| NetEase Cloud Music 网易云音乐 | `cloudmusic.exe` | no (TCP) |
+| Tencent Meeting 腾讯会议 | `wemeetapp.exe` | yes - ping |
+
+Steam, Telegram, Spotify, CS2, Minecraft, OBS and any download client work the same way.
+Process names differ between versions and regions, so don't memorise them: **Refresh** in the
+settings lists the programs currently holding connections, and `LagScope.exe --list-apps`
+does the same from the terminal.
+
 **Bilibili**
 
 - **Follows what you watch**: no pasting room ids — it detects the live room or video
@@ -585,7 +635,7 @@ Independent, individually switchable local sources, highest priority first:
 from the public API, not from your player — and detection needs nothing from you either:
 the client is a Chromium-based app that keeps its own browsing records, and the monitor
 reads those (read-only, Bilibili URLs only), falling back to the ids in the client's logs.
-Run `bili-latency --detect-report` to see exactly what was found on your machine; if the
+Run `lagscope --detect-report` to see exactly what was found on your machine; if the
 client lives somewhere unusual, point at it with `--client-dir "PATH"`. Should a client
 build store things differently, **share → copy link** still switches the target instantly
 and teaches the monitor that window's title for next time.
@@ -596,21 +646,21 @@ whose URL contains `bilibili.com` are read, and the result — a room id or a BV
 in memory. The clipboard source only ever acts on text containing a Bilibili URL and stores
 nothing else. Turn any of them off in Settings → General → Auto-detection, or switch the
 whole thing off from the tray menu. For the most accurate browser option, install
-[`extras/bilibili-latency-bridge.user.js`](extras/bilibili-latency-bridge.user.js) in
+[`extras/bililagscope-bridge.user.js`](extras/bililagscope-bridge.user.js) in
 Tampermonkey and tick "Accept userscript reports".
 
 ### Install
 
-Download a build from [Releases](https://github.com/cxu4425-beep/Bilibili-netspeed-check/releases)
+Download a build from [Releases](https://github.com/cxu4425-beep/LagScope/releases)
 (`.exe` for Windows, `.app` for macOS, a binary for Linux) — no installation needed.
 
 From source (Python 3.9+):
 
 ```bash
-git clone https://github.com/cxu4425-beep/Bilibili-netspeed-check.git
-cd Bilibili-netspeed-check
+git clone https://github.com/cxu4425-beep/LagScope.git
+cd LagScope
 pip install -r requirements.txt
-python run.py --room 21452505   # or: pip install -e . && bili-latency
+python run.py --room 21452505   # or: pip install -e . && lagscope
 ```
 
 Build your own executable: `pip install -r requirements-dev.txt && python packaging/build.py`.
@@ -623,16 +673,16 @@ its own. To pin it to one thing instead, right-click the tray icon (or the overl
 With nothing selected and detection off it runs in network-only mode. Handy flags:
 
 ```bash
-bili-latency --lang en --room 21452505     # language + room (detection off)
-bili-latency --video BV1GJ411x7h7          # a video; URLs with ?p=2 work too
-bili-latency --no-detect                   # never auto-detect
-bili-latency --no-tray                     # overlay only
-bili-latency --config-dir /media/usb/cfg   # portable settings
-bili-latency --probe-once --detect         # one JSON measurement of what you are watching
-bili-latency --app ValorantGame.exe        # measure any application
-bili-latency --app-foreground              # measure whatever app is in front
-bili-latency --ping 8.8.8.8 --ping-port 53 # measure a server address
-bili-latency --list-apps                   # which programs are on the network right now
+lagscope --lang en --room 21452505     # language + room (detection off)
+lagscope --video BV1GJ411x7h7          # a video; URLs with ?p=2 work too
+lagscope --no-detect                   # never auto-detect
+lagscope --no-tray                     # overlay only
+lagscope --config-dir /media/usb/cfg   # portable settings
+lagscope --probe-once --detect         # one JSON measurement of what you are watching
+lagscope --app ValorantGame.exe        # measure any application
+lagscope --app-foreground              # measure whatever app is in front
+lagscope --ping 8.8.8.8 --ping-port 53 # measure a server address
+lagscope --list-apps                   # which programs are on the network right now
 ```
 
 ### How the number is computed

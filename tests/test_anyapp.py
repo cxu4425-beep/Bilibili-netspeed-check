@@ -4,11 +4,11 @@ import time
 
 import pytest
 
-from bili_latency.events import SPIKE, STALL, EventLog, Notifier
-from bili_latency.models import KIND_APP, LatencySample
-from bili_latency.probes import appnet
-from bili_latency.probes.appnet import AppNetProbe, Peer, list_apps, peers_for
-from bili_latency.probes.netspeed import NetSpeedProbe
+from lagscope.events import SPIKE, STALL, EventLog, Notifier
+from lagscope.models import KIND_APP, LatencySample
+from lagscope.probes import appnet
+from lagscope.probes.appnet import AppNetProbe, Peer, list_apps, peers_for
+from lagscope.probes.netspeed import NetSpeedProbe
 
 
 # ------------------------------------------------------------------- netspeed
@@ -285,9 +285,9 @@ def test_notifications_are_rate_limited():
 # ------------------------------------------------- one place decides the target
 def test_the_gui_and_the_cli_agree_on_the_target():
     """The rule lived in two places once and drifted; it must stay shared."""
-    from bili_latency.config import Config
-    from bili_latency.models import KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO
-    from bili_latency.targets import manual_target
+    from lagscope.config import Config
+    from lagscope.models import KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO
+    from lagscope.targets import manual_target
 
     config = Config()
     config.detect.enabled = False
@@ -317,8 +317,8 @@ def test_the_gui_and_the_cli_agree_on_the_target():
 
 
 def test_follow_foreground_uses_the_frontmost_process():
-    from bili_latency.config import Config
-    from bili_latency.targets import manual_target
+    from lagscope.config import Config
+    from lagscope.targets import manual_target
 
     config = Config()
     config.manual_kind = "app"
@@ -331,9 +331,9 @@ def test_follow_foreground_uses_the_frontmost_process():
 
 
 def test_a_configured_app_is_used_even_when_the_kind_says_live():
-    from bili_latency.config import Config
-    from bili_latency.models import KIND_APP
-    from bili_latency.targets import manual_target
+    from lagscope.config import Config
+    from lagscope.models import KIND_APP
+    from lagscope.targets import manual_target
 
     config = Config()
     config.manual_kind = "live"

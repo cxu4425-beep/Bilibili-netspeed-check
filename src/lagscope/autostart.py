@@ -27,7 +27,7 @@ def launch_command() -> str:
     script = Path(sys.argv[0]).resolve()
     if script.suffix.lower() == ".py":
         return f'"{sys.executable}" "{script}"'
-    return f'"{sys.executable}" -m bili_latency'
+    return f'"{sys.executable}" -m lagscope'
 
 
 def is_supported() -> bool:

@@ -1,6 +1,6 @@
 """Optional loopback bridge fed by the companion userscript.
 
-The userscript in ``extras/bilibili-latency-bridge.user.js`` posts the address
+The userscript in ``extras/bililagscope-bridge.user.js`` posts the address
 of the page you are on to ``http://127.0.0.1:<port>/report``. That is the most
 accurate source there is - it is the page itself talking - and it works in every
 browser and every OS, at the cost of installing a userscript.

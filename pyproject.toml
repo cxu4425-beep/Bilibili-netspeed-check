@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bili-latency-monitor"
+name = "lagscope"
 dynamic = ["version"]
 description = "Real-time latency monitor for any app, with deep Bilibili live/video support: server -> client -> screen, in an overlay or the status bar."
 readme = "README.md"
@@ -28,14 +28,14 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/cxu4425-beep/Bilibili-netspeed-check"
-Issues = "https://github.com/cxu4425-beep/Bilibili-netspeed-check/issues"
+Homepage = "https://github.com/cxu4425-beep/LagScope"
+Issues = "https://github.com/cxu4425-beep/LagScope/issues"
 
 [project.scripts]
-bili-latency = "bili_latency.cli:main"
+lagscope = "lagscope.cli:main"
 
 [project.gui-scripts]
-bili-latency-gui = "bili_latency.cli:main"
+lagscope-gui = "lagscope.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4", "pyinstaller>=6.3"]
@@ -47,7 +47,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.dynamic]
-version = { attr = "bili_latency.__version__" }
+version = { attr = "lagscope.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

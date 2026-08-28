@@ -2,9 +2,9 @@
 
 import pytest
 
-from bili_latency.i18n import LANGUAGES, STRINGS, detect_system_language, normalize, set_language, tr
-from bili_latency.ui.anchor import WindowRect, clamp_to_rect, compute_anchor_position
-from bili_latency.ui.theme import format_ms, format_ms_short, level_for, palette_for
+from lagscope.i18n import LANGUAGES, STRINGS, detect_system_language, normalize, set_language, tr
+from lagscope.ui.anchor import WindowRect, clamp_to_rect, compute_anchor_position
+from lagscope.ui.theme import format_ms, format_ms_short, level_for, palette_for
 
 
 @pytest.mark.parametrize(
