@@ -9,7 +9,7 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-app.png" width="232" alt="任意應用模式懸浮窗">
 <img src="docs/images/overlay-dark.png" width="232" alt="直播模式懸浮窗">
@@ -31,6 +31,8 @@
 - **自動跟隨目前使用的程式**：切到哪個視窗就量哪個程式，不用每次設定。
 - **自訂伺服器位址**：直接填 `8.8.8.8`、遊戲伺服器、公司 VPN，先試 TCP、不通就 ping。
 - **全機上傳／下載速度**：每一筆樣本都附帶，一眼看出「是不是有別的東西在吃頻寬」。
+- **網路體檢**：一鍵拆出「你→路由器→電信商→伺服器」各段延遲與丟包，直接告訴你該怪誰
+  （見[網路體檢](#-網路體檢告訴你是誰的錯)）。
 - **卡頓與延遲突增偵測**：探測失敗或延遲跳到平常的兩倍以上就記一次事件，
   可選擇彈出提示（有冷卻時間，不會一直吵）。
 
@@ -239,6 +241,38 @@ Minecraft（`javaw.exe`）、OBS 推流、任何下載工具……
 | 選單 → 鼠標穿透 | 讓懸浮窗不擋滑鼠，點擊會穿到下面的視窗 |
 | 選單 → 暫停監測 | 暫時停止探測（例如你要跑測速） |
 | 選單 → 複製診斷信息 | 複製一份 JSON 診斷資料，回報問題時貼上很有幫助 |
+
+---
+
+## 🩺 網路體檢：告訴你「是誰的錯」
+
+看到「延遲 180ms」之後，真正的問題是**該怪誰**。體檢把整條路徑拆開來量：
+
+```
+你 → 路由器:      38 ms   丟包 0%   (192.168.1.1)
+路由器 → 電信商:  44 ms   丟包 0%   (100.64.0.1)
+→ 目標伺服器:     71 ms   丟包 0%   (8.8.8.8)
+Wi-Fi: 家裡的路由器  41%  802.11n
+
+延遲主要卡在你和路由器之間，而且 Wi-Fi 訊號偏弱——靠近路由器或改用網線會明顯改善。
+```
+
+**怎麼用**：托盤選單 → **網路體檢…**（約 10 秒），或命令列 `LagScope.exe --diagnose`
+（也可以指定目標：`--diagnose 8.8.8.8`）。不指定時就診斷你目前監測的那個對象。
+
+它會判斷出這幾種結論：
+
+| 結論 | 意思 | 你能做什麼 |
+| --- | --- | --- |
+| **Wi-Fi** | 延遲卡在你↔路由器，且訊號弱 | 靠近路由器、換 5GHz、改用網線 |
+| **家裡網路** | 延遲卡在你↔路由器，但訊號正常 | 路由器過載？重開機？換網線？ |
+| **電信商** | 你家正常，出門那一段開始變慢 | 你改不了——拿這份報告去問客服 |
+| **伺服器** | 你的線路正常，是伺服器太遠 | 換伺服器／節點最有效 |
+| **丟包** | 有封包遺失 | 比延遲更傷遊戲和通話，優先處理 |
+
+**技術上**：全部用系統內建工具（`ping`、`tracert`/`traceroute`、`netsh`/`iw`），
+不需要管理員權限、不用 raw socket。統計值是從**每一筆回應**自己算的，不解析會被翻譯的摘要行，
+所以中文版 Windows、英文版、Linux、macOS 都一樣準（四種格式都有測試涵蓋）。
 
 ---
 
@@ -656,6 +690,14 @@ does the same from the terminal.
   them all periodically and the diagnostics show how the current one compares to the best.
 - **Room details**: popularity, category, uptime, quality name, codec and container.
 - 简体中文 / 繁體中文 / English, per-user settings, single instance per user.
+
+### Network check: which segment is to blame
+
+`lagscope --diagnose` (or the tray menu) splits the path into **you → router → ISP → server**,
+measures each segment's latency and packet loss, reads the Wi-Fi signal, and names the culprit:
+your Wi-Fi, your home network, your provider, the distance to the server, or packet loss. It uses
+only the tools that ship with the OS - no admin rights, no raw sockets - and computes its
+statistics from the individual replies, so it reads the same in any system language.
 
 ### Watch from your phone
 

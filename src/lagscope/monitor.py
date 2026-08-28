@@ -49,6 +49,7 @@ class MonitorWorker(QObject):
     roomInfoChanged = Signal(object)  # RoomInfo | None
     targetChanged = Signal(object)    # WatchTarget
     linesChanged = Signal(object)     # list[CdnLine] - CDN edges, fastest first
+    diagnosisReady = Signal(object)   # (PathReport, verdict key, detail)
 
     def __init__(self, config: Config) -> None:
         super().__init__()
@@ -135,6 +136,41 @@ class MonitorWorker(QObject):
             return
         if target is not None and self._running and self._timer is not None:
             self._timer.start(0)      # switch over immediately
+
+    @Slot()
+    def runDiagnosis(self) -> None:
+        """Measure each segment of the path; several seconds of subprocesses."""
+        from .probes.path import analyse, verdict
+
+        with self._lock:
+            config = self._config
+        host = self._diagnosis_host(config)
+        try:
+            report = analyse(host)
+        except Exception:
+            LOG.exception("diagnosis failed")
+            self.diagnosisReady.emit(None)
+            return
+        key, detail = verdict(report)
+        self.diagnosisReady.emit((report, key, detail))
+
+    def _diagnosis_host(self, config: Config) -> str:
+        """Diagnose the path to whatever is being watched right now."""
+        target = self._target
+        if target is not None:
+            if target.kind == KIND_TARGET:
+                return target.ident
+            if target.kind == KIND_APP and self._app is not None:
+                peer = getattr(self._app.measure(target.ident, 2.0), "peer", None)
+                if peer is not None:
+                    return peer.ip
+            if target.kind in (KIND_LIVE, KIND_VIDEO):
+                sample_host = ""
+                if self._stream is not None:
+                    sample_host = self._stream.current_host
+                if sample_host:
+                    return sample_host
+        return config.probe.rtt_host
 
     def _resolve_url(self, url: str) -> Optional[str]:
         """Follow a short link to the page it points at."""

@@ -62,6 +62,7 @@ class MonitorApplication(QObject):
     pauseRequested = Signal(bool)
     stopRequested = Signal()
     clipboardText = Signal(str)
+    diagnosisRequested = Signal()
 
     def __init__(self, app: QApplication, config: Config,
                  instance: Optional[SingleInstance] = None) -> None:
@@ -115,6 +116,8 @@ class MonitorApplication(QObject):
         self.pauseRequested.connect(self._worker.setPaused)
         self.stopRequested.connect(self._worker.stop)
         self.clipboardText.connect(self._worker.submitClipboard)
+        self.diagnosisRequested.connect(self._worker.runDiagnosis)
+        self._worker.diagnosisReady.connect(self._on_diagnosis)
 
         # The clipboard belongs to the GUI thread, so it is polled here and the
         # text is handed to the worker, which does the parsing and any lookup.
@@ -167,6 +170,10 @@ class MonitorApplication(QObject):
         self._action_detect.setChecked(self._config.detect.enabled)
         self._action_detect.toggled.connect(self._set_auto_detect)
         self._menu.addAction(self._action_detect)
+
+        diagnose_action = QAction(tr("menu.diagnose"), self._menu)
+        diagnose_action.triggered.connect(self._run_diagnosis)
+        self._menu.addAction(diagnose_action)
 
         phone_action = QAction(tr("menu.phone"), self._menu)
         phone_action.triggered.connect(self._show_phone_url)
@@ -314,6 +321,48 @@ class MonitorApplication(QObject):
         self._settings_dialog.show()
         self._settings_dialog.raise_()
         self._settings_dialog.activateWindow()
+
+    def _run_diagnosis(self) -> None:
+        """Kick off the segment-by-segment check and tell the user to wait."""
+        if self._tray is not None:
+            self._tray.showMessage(tr("diag.title"), tr("diag.running"), app_icon(), 4000)
+        self.diagnosisRequested.emit()
+
+    @Slot(object)
+    def _on_diagnosis(self, payload) -> None:
+        if payload is None:
+            QMessageBox.warning(None, tr("diag.title"), tr("verdict.unknown"))
+            return
+        report, key, detail = payload
+        QMessageBox.information(None, tr("diag.title"), self._diagnosis_text(report, key, detail))
+
+    def _diagnosis_text(self, report, key: str, detail: str) -> str:
+        """The result as something a person can read - and paste to a helpdesk."""
+        lines = [f"{tr('diag.title')}: {report.target}", ""]
+        rows = [
+            (tr("diag.you_router"), report.gateway_stats),
+            (tr("diag.router_isp"), report.hop_stats),
+            (tr("diag.to_target"), report.target_stats),
+        ]
+        for label, stats in rows:
+            if stats is None:
+                lines.append(f"{label}:  --")
+            elif not stats.ok:
+                lines.append(f"{label}:  {stats.error or '--'}  ({stats.host})")
+            else:
+                lines.append(
+                    f"{label}:  {format_ms(stats.avg_ms)}   "
+                    f"{tr('diag.loss')} {stats.loss_pct:.0f}%   ({stats.host})"
+                )
+        if report.wifi is not None:
+            wifi = report.wifi
+            signal = f"{wifi.signal_pct}%" if wifi.signal_pct is not None else "--"
+            lines.append(f"\n{tr('diag.wifi')}: {wifi.ssid or '--'}  {signal}  {wifi.radio}")
+        if "gateway-silent" in report.notes:
+            lines.append(tr("diag.gateway_silent"))
+        lines.append("")
+        lines.append(tr(key) + (f"  [{detail}]" if detail else ""))
+        return "\n".join(lines)
 
     def _show_phone_url(self) -> None:
         """Show (and copy) the address to type into a phone browser."""

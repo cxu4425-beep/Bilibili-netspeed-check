@@ -42,6 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run a single measurement, print it as JSON and exit (no window)",
     )
     parser.add_argument(
+        "--diagnose", nargs="?", const="", metavar="HOST",
+        help="check each segment of the path (router / ISP / server) and say where the "
+             "delay is; defaults to whatever is being monitored",
+    )
+    parser.add_argument(
         "--detect-report", action="store_true",
         help="print what each detection source can see on this machine, then exit",
     )
@@ -113,6 +118,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         config.overlay.enabled = False
     config = config.sanitized()
     set_language(config.language)
+
+    if args.diagnose is not None:
+        return _diagnose(config, args.diagnose)
 
     if args.list_apps:
         return _list_apps()
@@ -227,6 +235,72 @@ def _probe_once(config) -> int:
         return 0 if sample.ok else 1
     finally:
         client.close()
+
+
+def _diagnose(config, host: str) -> int:
+    """Measure each segment of the path and say which one is the problem."""
+    from .i18n import tr
+    from .probes.path import analyse, verdict
+
+    target = host or _diagnosis_host(config)
+    if not target:
+        print("nothing to diagnose: pass a host, or set what to monitor first",
+              file=sys.stderr)
+        return 2
+
+    print(f"{tr('diag.title')}: {target}")
+    print(tr("diag.running"), flush=True)
+    report = analyse(target)
+
+    rows = [
+        (tr("diag.you_router"), report.gateway_stats),
+        (tr("diag.router_isp"), report.hop_stats),
+        (tr("diag.to_target"), report.target_stats),
+    ]
+    width = max(len(label) for label, _stats in rows)
+    print()
+    for label, stats in rows:
+        if stats is None:
+            print(f"  {label.ljust(width)}   --")
+            continue
+        if not stats.ok:
+            print(f"  {label.ljust(width)}   {stats.error or '--'}  ({stats.host})")
+            continue
+        loss = stats.loss_pct or 0.0
+        print(f"  {label.ljust(width)}   {stats.avg_ms:6.1f} ms   "
+              f"{tr('diag.loss')} {loss:4.0f}%   ({stats.host})")
+
+    if report.wifi is not None:
+        wifi = report.wifi
+        signal = f"{wifi.signal_pct}%" if wifi.signal_pct is not None else "--"
+        rate = f", {wifi.rx_mbps:.0f} Mbps" if wifi.rx_mbps else ""
+        print(f"\n  {tr('diag.wifi')}: {wifi.ssid or '--'}  {signal}  {wifi.radio}{rate}")
+    if "gateway-silent" in report.notes:
+        print(f"  {tr('diag.gateway_silent')}")
+    if not report.gateway:
+        print(f"  {tr('diag.no_gateway')}")
+
+    key, detail = verdict(report)
+    print(f"\n=> {tr(key)}" + (f"  [{detail}]" if detail else ""))
+    return 0
+
+
+def _diagnosis_host(config) -> str:
+    """What to diagnose when the user did not name a host."""
+    from .models import KIND_APP, KIND_TARGET
+
+    target = _probe_target(config)
+    if target.kind == KIND_TARGET:
+        return target.ident
+    if target.kind == KIND_APP:
+        from .probes.appnet import peers_for
+
+        peers = peers_for(target.ident)
+        if peers:
+            return peers[0].ip
+    # Anything else (a Bilibili room, a video, network-only) is reached through
+    # the same line, so the API host is a fair stand-in.
+    return config.probe.rtt_host
 
 
 def _list_apps() -> int:

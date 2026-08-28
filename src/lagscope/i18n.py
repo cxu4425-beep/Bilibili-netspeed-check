@@ -75,6 +75,67 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     ),
     "status.detecting": ("正在识别观看页面…", "正在辨識觀看頁面…", "Looking for what you are watching…"),
 
+    "menu.diagnose": ("网络体检…", "網路體檢…", "Diagnose my network…"),
+    "diag.title": ("网络体检", "網路體檢", "Network check"),
+    "diag.running": ("正在检测各段延迟…（约 10 秒）", "正在檢測各段延遲…（約 10 秒）",
+                     "Measuring each segment… (about 10 seconds)"),
+    "diag.you_router": ("你 → 路由器", "你 → 路由器", "You → router"),
+    "diag.router_isp": ("路由器 → 电信商", "路由器 → 電信商", "Router → ISP"),
+    "diag.to_target": ("→ 目标服务器", "→ 目標伺服器", "→ target server"),
+    "diag.wifi": ("Wi-Fi", "Wi-Fi", "Wi-Fi"),
+    "diag.loss": ("丢包", "丟包", "loss"),
+    "diag.no_gateway": ("找不到默认网关", "找不到預設閘道", "No default gateway found"),
+    "diag.gateway_silent": (
+        "路由器不回应 ping（很多路由器默认如此，不代表有问题）",
+        "路由器不回應 ping（很多路由器預設如此，不代表有問題）",
+        "The router ignores ping - common, and not a fault by itself",
+    ),
+
+    "verdict.ok": (
+        "网络看起来正常", "網路看起來正常", "Your network looks fine",
+    ),
+    "verdict.wifi": (
+        "延迟主要卡在你和路由器之间，而且 Wi-Fi 信号偏弱——靠近路由器或改用网线会明显改善。",
+        "延遲主要卡在你和路由器之間，而且 Wi-Fi 訊號偏弱——靠近路由器或改用網線會明顯改善。",
+        "Most of the delay is between you and the router, and the Wi-Fi signal is weak - "
+        "move closer to it or use a cable.",
+    ),
+    "verdict.home": (
+        "延迟主要卡在你家网络（你↔路由器）。检查 Wi-Fi、路由器是否过载，或换成网线。",
+        "延遲主要卡在你家網路（你↔路由器）。檢查 Wi-Fi、路由器是否過載，或換成網線。",
+        "Most of the delay is inside your own network (you to the router). Check the Wi-Fi or "
+        "the router's load, or use a cable.",
+    ),
+    "verdict.isp": (
+        "你家网络正常，延迟是从电信商那一段开始变大的——这一段你改不了，可以拿这份报告去问客服。",
+        "你家網路正常，延遲是從電信商那一段開始變大的——這一段你改不了，可以拿這份報告去問客服。",
+        "Your own network is fine; the delay appears once traffic reaches your provider. "
+        "That part is not yours to fix - this report is what to show them.",
+    ),
+    "verdict.server": (
+        "你的线路正常，延迟主要来自服务器距离或路由——换个服务器／节点通常最有效。",
+        "你的線路正常，延遲主要來自伺服器距離或路由——換個伺服器／節點通常最有效。",
+        "Your line is fine; the delay comes from how far away the server is. Picking a closer "
+        "server or node is usually what helps.",
+    ),
+    "verdict.loss": (
+        "有封包丢失——这比延迟更影响游戏和通话，优先处理。",
+        "有封包遺失——這比延遲更影響遊戲和通話，優先處理。",
+        "Packets are being lost - that hurts games and calls more than latency does.",
+    ),
+    "verdict.target_down": (
+        "目标没有回应（可能挡了 ping 或已离线），但你的网络本身正常。",
+        "目標沒有回應（可能擋了 ping 或已離線），但你的網路本身正常。",
+        "The target did not answer (it may block ping, or be down) - your own network is fine.",
+    ),
+    "verdict.no_ping": (
+        "这台电脑上找不到可用的 ping 命令，无法做分段诊断（其它功能不受影响）。",
+        "這台電腦上找不到可用的 ping 指令，無法做分段診斷（其它功能不受影響）。",
+        "No usable ping command on this machine, so the path cannot be split up "
+        "(everything else still works).",
+    ),
+    "verdict.unknown": ("资料不足，无法判断", "資料不足，無法判斷", "Not enough data to tell"),
+
     "settings.title": ("设置", "設定", "Settings"),
     "settings.tab.general": ("常规", "一般", "General"),
     "settings.tab.overlay": ("显示", "顯示", "Overlay"),
