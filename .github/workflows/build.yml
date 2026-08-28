@@ -82,8 +82,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # The first matrix job to arrive creates the release; the others reuse it.
+          # Hand-written notes when the tag has them, generated notes otherwise.
+          NOTES="docs/release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$NOTES" ]; then
+            NOTES_ARG=(--notes-file "$NOTES")
+          else
+            NOTES_ARG=(--generate-notes)
+          fi
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 \
-            || gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes \
+            || gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" "${NOTES_ARG[@]}" \
             || gh release view "${GITHUB_REF_NAME}"
           gh release upload "${GITHUB_REF_NAME}" "${{ matrix.asset }}" --clobber
         shell: bash
