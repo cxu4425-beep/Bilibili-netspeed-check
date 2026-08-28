@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import socket
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -34,6 +35,11 @@ class Peer:
     ip: str
     port: int
     connections: int = 1
+    protocol: str = "tcp"         # tcp | udp - decides how it can be timed
+
+    @property
+    def is_udp(self) -> bool:
+        return self.protocol == "udp"
 
     @property
     def is_public(self) -> bool:
@@ -127,12 +133,19 @@ def peers_for(process_name: str) -> list:
         name = (names.get(entry.pid) or "").lower()
         if wanted not in name and wanted != f"pid {entry.pid}":
             continue
-        key = (entry.raddr.ip, entry.raddr.port)
+        protocol = "udp" if entry.type == socket.SOCK_DGRAM else "tcp"
+        key = (entry.raddr.ip, entry.raddr.port, protocol)
         counted[key] = counted.get(key, 0) + 1
 
-    peers = [Peer(ip=ip, port=port, connections=count) for (ip, port), count in counted.items()]
-    # Public servers first: a LAN or loopback peer says nothing about the line.
-    peers.sort(key=lambda peer: (peer.is_public, peer.connections), reverse=True)
+    peers = [
+        Peer(ip=ip, port=port, connections=count, protocol=protocol)
+        for (ip, port, protocol), count in counted.items()
+    ]
+    # Public first (a LAN peer says nothing about the line), then UDP: a game or
+    # voice app carries its real-time traffic over UDP while holding several TCP
+    # connections to web and CDN endpoints, and timing those would answer a
+    # different question than "how laggy is my game right now".
+    peers.sort(key=lambda peer: (peer.is_public, peer.is_udp, peer.connections), reverse=True)
     return peers[:MAX_PEERS]
 
 
@@ -173,12 +186,17 @@ class AppNetProbe:
                 )
         return AppMeasurement(
             peers=tuple(peers), connections=total, process=process_name,
-            error="no reply from the app's servers",
+            error="no-reply",
         )
 
     def _time_peer(self, peer: Peer, timeout_s: float) -> tuple:
         """TCP first; ICMP for endpoints that never answer a handshake (UDP)."""
         key = str(peer)
+        # A handshake against a UDP port cannot succeed, so do not spend a
+        # timeout finding that out.
+        if peer.is_udp:
+            rtt = icmp_ping_ms(peer.ip, timeout_s)
+            return (rtt, "icmp") if rtt is not None else (None, "none")
         if key not in self._icmp_only:
             rtt = tcp_rtt_ms(peer.ip, peer.port, timeout_s)
             if rtt is not None:

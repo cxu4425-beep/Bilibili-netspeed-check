@@ -68,6 +68,11 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "该应用当前没有网络连接", "該應用目前沒有網路連線", "That app has no connections right now",
     ),
     "status.unreachable": ("目标无法连通", "目標無法連通", "Target unreachable"),
+    "status.no_reply": (
+        "该应用的服务器不回应探测（可能屏蔽了 ping）",
+        "該應用的伺服器不回應偵測（可能封鎖了 ping）",
+        "That app's servers do not answer probes (ping may be blocked)",
+    ),
     "status.detecting": ("正在识别观看页面…", "正在辨識觀看頁面…", "Looking for what you are watching…"),
 
     "settings.title": ("设置", "設定", "Settings"),

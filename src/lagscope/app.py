@@ -37,6 +37,15 @@ LOG = logging.getLogger(__name__)
 DISPLAY_PUSH_INTERVAL_MS = 1000
 CONFIG_SAVE_DEBOUNCE_MS = 1500
 CLIPBOARD_POLL_INTERVAL_MS = 1500
+# Probe error codes that have a sentence a person can act on.
+ERROR_MESSAGES = {
+    "no-connections": "status.no_connections",
+    "no-reply": "status.no_reply",
+    "unreachable": "status.unreachable",
+    "no-app": "status.no_app",
+    "no-video": "status.no_video",
+    "no-room": "status.no_room",
+}
 MAX_CLIPBOARD_CHARS = 4096
 
 
@@ -456,7 +465,10 @@ class MonitorApplication(QObject):
             return tr("status.detecting")
         text = mapping.get(self._status_key, "")
         if self._status_key == STATUS_ERROR and self._status_detail:
-            return f"{text}: {self._status_detail}"
+            # Probe errors are codes; show the translated sentence where there
+            # is one, and the raw detail (a network message) otherwise.
+            known = ERROR_MESSAGES.get(self._status_detail)
+            return tr(known) if known else f"{text}: {self._status_detail}"
         return text or tr("status.connecting")
 
     def _update_status_text(self) -> None:

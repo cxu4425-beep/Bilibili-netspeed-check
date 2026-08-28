@@ -92,8 +92,11 @@ def test_missing_counters_are_reported_not_raised(monkeypatch):
 
 # --------------------------------------------------------------------- peers
 class FakeConn:
-    def __init__(self, pid, ip, port):
+    def __init__(self, pid, ip, port, udp=False):
+        import socket as _socket
+
         self.pid = pid
+        self.type = _socket.SOCK_DGRAM if udp else _socket.SOCK_STREAM
         self.raddr = type("Addr", (), {"ip": ip, "port": port})() if ip else None
 
 
@@ -192,7 +195,50 @@ def test_a_peer_that_answers_nothing_is_reported(monkeypatch):
 
     result = AppNetProbe().measure("game.exe")
 
-    assert result.rtt_ms is None and result.peers and "no reply" in result.error
+    assert result.rtt_ms is None and result.peers and result.error == "no-reply"
+
+
+def test_a_games_udp_server_outranks_its_web_connections(monkeypatch):
+    """Roblox and friends hold one UDP socket to the game server and several TCP
+    ones to web and CDN endpoints; the game server is the interesting one."""
+    _patch_conns(monkeypatch, [
+        FakeConn(10, "93.184.216.34", 443),                 # web
+        FakeConn(10, "93.184.216.34", 443),                 # web
+        FakeConn(10, "93.184.216.35", 443),                 # CDN
+        FakeConn(10, "128.116.25.7", 53640, udp=True),      # the actual game server
+    ], {10: "RobloxPlayerBeta.exe"})
+
+    peers = peers_for("RobloxPlayerBeta.exe")
+
+    assert peers[0].is_udp and str(peers[0]) == "128.116.25.7:53640"
+    assert peers[0].connections == 1                        # despite being the quietest
+
+
+def test_a_udp_peer_is_pinged_without_trying_a_handshake(monkeypatch):
+    _patch_conns(monkeypatch, [FakeConn(10, "128.116.25.7", 53640, udp=True)],
+                 {10: "RobloxPlayerBeta.exe"})
+    handshakes = []
+    monkeypatch.setattr(appnet, "tcp_rtt_ms",
+                        lambda ip, port, timeout: handshakes.append(ip) or 1.0)
+    monkeypatch.setattr(appnet, "icmp_ping_ms", lambda ip, timeout: 28.0)
+
+    result = AppNetProbe().measure("RobloxPlayerBeta.exe")
+
+    assert result.method == "icmp" and result.rtt_ms == 28.0
+    assert handshakes == []          # no timeout wasted on a UDP port
+
+
+def test_a_udp_server_that_drops_icmp_falls_through_to_the_next_peer(monkeypatch):
+    _patch_conns(monkeypatch, [
+        FakeConn(10, "128.116.25.7", 53640, udp=True),
+        FakeConn(10, "93.184.216.34", 443),
+    ], {10: "game.exe"})
+    monkeypatch.setattr(appnet, "icmp_ping_ms", lambda ip, timeout: None)
+    monkeypatch.setattr(appnet, "tcp_rtt_ms", lambda ip, port, timeout: 19.0)
+
+    result = AppNetProbe().measure("game.exe")
+
+    assert result.method == "tcp" and str(result.peer) == "93.184.216.34:443"
 
 
 @pytest.mark.parametrize(

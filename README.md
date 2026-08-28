@@ -178,6 +178,7 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 
 | App | 進程名稱（Windows）| 測到的是 | 走 UDP？|
 | --- | --- | --- | --- |
+| **Roblox** | `RobloxPlayerBeta.exe` | 你所在的遊戲伺服器 | 是 → 自動用 ping |
 | **Discord** | `Discord.exe` | 語音／訊息伺服器 | 語音是 → 自動用 ping |
 | **Zoom** | `Zoom.exe` | 會議媒體伺服器 | 是 → 自動用 ping |
 | **VALORANT** | `VALORANT-Win64-Shipping.exe` | 對戰伺服器 | 是 → 自動用 ping |
@@ -188,6 +189,9 @@ Windows 也可以直接雙擊 `packaging\build_windows.bat`（會自動建立虛
 | **原神 Genshin Impact** | `YuanShen.exe`（國服）／ `GenshinImpact.exe`（國際服）| 遊戲伺服器 | 是 → 自動用 ping |
 | **網易雲音樂** | `cloudmusic.exe` | 音樂 CDN | 否（TCP）|
 | **騰訊會議 Tencent Meeting** | `wemeetapp.exe` | 會議伺服器 | 是 → 自動用 ping |
+
+遊戲和語音程式通常同時開著**一條 UDP 連線到遊戲／語音伺服器**和**好幾條 TCP 連線到網站與 CDN**。
+監視器會**優先選 UDP 那條**——那才是決定你卡不卡的連線，網站那幾條再多也只是背景雜訊。
 
 其他常見的也一樣可以：Steam（`steam.exe`）、Telegram、Spotify、迅雷、釘釘、CS2（`cs2.exe`）、
 Minecraft（`javaw.exe`）、OBS 推流、任何下載工具……
@@ -585,6 +589,7 @@ adapting to each program. Common examples and their Windows process names:
 
 | App | Process | UDP? |
 | --- | --- | --- |
+| Roblox | `RobloxPlayerBeta.exe` | yes - ping |
 | Discord | `Discord.exe` | voice is - falls back to ping |
 | Zoom | `Zoom.exe` | yes - ping |
 | VALORANT | `VALORANT-Win64-Shipping.exe` | yes - ping |
@@ -595,6 +600,10 @@ adapting to each program. Common examples and their Windows process names:
 | Genshin Impact 原神 | `YuanShen.exe` / `GenshinImpact.exe` | yes - ping |
 | NetEase Cloud Music 网易云音乐 | `cloudmusic.exe` | no (TCP) |
 | Tencent Meeting 腾讯会议 | `wemeetapp.exe` | yes - ping |
+
+Games and voice apps hold one UDP socket to the game or voice server and several TCP ones to
+web and CDN endpoints; the monitor picks the UDP peer, because that is the connection that
+decides whether you lag.
 
 Steam, Telegram, Spotify, CS2, Minecraft, OBS and any download client work the same way.
 Process names differ between versions and regions, so don't memorise them: **Refresh** in the
