@@ -45,7 +45,11 @@ def test_one_directory_under_two_names_is_found_once(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     real = tmp_path / "bilibili"
     real.mkdir()
-    (tmp_path / "BiliBili").symlink_to(real, target_is_directory=True)
+    alias = tmp_path / "BiliBili"
+    if not alias.exists():
+        # A case-sensitive filesystem needs the second name made by hand; on
+        # Windows and macOS it is already there, which is the whole point.
+        alias.symlink_to(real, target_is_directory=True)
 
     roots = client_source.client_roots()
 

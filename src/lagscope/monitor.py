@@ -531,7 +531,13 @@ class MonitorWorker(QObject):
 
     def _sync_clock_if_due(self, timeout_s: float) -> None:
         now = time.monotonic()
-        if now - self._last_clock_sync < CLOCK_SYNC_INTERVAL_S:
+        # "Never synced" is 0.0, and time.monotonic() is uptime on Linux - so
+        # comparing the two skipped the very first sync on a machine that had
+        # been up for less than the interval. That is not a hypothetical: it
+        # is exactly the machine of someone who turned on "start with the
+        # system", whose first minute of "measured" latency then ran without
+        # a clock offset at all.
+        if self._last_clock_sync and now - self._last_clock_sync < CLOCK_SYNC_INTERVAL_S:
             return
         self._last_clock_sync = now
         assert self._client is not None and self._stream is not None

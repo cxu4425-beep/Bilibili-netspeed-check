@@ -6,6 +6,7 @@ from lagscope.config import Config
 from lagscope.models import (
     KIND_LIVE, KIND_NETWORK, KIND_VIDEO, NetworkMeasurement, StreamMeasurement, WatchTarget,
 )
+from lagscope import monitor as monitor_module
 from lagscope.monitor import STATUS_ERROR, STATUS_NO_ROOM, STATUS_OFFLINE, STATUS_OK, MonitorWorker
 
 
@@ -226,6 +227,21 @@ def test_clock_offset_is_handed_to_the_stream_probe():
     worker._run_round()
     assert worker._stream.clock_offset_ms == 12.0
     assert worker._last_status == STATUS_OK
+
+
+def test_the_first_clock_sync_happens_on_a_freshly_booted_machine(monkeypatch):
+    """time.monotonic() is uptime on Linux, and "never synced" was 0.0.
+
+    Comparing the two skipped the first sync entirely on a machine up for
+    less than the interval - which is precisely the machine of someone who
+    enabled "start with the system".
+    """
+    monkeypatch.setattr(monitor_module.time, "monotonic", lambda: 3.0)   # just booted
+    worker = _worker(_config(), live=StreamMeasurement(stream_ms=1000.0, method="hls-pdt",
+                                                       estimated=False))
+    worker._run_round()
+
+    assert worker._stream.clock_offset_ms == 12.0
 
 
 def test_clock_sync_is_rate_limited():
