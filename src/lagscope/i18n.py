@@ -1,7 +1,14 @@
-"""Tiny translation table (zh-CN / zh-TW / English).
+"""Translations, kept dependency free so probes and tests can import it.
 
-Kept dependency free so it can be imported by the probes and by tests without
-pulling in Qt.
+The first three languages are columns of one table: every key is a
+``(zh_CN, zh_TW, en)`` tuple. Japanese and Korean arrived later and live in
+``translations.py`` as dictionaries keyed the same way, because widening 278
+tuples would have meant every future string had to be written in five
+languages before the app would run.
+
+The practical difference is the fallback. A key missing from an overlay
+language falls back to English, so an untranslated string looks unpolished
+rather than crashing or showing a bare ``some.key`` on screen.
 """
 
 from __future__ import annotations
@@ -10,8 +17,15 @@ import locale
 import os
 from typing import Iterable
 
-LANGUAGES = ("zh_CN", "zh_TW", "en")
-LANGUAGE_NAMES = {"zh_CN": "简体中文", "zh_TW": "繁體中文", "en": "English"}
+from .translations import OVERLAYS
+
+# The order of the tuple columns in STRINGS, then the overlay languages.
+BASE_LANGUAGES = ("zh_CN", "zh_TW", "en")
+LANGUAGES = BASE_LANGUAGES + tuple(OVERLAYS)
+LANGUAGE_NAMES = {
+    "zh_CN": "简体中文", "zh_TW": "繁體中文", "en": "English",
+    "ja": "日本語", "ko": "한국어",
+}
 
 _current = "zh_CN"
 
@@ -627,6 +641,7 @@ STRINGS: dict[str, tuple[str, str, str]] = {
 
 
 def normalize(code: str) -> str:
+    """``ja_JP.UTF-8`` -> ``ja``; anything unrecognised -> ``""``."""
     code = (code or "").replace("-", "_")
     if code in LANGUAGES:
         return code
@@ -637,6 +652,10 @@ def normalize(code: str) -> str:
         return "zh_CN"
     if lowered.startswith("en"):
         return "en"
+    if lowered.startswith("ja"):
+        return "ja"
+    if lowered.startswith("ko"):
+        return "ko"
     return ""
 
 
@@ -673,7 +692,13 @@ def tr(key: str, **kwargs) -> str:
     entry = STRINGS.get(key)
     if entry is None:
         return key
-    text = entry[LANGUAGES.index(_current)]
+    overlay = OVERLAYS.get(_current)
+    if overlay is not None:
+        # English is the fallback: a key nobody has translated yet still says
+        # something, in a language more people read than a raw key.
+        text = overlay.get(key) or entry[BASE_LANGUAGES.index("en")]
+    else:
+        text = entry[BASE_LANGUAGES.index(_current)]
     if kwargs:
         try:
             return text.format(**kwargs)

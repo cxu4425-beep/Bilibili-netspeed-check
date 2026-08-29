@@ -56,14 +56,28 @@ RestartApplications=no
 ; when available and the wizard falls back to English when it is not. The app
 ; itself is unaffected: it picks its own language on first run.
 #define ChineseIsl "Languages\ChineseSimplified.isl"
+#define JapaneseIsl "Languages\Japanese.isl"
+#define KoreanIsl "Languages\Korean.isl"
 #if FileExists(AddBackslash(CompilerPath) + ChineseIsl)
   #define HaveChinese
+#endif
+#if FileExists(AddBackslash(CompilerPath) + JapaneseIsl)
+  #define HaveJapanese
+#endif
+#if FileExists(AddBackslash(CompilerPath) + KoreanIsl)
+  #define HaveKorean
 #endif
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
 #ifdef HaveChinese
 Name: "zh"; MessagesFile: "compiler:{#ChineseIsl}"
+#endif
+#ifdef HaveJapanese
+Name: "ja"; MessagesFile: "compiler:{#JapaneseIsl}"
+#endif
+#ifdef HaveKorean
+Name: "ko"; MessagesFile: "compiler:{#KoreanIsl}"
 #endif
 
 [CustomMessages]
@@ -74,6 +88,16 @@ en.KeepSettings=Keep my settings and latency history
 zh.LaunchAfter=立即运行 {#AppName}
 zh.AutoStart=登录时自动启动 {#AppName}
 zh.KeepSettings=保留设置和延迟历史记录
+#endif
+#ifdef HaveJapanese
+ja.LaunchAfter={#AppName} を今すぐ実行
+ja.AutoStart=サインイン時に {#AppName} を起動
+ja.KeepSettings=設定と遅延の履歴を残す
+#endif
+#ifdef HaveKorean
+ko.LaunchAfter={#AppName} 지금 실행
+ko.AutoStart=로그인할 때 {#AppName} 자동 실행
+ko.KeepSettings=설정과 지연 기록 남기기
 #endif
 
 [Tasks]

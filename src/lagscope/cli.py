@@ -32,7 +32,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-detect", dest="detect", action="store_false",
                         help="never auto-detect; use --room / --video only")
     parser.set_defaults(detect=None)
-    parser.add_argument("--lang", choices=["auto", "zh_CN", "zh_TW", "en"], help="interface language")
+    # Imported here rather than at module scope: --help must not pay for Qt.
+    from .i18n import LANGUAGES
+
+    parser.add_argument("--lang", choices=["auto", *LANGUAGES], help="interface language")
     parser.add_argument("--config-dir", metavar="PATH", help="use this folder for config and logs")
     parser.add_argument("--reset-config", action="store_true", help="start from default settings")
     parser.add_argument("--no-tray", action="store_true", help="do not create a tray icon")

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import APP_ID, APP_NAME, LEGACY_APP_ID, LEGACY_APP_NAME
+from .i18n import LANGUAGES
 from .probes.video import parse_video_id, parse_video_page
 
 CONFIG_VERSION = 1
@@ -316,7 +317,7 @@ class Config:
             self.overlay.corner = "top-right"
         if self.overlay.theme not in ("dark", "light", "pink"):
             self.overlay.theme = "dark"
-        if self.language not in ("auto", "zh_CN", "zh_TW", "en"):
+        if self.language not in ("auto", *LANGUAGES):
             self.language = "auto"
         if not isinstance(self.detect.client_dirs, list):
             self.detect.client_dirs = []

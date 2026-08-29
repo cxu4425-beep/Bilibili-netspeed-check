@@ -17,7 +17,8 @@ from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
-    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QRadioButton, QVBoxLayout, QWidget,
+    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QRadioButton, QSizePolicy, QVBoxLayout,
+    QWidget,
 )
 
 from .. import APP_NAME, __version__
@@ -37,6 +38,27 @@ CHOICES = (
 CORNERS = ("top-right", "top-left", "bottom-right", "bottom-left")
 
 
+def _wrapped(label: QLabel, min_lines: int = 1) -> QLabel:
+    """A word-wrapped label a box layout will actually give room to.
+
+    A wrapped QLabel knows its height only once it knows its width, and a box
+    layout ignores that unless the size policy says to ask. Without this the
+    second line is simply cut off - which never showed up in Chinese, where
+    these hints happen to fit on one line, and did the moment they were
+    translated into a language that needs two.
+    """
+    label.setWordWrap(True)
+    policy = label.sizePolicy()
+    policy.setHeightForWidth(True)
+    policy.setVerticalPolicy(QSizePolicy.MinimumExpanding)
+    label.setSizePolicy(policy)
+    if min_lines > 1:
+        # Reserving the tallest case keeps the dialog from resizing every time
+        # a radio button swaps the text underneath it.
+        label.setMinimumHeight(label.fontMetrics().lineSpacing() * min_lines)
+    return label
+
+
 class SetupWizard(QDialog):
     """Shown once, on a config that has never been through it."""
 
@@ -49,11 +71,9 @@ class SetupWizard(QDialog):
 
         layout = QVBoxLayout(self)
 
-        heading = QLabel(f"<b>{tr('wizard.welcome', app=APP_NAME)}</b>", self)
-        heading.setWordWrap(True)
+        heading = _wrapped(QLabel(f"<b>{tr('wizard.welcome', app=APP_NAME)}</b>", self))
         layout.addWidget(heading)
-        blurb = QLabel(tr("wizard.blurb"), self)
-        blurb.setWordWrap(True)
+        blurb = _wrapped(QLabel(tr("wizard.blurb"), self), min_lines=2)
         blurb.setStyleSheet("color: palette(mid);")
         layout.addWidget(blurb)
 
@@ -89,8 +109,8 @@ class SetupWizard(QDialog):
         detail_form.addRow(self.detail_label, self.detail_edit)
         watch_layout.addLayout(detail_form)
 
-        self.detail_hint = QLabel("", watch_box)
-        self.detail_hint.setWordWrap(True)
+        # Three lines: the longest of the four hints, in the wordiest language.
+        self.detail_hint = _wrapped(QLabel("", watch_box), min_lines=3)
         self.detail_hint.setStyleSheet("color: palette(mid);")
         watch_layout.addWidget(self.detail_hint)
         layout.addWidget(watch_box)
@@ -117,14 +137,12 @@ class SetupWizard(QDialog):
         self.update_check = QCheckBox(tr("update.enabled"), update_box)
         self.update_check.setChecked(config.updates.enabled)
         update_layout.addWidget(self.update_check)
-        update_hint = QLabel(tr("update.hint"), update_box)
-        update_hint.setWordWrap(True)
+        update_hint = _wrapped(QLabel(tr("update.hint"), update_box), min_lines=3)
         update_hint.setStyleSheet("color: palette(mid);")
         update_layout.addWidget(update_hint)
         layout.addWidget(update_box)
 
-        footer = QLabel(tr("wizard.footer", version=__version__), self)
-        footer.setWordWrap(True)
+        footer = _wrapped(QLabel(tr("wizard.footer", version=__version__), self))
         footer.setStyleSheet("color: palette(mid);")
         layout.addWidget(footer)
 

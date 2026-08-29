@@ -7,7 +7,7 @@
 **任何程式的即時延遲都能看：遊戲、通話、瀏覽器、下載——常駐在狀態列或畫面角落。**
 **對 B 站另外做了深度支援：自動跟著你正在看的直播間／影片，量到「伺服器 → 電腦 → 螢幕」。**
 
-免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English
+免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English / 日本語 / 한국어
 
 [功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [CDN 節點](#-自動選最快的-cdn-節點) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
 
@@ -513,7 +513,7 @@ lagscope --room 21452505              # 啟動時直接指定直播間（並關�
 lagscope --video BV1GJ411x7h7         # 指定影片；也可貼整段網址（?p=2 指定分P）
 lagscope --detect                     # 強制開啟自動跟隨
 lagscope --no-detect                  # 強制關閉自動跟隨
-lagscope --lang zh_TW                 # 指定介面語言 (auto / zh_CN / zh_TW / en)
+lagscope --lang zh_TW                 # 介面語言 (auto / zh_CN / zh_TW / en / ja / ko)
 lagscope --no-overlay                 # 只留狀態列圖示
 lagscope --no-tray                    # 只留懸浮窗
 lagscope --config-dir D:\bili-cfg     # 攜帶式：設定寫到指定資料夾
@@ -578,7 +578,7 @@ lagscope --history                    # 把最近 24 小時的歷史摘要印成
 | 自動檢測：時間窗口 / 檢測間隔 | 歷史紀錄要看多久以內、多久重新判斷一次 |
 | 探測間隔 | 預設 2000 ms。長時間掛著建議 2000–5000 ms |
 | 統計窗口 | 均值 / P95 / 抖動 使用的樣本數（預設 180） |
-| 界面語言 | 跟隨系統 / 简体中文 / 繁體中文 / English |
+| 界面語言 | 跟隨系統 / 简体中文 / 繁體中文 / English / 日本語 / 한국어 |
 | 開機自動啟動 | Windows 寫 `HKCU\...\Run`；Linux 寫 `~/.config/autostart`；macOS 寫 LaunchAgent |
 | 狀態列圖示 | 是否顯示系統匣圖示、是否在圖示上畫出數值 |
 
@@ -648,7 +648,7 @@ lagscope --history                    # 把最近 24 小時的歷史摘要印成
 - 設定與紀錄都放在**目前使用者**的設定目錄，同一台電腦上不同 Windows 使用者各自獨立。
 - 每個使用者同時只會有一份程式在跑（重複啟動會把已在執行的那份叫出來，而不是開第二份），
   不同使用者之間互不影響。
-- 介面支援 简体中文 / 繁體中文 / English，預設跟隨系統語言。
+- 介面支援 **简体中文 / 繁體中文 / English / 日本語 / 한국어**，預設跟隨系統語言，隨時可以在設定裡改。
 - 想在公司或宿舍分享？直接把 Release 的壓縮檔丟給對方就好，沒有安裝程序、沒有註冊表殘留。
 
 ---
@@ -735,7 +735,8 @@ src/lagscope/
 ├── monitor.py        監測迴圈（獨立執行緒，含退避與時鐘校正）
 ├── config.py         每位使用者的設定檔（原子寫入、損毀自動隔離）
 ├── models.py         樣本與滾動統計
-├── i18n.py           简体 / 繁體 / English 字串表
+├── i18n.py           字串表（简体 / 繁體 / English）
+├── translations.py   日本語 / 한국어（缺字自動回退英文）
 ├── recording.py      CSV 紀錄與輪替
 ├── autostart.py      三個平台的開機自動啟動
 ├── targets.py        決定「這一輪要量什麼」（GUI 與命令列共用）
@@ -854,7 +855,7 @@ does the same from the terminal.
   away the fmp4 format that makes the latency measured rather than estimated. It changes
   what this tool measures, not what your player is playing.
 - **Room details**: popularity, category, uptime, quality name, codec and container.
-- 简体中文 / 繁體中文 / English, per-user settings, single instance per user.
+- 简体中文 / 繁體中文 / English / 日本語 / 한국어, per-user settings, single instance per user.
 
 ### Watch several things at once
 
