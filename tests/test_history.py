@@ -136,19 +136,21 @@ def test_summary_weights_each_minute_by_how_many_probes_answered(tmp_path):
 
 def test_the_worst_hour_is_the_one_with_the_trouble_in_it(tmp_path):
     history = History(tmp_path / "h.json", bucket_s=60, keep_hours=48)
-    now = time.time()
-    quiet_hour = now - 3 * 3600
-    bad_hour = now - 3600
+    # Anchored to real hour boundaries: "an hour ago" plus five minutes spills
+    # into the next hour whenever this runs near the end of one.
+    this_hour = math.floor(time.time() / 3600) * 3600
+    quiet_hour = this_hour - 3 * 3600
+    bad_hour = this_hour - 3600
 
     for index in range(5):
         history.add(_sample(quiet_hour + index * 60, 400.0))
     for index in range(5):
         history.add(_sample(bad_hour + index * 60, 120.0))
-    history.note_event("stall")
+    history.note_event("stall")        # lands in the minute last written to
 
     worst = history.worst_hour(hours=6)
     # Higher average, but no stalls, so the quiet hour is not the one to report.
-    assert worst["start"] == pytest.approx((bad_hour // 3600) * 3600, abs=1)
+    assert worst["start"] == bad_hour
     assert worst["stalls"] == 1
 
 
