@@ -111,3 +111,17 @@ def test_a_taken_port_is_reported_not_raised(server):
     clash = DashboardServer(port=server.port, bind_host="127.0.0.1")
     assert clash.start() is False
     assert not clash.running
+
+
+def test_the_port_is_never_shared_with_a_second_listener():
+    """SO_REUSEADDR means "steal a live port" on Windows and only "reuse a
+    dead one" on Unix, so it has to be off there - a decision worth checking
+    from any machine, not only from a Windows one."""
+    from lagscope.web import _ExclusiveHTTPServer, reuse_address_ok
+
+    assert reuse_address_ok("win32") is False
+    assert reuse_address_ok("cygwin") is False
+    assert reuse_address_ok("linux") is True
+    assert reuse_address_ok("darwin") is True
+    # ...and the server actually uses that decision.
+    assert _ExclusiveHTTPServer.allow_reuse_address == reuse_address_ok()

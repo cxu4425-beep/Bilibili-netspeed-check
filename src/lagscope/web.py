@@ -16,6 +16,7 @@ import ipaddress
 import json
 import logging
 import socket
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
@@ -283,6 +284,28 @@ def _make_handler(snapshot: _Snapshot, access_code: str):
     return Handler
 
 
+def reuse_address_ok(platform: str = "") -> bool:
+    """Whether SO_REUSEADDR is safe to set on this platform.
+
+    The two families disagree about what the option means. On Unix it only
+    allows rebinding a port stuck in TIME_WAIT, which is exactly what anyone
+    restarting a server wants. On Windows it means "take this port even if
+    another socket is bound to it right now" - so two copies of LagScope, or
+    LagScope and anything else already on 23125, would both bind happily and
+    requests would land on whichever socket the kernel felt like.
+
+    Taking the platform as an argument is what makes the decision checkable
+    from any machine rather than only from a Windows one.
+    """
+    return not (platform or sys.platform).startswith(("win", "cygwin"))
+
+
+class _ExclusiveHTTPServer(ThreadingHTTPServer):
+    """An HTTP server that refuses a port somebody else already holds."""
+
+    allow_reuse_address = reuse_address_ok()
+
+
 class DashboardServer:
     """Serves the phone dashboard; safe to start and stop repeatedly."""
 
@@ -303,7 +326,7 @@ class DashboardServer:
         if self._server is not None:
             return True
         try:
-            server = ThreadingHTTPServer(
+            server = _ExclusiveHTTPServer(
                 (self.bind_host, self.port), _make_handler(self._snapshot, self.access_code)
             )
         except OSError as exc:

@@ -214,6 +214,11 @@ def test_bridge_refuses_other_origins(bridge):
 
 def test_bridge_reports_go_stale(bridge):
     _post(bridge.port, {"url": "https://live.bilibili.com/1", "title": "t"})
+    assert bridge.latest() is not None          # fresh, with the real timeout
+
+    # A timeout of zero trusts nothing, whatever the clock's resolution is -
+    # on Windows an age of exactly 0.0 is a normal reading for a report that
+    # arrived a moment ago.
     bridge.timeout_s = 0.0
     assert bridge.latest() is None
 

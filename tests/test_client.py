@@ -34,6 +34,24 @@ def test_client_folders_are_found_next_to_the_config(tmp_path, monkeypatch):
     assert [path.name for path in roots] == ["bilibili"]
 
 
+def test_one_directory_under_two_names_is_found_once(tmp_path, monkeypatch):
+    """Windows and macOS treat "bilibili" and "BiliBili" as the same folder.
+
+    The candidate list spells it several ways on purpose, so on those systems
+    the same directory used to come back twice and every scan read the same
+    database over again. A symlink reproduces that here on any platform.
+    """
+    monkeypatch.setattr(client_source.sys, "platform", "linux")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    real = tmp_path / "bilibili"
+    real.mkdir()
+    (tmp_path / "BiliBili").symlink_to(real, target_is_directory=True)
+
+    roots = client_source.client_roots()
+
+    assert len(roots) == 1
+
+
 def test_extra_folders_from_the_config_are_used(tmp_path, monkeypatch):
     monkeypatch.setattr(client_source.sys, "platform", "linux")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))

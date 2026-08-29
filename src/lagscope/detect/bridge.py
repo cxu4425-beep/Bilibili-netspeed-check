@@ -194,10 +194,18 @@ class BridgeServer:
         self._state.set(None)
 
     def latest(self) -> Optional[WatchTarget]:
-        """The last reported target, or ``None`` once it goes stale."""
+        """The last reported target, or ``None`` once it goes stale.
+
+        The comparison is ``>=`` so that a timeout of zero means what it
+        reads like - trust nothing - rather than "trust it for one tick of
+        whatever the clock's resolution happens to be". That distinction is
+        invisible at the default 120 seconds and decides the answer at 0,
+        where Windows' ~15 ms clock granularity can make an age of exactly
+        0.0 out of a report that just arrived.
+        """
         target = self._state.get()
         if target is None:
             return None
-        if (time.time() - target.detected_at) > self.timeout_s:
+        if (time.time() - target.detected_at) >= self.timeout_s:
             return None
         return target

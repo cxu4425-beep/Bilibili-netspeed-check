@@ -92,13 +92,39 @@ def client_roots(extra: Iterable[str] = ()) -> list[Path]:
             except OSError:
                 pass
 
+    return _unique_dirs(roots)
+
+
+def _identity(path: Path):
+    """Something that is equal for two names of the same directory.
+
+    The candidate list deliberately spells the folder several ways, because
+    builds differ ("bilibili", "BiliBili", ...). On Windows and on a default
+    macOS volume those are the *same* directory, so comparing the text found
+    it twice and every scan then read the same database twice over.
+
+    The device and inode pair identifies the directory itself, whatever it was
+    reached through - case, symlink or junction. Where a platform cannot
+    supply it, the normalised text is a good enough fallback.
+    """
+    try:
+        info = path.stat()
+        if info.st_ino:
+            return (info.st_dev, info.st_ino)
+    except OSError:
+        pass
+    return os.path.normcase(str(path))
+
+
+def _unique_dirs(paths: Iterable[Path]) -> list[Path]:
+    """First spelling of each distinct directory, order preserved."""
     unique: list[Path] = []
     seen = set()
-    for root in roots:
-        resolved = str(root)
-        if resolved not in seen:
-            seen.add(resolved)
-            unique.append(root)
+    for path in paths:
+        key = _identity(path)
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
     return unique
 
 
