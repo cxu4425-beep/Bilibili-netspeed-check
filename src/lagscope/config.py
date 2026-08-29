@@ -140,6 +140,9 @@ class ProbeConfig:
     prefer_hls: bool = True
     player_buffer_segments: float = 1.0
     max_backoff_multiplier: int = 8
+    # Bilibili offers the same room from several CDN edges and the player just
+    # takes the first one. When a clearly faster edge exists, move to it.
+    auto_cdn: bool = True
 
 
 @dataclass

@@ -9,7 +9,7 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [CDN 節點](#-自動選最快的-cdn-節點) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-demo.gif" width="260" alt="懸浮窗即時變化">
 
@@ -58,8 +58,8 @@
 - **直播與一般影片都能測**：直播量的是離直播邊緣有多遠；一般影片量的是
   **起播延遲**與**頻寬餘量**（線路撐不撐得住這個畫質、會不會轉圈）。
 - **即時延遲監測**：每 2 秒（可調）量一次，總延遲 + 網路 / 推流 / 顯示三段分項。
-- **CDN 線路比較**：B 站同一個直播間會發好幾個節點，監視器會定期把每條線都測一遍，
-  在診斷資訊裡告訴你目前這條多快、最快的是哪一條。
+- **CDN 線路比較與自動切換**：B 站同一個直播間會發好幾個節點，監視器定期把每條線都測一遍，
+  明顯更快的就自動換過去（見[CDN 節點](#-自動選最快的-cdn-節點)）。
 - **直播間詳情**：人氣、分區、開播時長、畫質名稱、編碼、格式，全都看得到。
 - **常駐兩種形態，可同時開**
   - **狀態列（系統匣）圖示**：圖示上直接畫出目前的毫秒數，滑鼠移上去看完整分項。
@@ -372,6 +372,35 @@ lagscope --history all         # 全部保留的紀錄
 
 ---
 
+## ⚡ 自動選最快的 CDN 節點
+
+B 站同一個直播間**同時由好幾個 CDN 節點提供**，播放器拿到哪一個基本是運氣。差別不小：
+同一個房間，最快和最慢的節點差幾十毫秒是常事，偶爾差到上百毫秒。
+
+打開之後（預設開啟），監視器每兩分鐘量一次所有節點，發現明顯更快的就自動換過去：
+
+```
+cn-hbyc-ct-01.bilivideo.com   210 ms   ← 播放器給的
+cn-gotcha09.bilivideo.com      48 ms   ← 換到這個
+```
+
+**它什麼時候才會換**——刻意設得很保守，因為換節點要重新連線，不能為了幾毫秒亂跳：
+
+| 條件 | 為什麼 |
+| --- | --- |
+| 快 **25 ms 以上**，**而且**快 **20% 以上** | 20ms 差 4ms 是雜訊；200ms 差 40ms 才值得 |
+| 距離上次換至少 **3 分鐘** | 兩個速度接近的節點不會來回搶 |
+| 目前這個**完全沒回應**時直接換 | 這種情況不用談條件 |
+| 只在**格式相同**時比速度 | fmp4 才有伺服器時鐘（實測而非估算），不會為了快幾毫秒把精度換掉 |
+
+換過的節點會列在體檢報告裡（時間、從哪換到哪、省了多少）。不想要就在
+**設定 → 高級 → 自動選最快的 CDN 節點**關掉。
+
+> **它改的是什麼**：只影響**這個程式自己**去量哪個節點，**不會**改變你瀏覽器或客戶端正在播的那一路。
+> 也就是說它讓「量到的數字」更接近「這條線最好能到多少」，而不是幫你的播放器換節點。
+
+---
+
 ## 📱 用手機看（不用裝 App）
 
 <div align="center"><img src="docs/images/phone-dashboard.png" width="300" alt="手機儀表板"></div>
@@ -565,6 +594,7 @@ lagscope --history                    # 把最近 24 小時的歷史摘要印成
 | 請求超時 | 單次 HTTP / TCP 探測的等待上限 |
 | 播放地址刷新 | 播放 URL 會過期，預設每 240 秒重取一次 |
 | RTT 探測主機 | 沒設定房間時，用來量網路延遲的主機 |
+| 自動選最快的 CDN 節點 | 定期比較所有節點，明顯更快就換過去（預設開啟） |
 | 優先使用 HLS | 開啟（預設）才能拿到帶伺服器時鐘的「實測」延遲 |
 | 播放器緩衝分片數 | 估算播放器要墊多少緩衝，預設 1 個分片 |
 | 合成器排隊幀數 | 顯示延遲模型的排隊層數，預設 2 |
@@ -818,8 +848,11 @@ does the same from the terminal.
 - Built for long sessions: bounded memory, exponential backoff, atomic config writes, auto recovery.
 - Stats (avg / p95 / jitter or speed), a sparkline, and optional CSV logging with rotation.
 - **No account, no cookies, no telemetry** — only the public endpoints a browser already calls.
-- **CDN line comparison**: the same room is served from several edges; the monitor times
-  them all periodically and the diagnostics show how the current one compares to the best.
+- **Picks the fastest CDN edge**: the same room is served from several edges and the player
+  just takes the first one. The monitor times them all periodically and moves to a clearly
+  faster one - 25 ms *and* 20% better, at most once every three minutes, and never trading
+  away the fmp4 format that makes the latency measured rather than estimated. It changes
+  what this tool measures, not what your player is playing.
 - **Room details**: popularity, category, uptime, quality name, codec and container.
 - 简体中文 / 繁體中文 / English, per-user settings, single instance per user.
 

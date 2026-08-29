@@ -267,6 +267,20 @@ def finding_rows(findings: Sequence) -> List[tuple]:
     return rows
 
 
+def switch_rows(switches: Sequence) -> List[tuple]:
+    """(when, from -> to, what it saved) for each CDN edge change."""
+    rows = []
+    for switch in switches or ():
+        when = time.strftime("%m-%d %H:%M", time.localtime(getattr(switch, "ts", 0)))
+        saved = getattr(switch, "saved_ms", None)
+        rows.append((
+            when,
+            f"{getattr(switch, 'from_host', '') or '--'} → {getattr(switch, 'to_host', '')}",
+            f"-{format_ms(saved)}" if saved else "",
+        ))
+    return rows
+
+
 def segment_rows(path_report) -> List[tuple]:
     """The three path segments as (label, value) pairs, or [] without a check."""
     if path_report is None:
@@ -295,7 +309,7 @@ def segment_rows(path_report) -> List[tuple]:
 def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60.0,
                worst: Optional[dict] = None, path_report=None, verdict_key: str = "",
                verdict_detail: str = "", extras: Sequence = (), target_label: str = "",
-               auto_findings: Sequence = (),
+               auto_findings: Sequence = (), switches: Sequence = (),
                good_ms: Optional[float] = None, warn_ms: Optional[float] = None) -> str:
     """The whole report as one HTML document with nothing external in it."""
     esc = html.escape
@@ -401,6 +415,18 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
         body.append(f"<h2>{esc(tr('report.findings'))}</h2>")
         body.append(f'<div class="card"><table>{rows}</table></div>')
 
+    moves = switch_rows(switches)
+    if moves:
+        rows = "".join(
+            f'<tr><td class="n">{esc(when)}</td><td>{esc(hosts)}</td>'
+            f'<td class="n">{esc(saved)}</td></tr>'
+            for when, hosts, saved in moves
+        )
+        body.append(f"<h2>{esc(tr('report.switches'))}</h2>")
+        body.append(f'<div class="card"><table>{rows}</table>'
+                    f'<p class="sub" style="margin:10px 0 0">{esc(tr("report.switches_hint"))}</p>'
+                    "</div>")
+
     live_extras = [entry for entry in extras if entry is not None]
     if live_extras:
         rows = "".join(
@@ -423,7 +449,8 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
 
 def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
                verdict_key: str = "", verdict_detail: str = "",
-               target_label: str = "", auto_findings: Sequence = ()) -> str:
+               target_label: str = "", auto_findings: Sequence = (),
+               switches: Sequence = ()) -> str:
     """The same findings as something you can paste into a forum reply."""
     hours = summary.get("hours")
     window = tr("report.hours", n=int(hours)) if hours else tr("report.all")
@@ -456,6 +483,13 @@ def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
         lines.append(f"{tr('report.findings')}:")
         for when, what, _events in findings:
             lines.append(f"  {when}  {what}")
+
+    moves = switch_rows(switches)
+    if moves:
+        lines.append("")
+        lines.append(f"{tr('report.switches')}:")
+        for when, hosts, saved in moves:
+            lines.append(f"  {when}  {hosts}  {saved}".rstrip())
 
     if verdict_key:
         lines.append("")

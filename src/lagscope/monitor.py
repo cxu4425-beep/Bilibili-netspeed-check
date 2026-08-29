@@ -52,6 +52,7 @@ class MonitorWorker(QObject):
     linesChanged = Signal(object)     # list[CdnLine] - CDN edges, fastest first
     diagnosisReady = Signal(object)   # (PathReport, verdict key, detail)
     quickCheckReady = Signal(object)  # (timestamp, verdict key, detail) - unattended
+    lineSwitched = Signal(object)     # LineSwitch - moved to a faster CDN edge
     extraUpdated = Signal(object)     # ExtraResult - one side watch, refreshed
 
     def __init__(self, config: Config) -> None:
@@ -69,6 +70,7 @@ class MonitorWorker(QObject):
         self._stream: Optional[StreamProbe] = None
         self._video: Optional[VideoProbe] = None
         self._app = AppNetProbe()
+        self._last_switch = None
         self._extra_app = AppNetProbe()   # separate state: different target
         self._netspeed = NetSpeedProbe()
         self._extra_index = 0
@@ -230,6 +232,7 @@ class MonitorWorker(QObject):
             prefer_hls=config.probe.prefer_hls,
             player_buffer_segments=config.probe.player_buffer_segments,
             playurl_refresh_s=config.probe.playurl_refresh_s,
+            auto_cdn=config.probe.auto_cdn,
         )
         self._video = VideoProbe(self._client, playurl_refresh_s=config.probe.playurl_refresh_s)
         self._netspeed.reset()
@@ -518,6 +521,13 @@ class MonitorWorker(QObject):
             return
         if lines:
             self.linesChanged.emit((self._stream.current_host, lines))
+        # compare_lines() decides on its own whether a move is worth it; this
+        # only reports the ones it actually made.
+        switches = self._stream.switches
+        if switches and switches[-1] is not self._last_switch:
+            self._last_switch = switches[-1]
+            LOG.info("switched CDN edge: %s -> %s", switches[-1].from_host, switches[-1].to_host)
+            self.lineSwitched.emit(switches[-1])
 
     def _sync_clock_if_due(self, timeout_s: float) -> None:
         now = time.monotonic()

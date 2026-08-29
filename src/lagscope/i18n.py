@@ -358,6 +358,22 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "advanced.playurl_refresh": ("播放地址刷新 (秒)", "播放位址更新 (秒)", "Play URL refresh (s)"),
     "advanced.rtt_host": ("RTT 探测主机", "RTT 偵測主機", "RTT probe host"),
     "advanced.prefer_hls": ("优先使用 HLS (更精确)", "優先使用 HLS (更精確)", "Prefer HLS (more accurate)"),
+    "advanced.auto_cdn": (
+        "自动选最快的 CDN 节点", "自動選最快的 CDN 節點", "Pick the fastest CDN edge",
+    ),
+    "advanced.auto_cdn_hint": (
+        "B 站同一个直播间由好几个 CDN 节点提供，播放器只会拿到第一个——快慢差几十毫秒是常事。"
+        "打开后会定期比较所有节点，发现明显更快的（快 25ms 且快 20% 以上）就自动换过去，"
+        "最短 3 分钟才会再换一次，不会来回跳。只影响本程序的测量，不会改变你播放器用的节点。",
+        "B 站同一個直播間由好幾個 CDN 節點提供，播放器只會拿到第一個——快慢差幾十毫秒是常事。"
+        "開啟後會定期比較所有節點，發現明顯更快的（快 25ms 且快 20% 以上）就自動換過去，"
+        "最短 3 分鐘才會再換一次，不會來回跳。只影響本程式的量測，不會改變你播放器用的節點。",
+        "Bilibili serves the same room from several CDN edges and the player takes the first "
+        "one, which is often tens of milliseconds slower than the best. This compares them "
+        "periodically and moves when one is clearly faster (25 ms and 20% better), at most "
+        "once every three minutes so two similar edges cannot trade it back and forth. It "
+        "changes what this tool measures, not what your player is using.",
+    ),
     "advanced.buffer_segments": ("播放器缓冲分片数", "播放器緩衝分片數", "Player buffer segments"),
     "advanced.frames_in_flight": ("合成器排队帧数", "合成器排隊影格數", "Frames in flight"),
     "advanced.manual_offset": ("显示器输入延迟补偿 (毫秒)", "顯示器輸入延遲補償 (毫秒)", "Panel input lag offset (ms)"),
@@ -501,6 +517,13 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "report.copied": ("摘要已复制到剪贴板", "摘要已複製到剪貼簿", "Summary copied to the clipboard"),
     "report.failed": ("无法写入报告文件", "無法寫入報告檔案", "Could not write the report file"),
     "report.findings": ("卡顿时发生了什么", "卡頓時發生了什麼", "What happened when it broke"),
+    "report.switches": ("自动换过的线路", "自動換過的線路", "Faster edges it moved to"),
+    "report.switches_hint": (
+        "同一个直播间由多个 CDN 节点提供，播放器只会拿到第一个。监视器发现明显更快的节点时会自动换过去。",
+        "同一個直播間由多個 CDN 節點提供，播放器只會拿到第一個。監視器發現明顯更快的節點時會自動換過去。",
+        "The same room is served from several CDN edges and the player just takes the first "
+        "one. When a clearly faster edge exists, the monitor moves to it.",
+    ),
     "report.auto_check": ("自动检查", "自動檢查", "checked automatically"),
 
     # ------------------------------------------------------------- setup wizard

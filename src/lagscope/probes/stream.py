@@ -70,6 +70,17 @@ class RoomInfo:
         return int(elapsed) if elapsed >= 0 else None
 
 
+# Switching edges is not free: the player reconnects, so a swap has to buy
+# more than it costs. A candidate must be better by BOTH an absolute margin
+# and a proportion of the current time - 4 ms off 8 ms is noise on a LAN-close
+# edge, while 40 ms off 200 ms is worth the reconnect.
+SWITCH_MARGIN_MS = 25.0
+SWITCH_MARGIN_RATIO = 0.20
+# ...and not more often than this, so two edges of similar speed cannot start
+# trading the stream back and forth.
+SWITCH_COOLDOWN_S = 180.0
+
+
 @dataclass(frozen=True)
 class CdnLine:
     """One CDN edge this room is available on."""
@@ -80,6 +91,23 @@ class CdnLine:
     @property
     def reachable(self) -> bool:
         return self.rtt_ms is not None
+
+
+@dataclass(frozen=True)
+class LineSwitch:
+    """A record of moving the stream from one edge to another."""
+
+    ts: float
+    from_host: str
+    to_host: str
+    from_ms: Optional[float]
+    to_ms: Optional[float]
+
+    @property
+    def saved_ms(self) -> Optional[float]:
+        if self.from_ms is None or self.to_ms is None:
+            return None
+        return self.from_ms - self.to_ms
 
 
 @dataclass(frozen=True)
@@ -248,7 +276,8 @@ class StreamProbe:
     """Resolves playback URLs for a room and measures the live-edge delay."""
 
     def __init__(self, client: HttpClient, *, prefer_hls: bool = True,
-                 player_buffer_segments: float = 1.0, playurl_refresh_s: int = 240) -> None:
+                 player_buffer_segments: float = 1.0, playurl_refresh_s: int = 240,
+                 auto_cdn: bool = True) -> None:
         self.client = client
         self.prefer_hls = prefer_hls
         self.player_buffer_segments = player_buffer_segments
@@ -261,6 +290,10 @@ class StreamProbe:
         self._lines: list = []
         self._lines_checked_at = 0.0
         self._quality_desc: dict = {}
+        self.auto_cdn = auto_cdn
+        self._preferred_host = ""       # the edge the comparison settled on
+        self._last_switch_at = 0.0
+        self._switches: list = []
 
     # -------------------------------------------------------------- room data
     def set_room(self, room_id: str) -> None:
@@ -274,6 +307,10 @@ class StreamProbe:
         self._room_info = None
         self._lines = []
         self._lines_checked_at = 0.0
+        # A different room is served by different edges, so the old choice
+        # means nothing - but the switch history is worth keeping.
+        self._preferred_host = ""
+        self._last_switch_at = 0.0
 
     def set_clock_offset_ms(self, offset_ms: Optional[float]) -> None:
         if offset_ms is not None and abs(offset_ms) < 86_400_000:
@@ -330,14 +367,98 @@ class StreamProbe:
         return self._endpoints
 
     def choose_endpoint(self, endpoints: list[StreamEndpoint]) -> Optional[StreamEndpoint]:
+        """The endpoint to measure: format first, then the fastest edge.
+
+        Format stays the primary key on purpose. Only fmp4 HLS carries the
+        server date tag that makes the latency *measured* rather than
+        estimated, so trading it for a few milliseconds of round trip would
+        make the headline number worse, not better. Among endpoints that are
+        equally good on that count, the fastest edge wins.
+        """
         if not endpoints:
             return None
-        hls = [e for e in endpoints if e.is_hls]
-        flv = [e for e in endpoints if not e.is_hls]
-        # fmp4 first: it is the only variant that reliably carries a date tag.
-        hls.sort(key=lambda e: 0 if e.fmt == "fmp4" else 1)
-        ordered = (hls + flv) if self.prefer_hls else (flv + hls)
-        return ordered[0]
+
+        def rank(endpoint: StreamEndpoint) -> tuple:
+            protocol = 0 if endpoint.is_hls else 1
+            if not self.prefer_hls:
+                protocol = 1 - protocol
+            # fmp4 first: it is the only variant that reliably carries a date tag.
+            fmt = 0 if endpoint.fmt == "fmp4" else 1
+            edge = 0 if (self.auto_cdn and self._preferred_host
+                         and endpoint.host == self._preferred_host) else 1
+            return (protocol, fmt, edge)
+
+        # ``min`` keeps the first of equal ranks, so the order the API returned
+        # still decides between endpoints this has no opinion about.
+        return min(endpoints, key=rank)
+
+    # -------------------------------------------------------------- CDN edges
+    def hosts_available(self) -> list:
+        """Every distinct edge the current endpoints are offered on."""
+        seen = []
+        for endpoint in self._endpoints:
+            if endpoint.host and endpoint.host not in seen:
+                seen.append(endpoint.host)
+        return seen
+
+    def _switchable(self, host: str) -> bool:
+        """True when this room is actually served from ``host``."""
+        return any(endpoint.host == host for endpoint in self._endpoints)
+
+    def consider_switch(self, lines: list, now: Optional[float] = None) -> Optional[LineSwitch]:
+        """Move to a faster edge when one is clearly, durably faster.
+
+        Returns the switch that was made, or ``None`` - which is the normal
+        answer. Being on the second fastest edge by a few milliseconds is not
+        a problem worth reconnecting the stream over.
+        """
+        if not self.auto_cdn or not lines:
+            return None
+        now = time.monotonic() if now is None else now
+
+        candidate = next((line for line in lines if line.reachable), None)
+        if candidate is None or not self._switchable(candidate.host):
+            return None
+
+        current_host = self.current_host
+        if not current_host or candidate.host == current_host:
+            # Already on it: remember that, so the choice survives a refresh.
+            self._preferred_host = candidate.host
+            return None
+
+        if self._last_switch_at and (now - self._last_switch_at) < SWITCH_COOLDOWN_S:
+            return None
+
+        current = next((line for line in lines if line.host == current_host), None)
+        if current is None or not current.reachable:
+            # The edge in use stopped answering: move without haggling.
+            return self._switch_to(candidate, current, now)
+
+        gain = current.rtt_ms - candidate.rtt_ms
+        if gain < SWITCH_MARGIN_MS or gain < current.rtt_ms * SWITCH_MARGIN_RATIO:
+            return None
+        return self._switch_to(candidate, current, now)
+
+    def _switch_to(self, candidate: CdnLine, current: Optional[CdnLine],
+                   now: float) -> LineSwitch:
+        switch = LineSwitch(
+            ts=time.time(), from_host=self.current_host, to_host=candidate.host,
+            from_ms=current.rtt_ms if current is not None else None,
+            to_ms=candidate.rtt_ms,
+        )
+        self._preferred_host = candidate.host
+        self._last_switch_at = now
+        self._switches.append(switch)
+        del self._switches[:-20]        # a bounded record, not a log file
+        return switch
+
+    @property
+    def switches(self) -> list:
+        return list(self._switches)
+
+    @property
+    def preferred_host(self) -> str:
+        return self._preferred_host
 
     # --------------------------------------------------------------- measuring
     def measure(self, room_id: Optional[str] = None) -> StreamMeasurement:
@@ -495,6 +616,9 @@ class StreamProbe:
         reachable.sort(key=lambda line: line.rtt_ms)
         self._lines = reachable + unreachable
         self._lines_checked_at = time.monotonic()
+        # The comparison is the only thing that knows which edge is quickest,
+        # so it is also where the decision to move belongs.
+        self.consider_switch(self._lines)
         return self._lines
 
     def lines_if_due(self, timeout_s: float = 4.0, interval_s: float = 60.0) -> list:

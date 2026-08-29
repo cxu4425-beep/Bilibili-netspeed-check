@@ -102,6 +102,7 @@ class MonitorApplication(QObject):
         # Kept so an exported report carries the last check, not a blank section.
         self._last_diagnosis: Optional[tuple] = None
         self._last_auto_check = 0.0
+        self._switches: list = []    # CDN edges moved to, newest last
         self._update_available: Optional[UpdateInfo] = None
         self._update_manual = False
         self._update_announced = False
@@ -147,6 +148,7 @@ class MonitorApplication(QObject):
         self.diagnosisRequested.connect(self._worker.runDiagnosis)
         self.quickCheckRequested.connect(self._worker.runQuickCheck)
         self._worker.quickCheckReady.connect(self._on_quick_check)
+        self._worker.lineSwitched.connect(self._on_line_switch)
         self._worker.diagnosisReady.connect(self._on_diagnosis)
         self._worker.extraUpdated.connect(self._on_extra)
 
@@ -462,6 +464,7 @@ class MonitorApplication(QObject):
             "verdict_detail": verdict_detail,
             "extras": self._ordered_extras(),
             "auto_findings": self._history.findings(hours),
+            "switches": list(reversed(self._switches)),
             "target_label": self._room_title or self._watch_label(),
             "good_ms": self._config.thresholds.good_ms,
             "warn_ms": self._config.thresholds.warn_ms,
@@ -496,7 +499,7 @@ class MonitorApplication(QObject):
             summary=context["summary"], worst=context["worst"],
             path_report=context["path_report"], verdict_key=context["verdict_key"],
             verdict_detail=context["verdict_detail"], target_label=context["target_label"],
-            auto_findings=context["auto_findings"],
+            auto_findings=context["auto_findings"], switches=context["switches"],
         ))
         if self._tray is not None:
             self._tray.showMessage(tr("report.title"), tr("report.copied"), app_icon(), 4000)
@@ -589,6 +592,21 @@ class MonitorApplication(QObject):
         self._history.note_verdict(key, detail, ts)
         if self._history_window is not None and self._history_window.isVisible():
             self._history_window.refresh()
+
+    @Slot(object)
+    def _on_line_switch(self, switch) -> None:
+        """A faster CDN edge was picked: note it, quietly.
+
+        No balloon: this happens on its own, and a notification for something
+        the user did not ask for and cannot act on is just noise. It is not
+        filed in the history either - that section answers "why did it stall",
+        and a switch is the opposite of a problem. The report lists them
+        separately, and the drop it caused is already visible on the chart.
+        """
+        if switch is None:
+            return
+        self._switches.append(switch)
+        del self._switches[:-20]
 
     def _maybe_auto_check(self) -> None:
         """Run one background check per cooldown, when something breaks."""

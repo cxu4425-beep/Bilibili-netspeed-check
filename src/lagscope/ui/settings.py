@@ -516,6 +516,13 @@ class SettingsDialog(QDialog):
         self.rtt_host_edit = QLineEdit(page)
         form.addRow(tr("advanced.rtt_host"), self.rtt_host_edit)
 
+        self.auto_cdn_check = QCheckBox(tr("advanced.auto_cdn"), page)
+        form.addRow("", self.auto_cdn_check)
+        auto_cdn_hint = QLabel(tr("advanced.auto_cdn_hint"), page)
+        auto_cdn_hint.setWordWrap(True)
+        auto_cdn_hint.setStyleSheet("color: palette(mid);")
+        form.addRow(auto_cdn_hint)
+
         self.prefer_hls_check = QCheckBox(tr("advanced.prefer_hls"), page)
         form.addRow("", self.prefer_hls_check)
 
@@ -678,6 +685,7 @@ class SettingsDialog(QDialog):
         self.good_spin.setValue(self._config.thresholds.good_ms)
         self.warn_spin.setValue(self._config.thresholds.warn_ms)
         self.csv_check.setChecked(self._config.recording.csv_enabled)
+        self.auto_cdn_check.setChecked(self._config.probe.auto_cdn)
         self.history_check.setChecked(self._config.history.enabled)
         self.history_keep_spin.setValue(self._config.history.keep_hours)
         self.auto_check_check.setChecked(self._config.history.auto_check)
@@ -824,6 +832,7 @@ class SettingsDialog(QDialog):
         config.thresholds.good_ms = self.good_spin.value()
         config.thresholds.warn_ms = max(self.warn_spin.value(), self.good_spin.value())
         config.recording.csv_enabled = self.csv_check.isChecked()
+        config.probe.auto_cdn = self.auto_cdn_check.isChecked()
         config.history.enabled = self.history_check.isChecked()
         config.history.keep_hours = self.history_keep_spin.value()
         config.history.auto_check = self.auto_check_check.isChecked()
