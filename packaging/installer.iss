@@ -50,17 +50,31 @@ LicenseFile=..\LICENSE
 CloseApplications=yes
 RestartApplications=no
 
+; Chinese is an unofficial Inno Setup translation, so it is present in some
+; installs of the compiler and not others - including on CI runners. Requiring
+; it would mean no installer at all on a machine that lacks it, so it is used
+; when available and the wizard falls back to English when it is not. The app
+; itself is unaffected: it picks its own language on first run.
+#define ChineseIsl "Languages\ChineseSimplified.isl"
+#if FileExists(AddBackslash(CompilerPath) + ChineseIsl)
+  #define HaveChinese
+#endif
+
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
-Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+#ifdef HaveChinese
+Name: "zh"; MessagesFile: "compiler:{#ChineseIsl}"
+#endif
 
 [CustomMessages]
 en.LaunchAfter=Run {#AppName} now
 en.AutoStart=Start {#AppName} when I sign in
 en.KeepSettings=Keep my settings and latency history
+#ifdef HaveChinese
 zh.LaunchAfter=立即运行 {#AppName}
 zh.AutoStart=登录时自动启动 {#AppName}
 zh.KeepSettings=保留设置和延迟历史记录
+#endif
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; \

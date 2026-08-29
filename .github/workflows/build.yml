@@ -64,6 +64,24 @@ jobs:
           Copy-Item LICENSE dist/
           Compress-Archive -Path dist/LagScope.exe, dist/README.md, dist/LICENSE -DestinationPath ${{ matrix.asset }}
 
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cp README.md LICENSE dist/
+          cd dist && zip -r ../${{ matrix.asset }} LagScope.app README.md LICENSE
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cp README.md LICENSE dist/
+          tar -czf ${{ matrix.asset }} -C dist LagScope README.md LICENSE
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
       - name: Build the installer (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -84,24 +102,6 @@ jobs:
         with:
           name: ${{ matrix.installer }}
           path: ${{ matrix.installer }}
-          if-no-files-found: error
-
-      - name: Package (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          cp README.md LICENSE dist/
-          cd dist && zip -r ../${{ matrix.asset }} LagScope.app README.md LICENSE
-
-      - name: Package (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          cp README.md LICENSE dist/
-          tar -czf ${{ matrix.asset }} -C dist LagScope README.md LICENSE
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.asset }}
-          path: ${{ matrix.asset }}
           if-no-files-found: error
 
       - name: Attach to release
