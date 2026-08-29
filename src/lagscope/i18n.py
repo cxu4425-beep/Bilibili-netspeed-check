@@ -540,6 +540,41 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     ),
     "report.auto_check": ("自动检查", "自動檢查", "checked automatically"),
 
+    # ------------------------------------------------------- before and after
+    "menu.mark": ("标记此刻（我改了设置）…", "標記此刻（我改了設定）…", "Mark this moment…"),
+    "compare.title": ("我改的设置有用吗", "我改的設定有用嗎", "Did the change help?"),
+    "compare.hint": (
+        "前后用的是一样长的时间窗口，取两边都有资料的较短那段，"
+        "免得拿一整晚的「之前」去比五分钟的「之后」。",
+        "前後用的是一樣長的時間視窗，取兩邊都有資料的較短那段，"
+        "免得拿一整晚的「之前」去比五分鐘的「之後」。",
+        "Both sides use the same length of time - the shorter of what is available "
+        "either side - so a whole evening of \"before\" is never compared with five "
+        "minutes of \"after\".",
+    ),
+    "compare.better": ("好转了，快了 {value}", "好轉了，快了 {value}", "Better by {value}"),
+    "compare.worse": ("反而差了 {value}", "反而差了 {value}", "Worse by {value}"),
+    "compare.same": ("没有明显差别", "沒有明顯差別", "No real difference"),
+    "compare.unclear": ("资料不够，看不出来", "資料不夠，看不出來", "Not enough data to tell"),
+    "compare.span_min": ("前后各 {n} 分钟", "前後各 {n} 分鐘", "{n} min either side"),
+    "compare.span_hour": ("前后各 {n} 小时", "前後各 {n} 小時", "{n} h either side"),
+    "compare.dialog": ("标记此刻", "標記此刻", "Mark this moment"),
+    "compare.prompt": (
+        "你刚才改了什么？（例如：换成 5GHz、DNS 改 8.8.8.8、换了网线）",
+        "你剛才改了什麼？（例如：換成 5GHz、DNS 改 8.8.8.8、換了網線）",
+        "What did you just change? (for example: moved to 5GHz, DNS to 8.8.8.8, "
+        "plugged in a cable)",
+    ),
+    "compare.marked": (
+        "已标记。让它再跑一阵子，报告里就会出现前后对照。",
+        "已標記。讓它再跑一陣子，報告裡就會出現前後對照。",
+        "Marked. Leave it running a while and the report will show the before and after.",
+    ),
+    "compare.waiting": (
+        "还在收集「之后」的资料", "還在收集「之後」的資料", "still collecting the \"after\"",
+    ),
+    "history.markers": ("标记", "標記", "Markers"),
+
     # ------------------------------------------------------------- setup wizard
     "wizard.title": ("初次设置", "初次設定", "Setup"),
     "wizard.welcome": ("欢迎使用 {app}", "歡迎使用 {app}", "Welcome to {app}"),

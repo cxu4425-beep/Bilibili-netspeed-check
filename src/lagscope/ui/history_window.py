@@ -40,15 +40,18 @@ class HistoryChart(QWidget):
         self._config = config
         self._buckets: List[Bucket] = []
         self._bucket_s = 60.0
+        self._markers: List[dict] = []
         self.setMinimumHeight(220)
 
     def set_config(self, config: Config) -> None:
         self._config = config
         self.update()
 
-    def set_data(self, buckets: Sequence[Bucket], bucket_s: float) -> None:
+    def set_data(self, buckets: Sequence[Bucket], bucket_s: float,
+                 markers: Sequence = ()) -> None:
         self._buckets = list(buckets)
         self._bucket_s = max(1.0, float(bucket_s))
+        self._markers = list(markers)
         self.update()
 
     def _palette(self) -> Palette:
@@ -117,6 +120,22 @@ class HistoryChart(QWidget):
             x = x_of(row.start + self._bucket_s / 2)
             painter.fillRect(QRectF(x - 1.5, plot.bottom() - 7.0, 3.0, 7.0), colour)
 
+        # "I changed something here" - the line the before/after is measured from.
+        for marker in self._markers:
+            stamp = float(marker.get("ts", 0.0))
+            if not (first <= stamp <= last):
+                continue
+            x = x_of(stamp)
+            painter.setPen(QPen(QColor(palette.foreground), 1.0, Qt.DashLine))
+            painter.drawLine(x, plot.top(), x, plot.bottom())
+            label = str(marker.get("label") or "")
+            if label:
+                painter.setFont(QFont(self.font().family(), 8))
+                metrics = QFontMetrics(painter.font())
+                text = metrics.elidedText(label, Qt.ElideRight, 140)
+                painter.drawText(QRectF(x + 3, plot.top() + 2, 140, 16),
+                                 Qt.AlignLeft | Qt.AlignVCenter, text)
+
         painter.end()
 
     def _paint_grid(self, painter: QPainter, palette: Palette, plot: QRectF, top: float) -> None:
@@ -160,6 +179,7 @@ class HistoryWindow(QDialog):
 
     exportRequested = Signal()
     copyRequested = Signal()
+    markRequested = Signal()
 
     def __init__(self, config: Config, history: History,
                  parent: Optional[QWidget] = None) -> None:
@@ -199,6 +219,10 @@ class HistoryWindow(QDialog):
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
+        self.mark_button = QPushButton(tr("menu.mark"), self)
+        self.mark_button.clicked.connect(self.markRequested.emit)
+        buttons.insertWidget(1, self.mark_button)
+
         self.copy_button = QPushButton(tr("history.copy"), self)
         self.copy_button.clicked.connect(self.copyRequested.emit)
         buttons.addWidget(self.copy_button)
@@ -229,7 +253,8 @@ class HistoryWindow(QDialog):
     def refresh(self) -> None:
         """Redraw from the history object; safe to call on every new sample."""
         buckets = self._history.buckets(self._hours)
-        self.chart.set_data(buckets, self._history.bucket_s)
+        self.chart.set_data(buckets, self._history.bucket_s,
+                            self._history.markers(self._hours))
         self.summary_label.setText(self.summary_text())
         self.worst_label.setText(f"{tr('report.worst')}: "
                                  f"{worst_hour_line(self._history.worst_hour(self._hours))}")

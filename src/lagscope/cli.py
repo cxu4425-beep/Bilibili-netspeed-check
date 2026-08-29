@@ -60,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
              "'all' for everything kept)",
     )
     parser.add_argument(
+        "--selftest", nargs="?", const="", metavar="ROOM",
+        help="run every probe once against the real world and print what came back; "
+             "pass a room id that is currently streaming to cover the Bilibili paths",
+    )
+    parser.add_argument(
         "--detect-report", action="store_true",
         help="print what each detection source can see on this machine, then exit",
     )
@@ -134,6 +139,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.diagnose is not None:
         return _diagnose(config, args.diagnose)
+
+    if args.selftest is not None:
+        return _selftest(config, args.selftest)
 
     if args.report is not None:
         return _write_report(config, args.report)
@@ -325,6 +333,17 @@ def _diagnosis_host(config) -> str:
     # Anything else (a Bilibili room, a video, network-only) is reached through
     # the same line, so the API host is a fair stand-in.
     return config.probe.rtt_host
+
+
+def _selftest(config, room: str) -> int:
+    """Evidence that each probe works here, for a person to read and paste."""
+    from .selftest import FAIL, format_report, run, worst_status
+
+    print("running the self-test; the Bilibili checks need a few seconds...\n", flush=True)
+    results = run(config, room=room)
+    print(format_report(results))
+    # A non-zero exit lets this be used in a script, but the report is the point.
+    return 1 if worst_status(results) == FAIL else 0
 
 
 def _history_hours(text: str):

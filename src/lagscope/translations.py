@@ -351,6 +351,23 @@ JA: dict = {
     "update.failed": "バージョン情報を取得できませんでした（オフライン？）",
     "menu.check_update": "更新を確認…",
     "update.group": "更新",
+
+    # ----------------------------------------------------- before and after
+    "menu.mark": "この瞬間を記録（設定を変えた）…",
+    "compare.title": "変更は効きましたか",
+    "compare.hint": "前後で同じ長さの期間を使い、両側にデータがある短いほうに合わせます。"
+                    "一晩分の「前」と 5 分の「後」を比べてしまわないためです。",
+    "compare.better": "改善しました（{value} 速くなりました）",
+    "compare.worse": "むしろ悪化しました（{value} 遅くなりました）",
+    "compare.same": "はっきりした差はありません",
+    "compare.unclear": "データが足りず判断できません",
+    "compare.span_min": "前後それぞれ {n} 分",
+    "compare.span_hour": "前後それぞれ {n} 時間",
+    "compare.dialog": "この瞬間を記録",
+    "compare.prompt": "いま何を変えましたか？（例：5GHz に変更、DNS を 8.8.8.8 に、有線に変更）",
+    "compare.marked": "記録しました。しばらく動かすと、レポートに前後の比較が出ます。",
+    "compare.waiting": "「後」のデータを収集中",
+    "history.markers": "記録した変更",
 }
 
 KO: dict = {
@@ -688,6 +705,23 @@ KO: dict = {
     "update.failed": "버전 정보를 가져오지 못했습니다 (오프라인?)",
     "menu.check_update": "업데이트 확인…",
     "update.group": "업데이트",
+
+    # ----------------------------------------------------- before and after
+    "menu.mark": "이 순간 표시 (설정을 바꿨음)…",
+    "compare.title": "바꾼 게 효과가 있었나",
+    "compare.hint": "앞뒤로 같은 길이의 기간을 쓰고, 양쪽 모두 자료가 있는 짧은 쪽에 맞춥니다. "
+                    "하룻밤치 '이전'과 5분치 '이후'를 비교하지 않기 위해서입니다.",
+    "compare.better": "좋아졌습니다 ({value} 빨라짐)",
+    "compare.worse": "오히려 나빠졌습니다 ({value} 느려짐)",
+    "compare.same": "뚜렷한 차이가 없습니다",
+    "compare.unclear": "자료가 부족해 판단할 수 없습니다",
+    "compare.span_min": "앞뒤 각 {n}분",
+    "compare.span_hour": "앞뒤 각 {n}시간",
+    "compare.dialog": "이 순간 표시",
+    "compare.prompt": "방금 무엇을 바꿨나요? (예: 5GHz로 변경, DNS를 8.8.8.8로, 유선으로 교체)",
+    "compare.marked": "표시했습니다. 조금 더 두면 보고서에 전후 비교가 나타납니다.",
+    "compare.waiting": "'이후' 자료를 모으는 중",
+    "history.markers": "표시한 변경",
 }
 
 OVERLAYS: dict = {"ja": JA, "ko": KO}

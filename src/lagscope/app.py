@@ -11,7 +11,9 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, QTimer, QUrl, Qt, Signal, Slot
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication
-from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
+from PySide6.QtWidgets import (
+    QApplication, QInputDialog, QMenu, QMessageBox, QSystemTrayIcon,
+)
 
 from . import APP_NAME, REPO_URL, __version__
 from .autostart import get_autostart, is_supported as autostart_supported, set_autostart
@@ -233,6 +235,10 @@ class MonitorApplication(QObject):
         report_action.triggered.connect(self.export_report)
         self._menu.addAction(report_action)
 
+        mark_action = QAction(tr("menu.mark"), self._menu)
+        mark_action.triggered.connect(self.mark_moment)
+        self._menu.addAction(mark_action)
+
         phone_action = QAction(tr("menu.phone"), self._menu)
         phone_action.triggered.connect(self._show_phone_url)
         self._menu.addAction(phone_action)
@@ -441,11 +447,36 @@ class MonitorApplication(QObject):
             self._history_window = HistoryWindow(self._config, self._history)
             self._history_window.exportRequested.connect(self.export_report)
             self._history_window.copyRequested.connect(self._copy_report_summary)
+            self._history_window.markRequested.connect(self.mark_moment)
         else:
             self._history_window.refresh()
         self._history_window.show()
         self._history_window.raise_()
         self._history_window.activateWindow()
+
+    def mark_moment(self) -> None:
+        """Record "I changed something", so the effect can be measured later."""
+        label, accepted = QInputDialog.getText(
+            None, tr("compare.dialog"), tr("compare.prompt")
+        )
+        if not accepted:
+            return
+        self._history.mark(label)
+        self._flush_history()
+        if self._history_window is not None and self._history_window.isVisible():
+            self._history_window.refresh()
+        if self._tray is not None:
+            self._tray.showMessage(tr("compare.dialog"), tr("compare.marked"),
+                                   app_icon(), 6000)
+
+    def _comparisons(self, hours) -> list:
+        """Each marked moment with its before-and-after, newest first."""
+        entries = []
+        for marker in self._history.markers(hours):
+            entries.append({"label": marker["label"],
+                            "compare": self._history.compare(marker["ts"])})
+        entries.reverse()
+        return entries
 
     def _report_context(self) -> dict:
         """Everything the report needs, gathered from what is already known."""
@@ -465,6 +496,7 @@ class MonitorApplication(QObject):
             "extras": self._ordered_extras(),
             "auto_findings": self._history.findings(hours),
             "switches": list(reversed(self._switches)),
+            "comparisons": self._comparisons(hours),
             "target_label": self._room_title or self._watch_label(),
             "good_ms": self._config.thresholds.good_ms,
             "warn_ms": self._config.thresholds.warn_ms,
@@ -500,6 +532,7 @@ class MonitorApplication(QObject):
             path_report=context["path_report"], verdict_key=context["verdict_key"],
             verdict_detail=context["verdict_detail"], target_label=context["target_label"],
             auto_findings=context["auto_findings"], switches=context["switches"],
+            comparisons=context["comparisons"],
         ))
         if self._tray is not None:
             self._tray.showMessage(tr("report.title"), tr("report.copied"), app_icon(), 4000)

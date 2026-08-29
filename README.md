@@ -9,7 +9,7 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English / 日本語 / 한국어
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [CDN 節點](#-自動選最快的-cdn-節點) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-demo.gif" width="260" alt="懸浮窗即時變化">
 
@@ -44,6 +44,8 @@
 - **歷史走勢圖**：每分鐘存一行摘要，關掉程式也不會丟。回頭就看得出「昨晚九點特別卡」
   （見[歷史與報告](#-歷史走勢與一鍵體檢報告)）。
 - **一鍵體檢報告**：走勢圖＋分段診斷輸出成一個自包含的 HTML 檔，可以直接寄給客服或貼到論壇。
+- **改了設定有沒有用**：標記「我剛剛換了 5GHz」，之後報告會用前後**一樣長**的時間窗口告訴你
+  到底有沒有變好（見[前後對照](#-我改的設定有用嗎)）。
 - **卡頓時自動查原因**：探測失敗或延遲突增時，背景自動跑一次精簡診斷，把結論記在那一分鐘上——
   事後看得到「昨晚 9 點是 Wi-Fi 的問題」，而不只是「那時候卡過」。
 - **卡頓與延遲突增偵測**：探測失敗或延遲跳到平常的兩倍以上就記一次事件，
@@ -401,6 +403,81 @@ cn-gotcha09.bilivideo.com      48 ms   ← 換到這個
 
 ---
 
+## 🔬 我改的設定有用嗎
+
+工具告訴你「Wi-Fi 訊號弱」，你去換了 5GHz、改了 DNS、插了網線——**然後呢？**
+以前只能憑感覺，因為沒有任何東西告訴你有沒有變好。
+
+現在按一下 **標記此刻（我改了設定）…**，輸入你改了什麼，之後報告就會多一段：
+
+<div align="center"><img src="docs/images/history-marked.png" width="820" alt="標記前後的走勢"></div>
+
+```
+我改的設定有用嗎
+  08-29 12:30   換到 5GHz
+      218 ms → 87 ms    好轉了，快了 131 ms    (前後各 1.5 小時)
+```
+
+走勢圖上會畫一條虛線標出那個時刻，**體檢報告裡的圖也有**，所以寄出去的那份一看就懂。
+
+**這裡最重要的一件事是它怎麼避免騙你**：前後用的是**一樣長**的時間窗口，
+取兩邊都有資料的**較短**那段。拿一整晚的「之前」去比五分鐘的「之後」，
+幾乎任何改動都會顯得有效——這種比較方式本身就是在說謊。
+
+| 規則 | 為什麼 |
+| --- | --- |
+| 前後窗口**等長**，取較短的那邊 | 不然一整晚 vs 五分鐘，什麼改動都「有效」 |
+| 最長各 **6 小時** | 「之前」不會跨到完全不同的另一個晚上 |
+| 每邊至少 **5 分鐘**，否則不給結論 | 兩分鐘的資料只是雜訊 |
+| 差距在 **10 ms 以內**算「沒有明顯差別」 | 不把測量誤差說成改善 |
+| 平均、P95、丟包率都會比 | 只看平均會漏掉「偶爾爆一下」 |
+
+資料不夠時它會直接說「資料不夠，看不出來」，不會硬給一個結論。
+
+---
+
+## 🩺 自我檢測（`--selftest`）
+
+這個功能是給**回報問題**用的，也是給我自己用的。
+
+坦白說：這個程式所有 B 站相關的程式碼——playurl 解析、HLS 伺服器時鐘、FLV 關鍵影格、
+CDN 比較與自動切換——**都是對著測試資料寫出來的**，因為開發環境根本連不上 B 站。
+單元測試能證明「給定這種格式，解析是對的」，不能證明「B 站現在還是這種格式」。
+
+`--selftest` 就是把每個探測對著真實世界跑一次，然後把拿到什麼原封不動印出來：
+
+```bash
+lagscope --selftest              # 不含 B 站的部分
+lagscope --selftest 21452505     # 帶一個正在直播的房間號，涵蓋全部
+```
+
+```
+[ ok ] name resolution
+        api.live.bilibili.com: 12 ms
+[ ok ] Bilibili API reachable
+        TCP handshake: 18 ms
+        API answered, code=0
+[ ok ] play URLs
+        6 endpoint(s), 3 distinct edge(s)
+          http_hls     fmp4  qn=10000  cn-gotcha09.bilivideo.com
+          ...
+        chosen: fmp4 on cn-gotcha09.bilivideo.com
+[ ok ] live measurement
+        method: hls-pdt   measured
+        stream: 2310 ms   host: cn-gotcha09.bilivideo.com
+[ ok ] CDN edges
+        cn-gotcha09.bilivideo.com     48 ms
+        cn-hbyc-ct-01.bilivideo.com   210 ms
+        it moved: cn-hbyc-ct-01... -> cn-gotcha09... (saving 162 ms)
+```
+
+它**不做任何斷言**，只是把證據攤開來給人看。有問題的話把整段貼進 issue 就夠了。
+
+**輸出裡沒有什麼**：沒有 Wi-Fi 名稱、沒有公網 IP、沒有帳號、沒有其他程式的資訊。
+出現的位址只有你家內網的，和被測的伺服器。房間號是你自己給的。
+
+---
+
 ## 📱 用手機看（不用裝 App）
 
 <div align="center"><img src="docs/images/phone-dashboard.png" width="300" alt="手機儀表板"></div>
@@ -529,6 +606,7 @@ lagscope --list-apps                  # 列出正在連網的程式（挑名字�
 lagscope --diagnose                   # 分段診斷（可加位址：--diagnose 8.8.8.8）
 lagscope --report                     # 匯出體檢報告 HTML，印出檔案位置
 lagscope --history                    # 把最近 24 小時的歷史摘要印成文字（all＝全部）
+lagscope --selftest                   # 每個探測對真實世界跑一次，印出結果（可加房間號）
 ```
 
 `--probe-once` 很適合排查問題或寫成腳本定時記錄：
@@ -873,6 +951,33 @@ your Wi-Fi, your home network, your provider, the distance to the server, or pac
 only the tools that ship with the OS - no admin rights, no raw sockets - and computes its
 statistics from the individual replies, so it reads the same in any system language.
 
+### Did the change help?
+
+The tool can say the Wi-Fi is the problem. Whether moving the router actually helped was
+never something it could answer - until now. **Mark this moment…** records what you changed,
+and the report then compares the periods either side of it.
+
+The honesty of that comparison is the whole feature: both sides use **the same length of
+time**, the shorter of what is available either way, capped at six hours and refused below
+five minutes. Six hours of "before" against five minutes of "after" would make almost any
+change look like a triumph. A difference under 10 ms is reported as no real difference
+rather than dressed up as an improvement, and average, p95 and packet loss are all compared,
+because looking only at the average hides "it spikes occasionally".
+
+The chart draws a dashed line at the marked moment, in the window and in the exported report.
+
+### Self-test
+
+Every Bilibili code path here - the playurl response, the HLS server clock, the FLV key
+frame, the CDN comparison and the edge switch - was written against fixtures, because the
+machine it was written on cannot reach Bilibili at all. The unit tests prove the parsing is
+right *given that shape of input*; they cannot prove the input still has that shape.
+
+`lagscope --selftest [room-id]` runs each probe once against the real thing and prints what
+came back, asserting nothing. It is evidence for a person to read and paste into a bug
+report. The output carries addresses inside your own network and the servers measured - no
+Wi-Fi name, no public IP, no account.
+
 ### Updates and what it connects to
 
 Once a day at most, LagScope asks GitHub what the newest version number is - one public page,
@@ -991,6 +1096,7 @@ lagscope --list-apps                   # which programs are on the network right
 lagscope --diagnose                    # split the path up (add a host to pick the target)
 lagscope --report                      # write the health report and print where it went
 lagscope --history                     # print the last 24 h as text ("all" for everything)
+lagscope --selftest [room]             # run every probe once for real and print the result
 ```
 
 ### How the number is computed

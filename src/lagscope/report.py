@@ -45,6 +45,9 @@ MUTED = "#5c6474"
 LINE = "#d8dde7"
 ACCENT = "#0b7fab"
 
+# Smaller than this either way is not a change anyone would notice.
+CHANGE_MS = 10.0
+
 
 # --------------------------------------------------------------------- chart
 def nice_ceiling(value: float) -> float:
@@ -79,7 +82,8 @@ def grid_values(top: float, lines: int = 4) -> List[float]:
 
 
 def chart_svg(buckets: Sequence[Bucket], bucket_s: float = 60.0,
-              good_ms: Optional[float] = None, warn_ms: Optional[float] = None) -> str:
+              good_ms: Optional[float] = None, warn_ms: Optional[float] = None,
+              markers: Sequence = ()) -> str:
     """The whole history as one inline SVG - no script, no external file."""
     rows = [row for row in buckets if row.avg_ms is not None]
     if not rows:
@@ -171,6 +175,25 @@ def chart_svg(buckets: Sequence[Bucket], bucket_s: float = 60.0,
             f'<rect x="{x - 1.5:.1f}" y="{CHART_PAD_TOP + plot_h - 6}" width="3" height="6" '
             f'fill="{colour}"/>'
         )
+
+    # The moments the user marked, so the shared report shows the same "I
+    # changed something here" line the window does.
+    for marker in markers or ():
+        stamp = float(marker.get("ts", 0.0))
+        if not (first <= stamp <= last):
+            continue
+        x = x_of(stamp)
+        parts.append(
+            f'<line x1="{x:.1f}" y1="{CHART_PAD_TOP}" x2="{x:.1f}" '
+            f'y2="{CHART_PAD_TOP + plot_h}" stroke="{INK}" stroke-width="1" '
+            f'stroke-dasharray="4 3"/>'
+        )
+        label = str(marker.get("label") or "")
+        if label:
+            parts.append(
+                f'<text x="{x + 4:.1f}" y="{CHART_PAD_TOP + 12}" font-size="11" '
+                f'fill="{INK}">{html.escape(label[:28])}</text>'
+            )
 
     parts.append("</svg>")
     return "".join(parts)
@@ -267,6 +290,40 @@ def finding_rows(findings: Sequence) -> List[tuple]:
     return rows
 
 
+def comparison_rows(comparisons: Sequence) -> List[tuple]:
+    """(when, what changed, before -> after, verdict) for each marked moment."""
+    rows = []
+    for entry in comparisons or ():
+        compare = entry.get("compare")
+        if not compare:
+            continue
+        before, after = compare["before"], compare["after"]
+        delta = compare.get("delta_ms")
+        if delta is None:
+            verdict = tr("compare.unclear")
+        elif delta <= -CHANGE_MS:
+            verdict = tr("compare.better", value=format_ms(abs(delta)))
+        elif delta >= CHANGE_MS:
+            verdict = tr("compare.worse", value=format_ms(abs(delta)))
+        else:
+            verdict = tr("compare.same")
+        rows.append((
+            time.strftime("%m-%d %H:%M", time.localtime(compare["ts"])),
+            entry.get("label") or "",
+            f"{format_ms(before['avg_ms'])} → {format_ms(after['avg_ms'])}",
+            verdict,
+            _span_text(compare["span_s"]),
+        ))
+    return rows
+
+
+def _span_text(span_s: float) -> str:
+    minutes = max(1, int(round(span_s / 60.0)))
+    if minutes < 90:
+        return tr("compare.span_min", n=minutes)
+    return tr("compare.span_hour", n=round(span_s / 3600.0, 1))
+
+
 def switch_rows(switches: Sequence) -> List[tuple]:
     """(when, from -> to, what it saved) for each CDN edge change."""
     rows = []
@@ -310,6 +367,7 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
                worst: Optional[dict] = None, path_report=None, verdict_key: str = "",
                verdict_detail: str = "", extras: Sequence = (), target_label: str = "",
                auto_findings: Sequence = (), switches: Sequence = (),
+               comparisons: Sequence = (),
                good_ms: Optional[float] = None, warn_ms: Optional[float] = None) -> str:
     """The whole report as one HTML document with nothing external in it."""
     esc = html.escape
@@ -371,7 +429,11 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
 
     body.append(f"<h2>{esc(tr('report.chart'))}</h2>")
     body.append('<div class="card">')
-    body.append(chart_svg(buckets, bucket_s, good_ms, warn_ms))
+    chart_marks = [
+        {"ts": entry["compare"]["ts"], "label": entry.get("label", "")}
+        for entry in (comparisons or ()) if entry.get("compare")
+    ]
+    body.append(chart_svg(buckets, bucket_s, good_ms, warn_ms, chart_marks))
     body.append(
         f'<div class="legend">'
         f'<span class="sw" style="background:{ACCENT}"></span>{esc(tr("report.legend_avg"))}'
@@ -415,6 +477,19 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
         body.append(f"<h2>{esc(tr('report.findings'))}</h2>")
         body.append(f'<div class="card"><table>{rows}</table></div>')
 
+    changes = comparison_rows(comparisons)
+    if changes:
+        rows = "".join(
+            f'<tr><td class="n">{esc(when)}</td><td>{esc(label)}</td>'
+            f'<td class="n">{esc(shift)}</td><td>{esc(verdict)}</td>'
+            f'<td class="n">{esc(span)}</td></tr>'
+            for when, label, shift, verdict, span in changes
+        )
+        body.append(f"<h2>{esc(tr('compare.title'))}</h2>")
+        body.append(f'<div class="card"><table>{rows}</table>'
+                    f'<p class="sub" style="margin:10px 0 0">{esc(tr("compare.hint"))}</p>'
+                    "</div>")
+
     moves = switch_rows(switches)
     if moves:
         rows = "".join(
@@ -450,7 +525,7 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
 def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
                verdict_key: str = "", verdict_detail: str = "",
                target_label: str = "", auto_findings: Sequence = (),
-               switches: Sequence = ()) -> str:
+               switches: Sequence = (), comparisons: Sequence = ()) -> str:
     """The same findings as something you can paste into a forum reply."""
     hours = summary.get("hours")
     window = tr("report.hours", n=int(hours)) if hours else tr("report.all")
@@ -483,6 +558,14 @@ def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
         lines.append(f"{tr('report.findings')}:")
         for when, what, _events in findings:
             lines.append(f"  {when}  {what}")
+
+    changes = comparison_rows(comparisons)
+    if changes:
+        lines.append("")
+        lines.append(f"{tr('compare.title')}:")
+        for when, label, shift, verdict, span in changes:
+            lines.append(f"  {when}  {label}".rstrip())
+            lines.append(f"      {shift}   {verdict}   ({span})")
 
     moves = switch_rows(switches)
     if moves:

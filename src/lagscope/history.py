@@ -40,6 +40,11 @@ DEFAULT_KEEP_HOURS = 48
 FILE_VERSION = 1
 # Guards against a pathological interval filling memory inside one bucket.
 MAX_VALUES_PER_BUCKET = 4000
+MAX_MARKERS = 50
+# A comparison window is capped so "before" cannot stretch back over a whole
+# different evening, and floored so it is never a couple of minutes of noise.
+MAX_COMPARE_SPAN_S = 6 * 3600
+MIN_COMPARE_BUCKETS = 5
 
 
 @dataclass(frozen=True)
@@ -168,6 +173,7 @@ class History:
         maxlen = int(self.keep_hours * 3600 / self.bucket_s) + 2
         self._closed: Deque[Bucket] = deque(maxlen=maxlen)
         self._open: Optional[_OpenBucket] = None
+        self._markers: List[dict] = []      # [{ts, label}] - "I changed something"
         self._dirty = False
         if load:
             self.load()
@@ -194,6 +200,78 @@ class History:
             self._open.stalls += 1
         elif kind == "spike":
             self._open.spikes += 1
+
+    def mark(self, label: str, ts: Optional[float] = None) -> dict:
+        """Record "I changed something here", so the effect can be measured.
+
+        The tool can say the Wi-Fi is the problem. Whether moving the router
+        actually helped is a different question, and nobody could answer it
+        from a chart alone - a marker turns the data already being collected
+        into a before-and-after.
+        """
+        marker = {"ts": float(ts if ts is not None else time.time()),
+                  "label": str(label or "").strip()[:80]}
+        self._markers.append(marker)
+        self._markers.sort(key=lambda entry: entry["ts"])
+        del self._markers[:-MAX_MARKERS]
+        self._dirty = True
+        return marker
+
+    def markers(self, hours: Optional[float] = None) -> List[dict]:
+        """Markers inside the window, oldest first."""
+        if hours is None:
+            return list(self._markers)
+        cutoff = time.time() - float(hours) * 3600
+        return [entry for entry in self._markers if entry["ts"] >= cutoff]
+
+    def clear_markers(self) -> None:
+        self._markers = []
+        self._dirty = True
+
+    def compare(self, marker_ts: float, cap_s: float = MAX_COMPARE_SPAN_S) -> Optional[dict]:
+        """What changed either side of a moment, over a *fair* span.
+
+        The span is the same on both sides on purpose. Six hours of "before"
+        against five minutes of "after" would compare a whole evening with one
+        quiet moment and call the difference an improvement, which is how this
+        kind of feature usually lies.
+        """
+        rows = self.buckets()
+        if not rows:
+            return None
+        first = rows[0].start
+        last = rows[-1].start + self.bucket_s
+        span = min(marker_ts - first, last - marker_ts, float(cap_s))
+        if span < self.bucket_s * MIN_COMPARE_BUCKETS:
+            return None       # not enough on one side to say anything honest
+
+        before = self._window_summary(marker_ts - span, marker_ts)
+        after = self._window_summary(marker_ts, marker_ts + span)
+        if not before["buckets"] or not after["buckets"]:
+            return None
+        return {"ts": marker_ts, "span_s": span, "before": before, "after": after,
+                "delta_ms": _difference(after["avg_ms"], before["avg_ms"]),
+                "delta_p95_ms": _difference(after["p95_ms"], before["p95_ms"]),
+                "delta_loss_pct": _difference(after["loss_pct"], before["loss_pct"])}
+
+    def _window_summary(self, start: float, end: float) -> dict:
+        """Summarise the buckets between two moments."""
+        rows = [row for row in self.buckets() if start <= row.start < end]
+        counted = sum(row.count for row in rows)
+        answered = sum(row.ok for row in rows)
+        weighted = [(row.avg_ms, row.ok) for row in rows if row.avg_ms is not None and row.ok]
+        avg = None
+        if weighted:
+            avg = (sum(value * weight for value, weight in weighted)
+                   / sum(weight for _value, weight in weighted))
+        p95s = [row.p95_ms for row in rows if row.p95_ms is not None]
+        return {
+            "buckets": len(rows), "samples": counted,
+            "avg_ms": avg, "p95_ms": percentile(p95s, 95.0),
+            "loss_pct": ((counted - answered) * 100.0 / counted) if counted else 0.0,
+            "stalls": sum(row.stalls for row in rows),
+            "spikes": sum(row.spikes for row in rows),
+        }
 
     def note_verdict(self, key: str, detail: str = "",
                      ts: Optional[float] = None) -> None:
@@ -350,13 +428,23 @@ class History:
         restored.sort(key=lambda bucket: bucket.start)
         self._closed.extend(restored)
 
+        for entry in (data.get("markers") or []):
+            try:
+                self._markers.append({"ts": float(entry["ts"]),
+                                      "label": str(entry.get("label") or "")})
+            except (TypeError, ValueError, KeyError):
+                continue
+        self._markers.sort(key=lambda entry: entry["ts"])
+        del self._markers[:-MAX_MARKERS]
+
     def flush(self, force: bool = False) -> bool:
         """Write the closed buckets out; returns True when it wrote."""
         if not self._dirty and not force:
             return False
         rows = [bucket.as_row() for bucket in self._closed]
         payload = json.dumps({"version": FILE_VERSION, "bucket_s": self.bucket_s,
-                              "buckets": rows}, ensure_ascii=False)
+                              "buckets": rows, "markers": self._markers},
+                             ensure_ascii=False)
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile(
@@ -383,6 +471,7 @@ class History:
 
     def clear(self) -> None:
         self._closed.clear()
+        self._markers = []
         self._open = None
         self._dirty = True
         self.flush(force=True)
@@ -400,6 +489,13 @@ def percentile(values: list, pct: float) -> Optional[float]:
     if low == high:
         return ordered[int(pos)]
     return ordered[low] + (ordered[high] - ordered[low]) * (pos - low)
+
+
+def _difference(after: Optional[float], before: Optional[float]) -> Optional[float]:
+    """after - before, or None when either side has nothing to compare."""
+    if after is None or before is None:
+        return None
+    return after - before
 
 
 def _round(value: Optional[float]) -> Optional[float]:
