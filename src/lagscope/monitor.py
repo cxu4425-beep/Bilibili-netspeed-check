@@ -205,7 +205,10 @@ class MonitorWorker(QObject):
         if not url:
             url, source = public_url(max_bytes), "public"
 
-        assert self._client is not None
+        if self._client is None:
+            # The menu item is available before the first probe cycle has run,
+            # and while monitoring is stopped. Neither should crash the worker.
+            self._client = HttpClient(timeout_s=config.probe.timeout_ms / 1000.0)
         result = measure_download(self._client.session, url, budget_s=budget_s,
                                   max_bytes=max_bytes, source=source)
         if not result.ok and source == "stream":

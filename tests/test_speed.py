@@ -195,3 +195,20 @@ def test_the_public_endpoint_asks_for_the_size_it_intends_to_read():
 def test_a_result_serialises_for_the_report():
     payload = SpeedResult(mbps=42.0, bytes=100, seconds=2.0, host="h").as_dict()
     assert payload["mbps"] == 42.0 and payload["host"] == "h"
+
+
+# ------------------------------------------------------- running it too early
+def test_a_speed_test_before_the_first_probe_does_not_crash_the_worker():
+    """The menu item exists before any probe cycle has built the client."""
+    from lagscope.config import Config
+    from lagscope.monitor import MonitorWorker
+
+    worker = MonitorWorker(Config())
+    assert worker._client is None            # nothing has run yet
+
+    seen = []
+    worker.speedTestReady.connect(seen.append)
+    worker.runSpeedTest()                    # must report, never raise
+
+    assert len(seen) == 1
+    assert isinstance(seen[0], SpeedResult)
