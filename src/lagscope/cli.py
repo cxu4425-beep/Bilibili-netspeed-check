@@ -164,6 +164,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     guard.listen()
 
     monitor = MonitorApplication(app, config, guard)
+    # A fresh install answers three questions before the overlay appears; an
+    # existing one never sees this.
+    monitor.run_setup_if_needed()
     monitor.start()
     return app.exec()
 
@@ -286,6 +289,8 @@ def _diagnose(config, host: str) -> int:
         print(f"  {label.ljust(width)}   {stats.avg_ms:6.1f} ms   "
               f"{tr('diag.loss')} {loss:4.0f}%   ({stats.host})")
 
+    if report.dns_ms is not None:
+        print(f"  {tr('diag.dns').ljust(width)}   {report.dns_ms:6.1f} ms")
     if report.wifi is not None:
         wifi = report.wifi
         signal = f"{wifi.signal_pct}%" if wifi.signal_pct is not None else "--"

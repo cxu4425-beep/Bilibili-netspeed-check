@@ -26,7 +26,7 @@ import os
 import tempfile
 import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Deque, Iterable, List, Optional
 
@@ -58,6 +58,10 @@ class Bucket:
     spikes: int = 0
     kind: str = ""
     label: str = ""
+    # What an automatic check blamed, if one ran in this minute. This is what
+    # turns "it stalled at 21:14" into "it stalled at 21:14 - weak Wi-Fi".
+    verdict: str = ""
+    verdict_detail: str = ""
 
     @property
     def loss_pct(self) -> float:
@@ -72,6 +76,7 @@ class Bucket:
             _round(self.avg_ms), _round(self.min_ms), _round(self.max_ms),
             _round(self.p95_ms), _round(self.jitter_ms),
             self.stalls, self.spikes, self.kind, self.label,
+            self.verdict, self.verdict_detail,
         ]
 
     @classmethod
@@ -88,6 +93,9 @@ class Bucket:
                 stalls=int(values[8]), spikes=int(values[9]),
                 kind=str(values[10]) if len(values) > 10 else "",
                 label=str(values[11]) if len(values) > 11 else "",
+                # Written since 3.6; rows from an older file simply lack them.
+                verdict=str(values[12]) if len(values) > 12 else "",
+                verdict_detail=str(values[13]) if len(values) > 13 else "",
             )
         except (TypeError, ValueError):
             return None
@@ -100,6 +108,7 @@ class Bucket:
             "p95_ms": self.p95_ms, "jitter_ms": self.jitter_ms,
             "stalls": self.stalls, "spikes": self.spikes,
             "kind": self.kind, "label": self.label,
+            "verdict": self.verdict, "verdict_detail": self.verdict_detail,
         }
 
 
@@ -115,6 +124,8 @@ class _OpenBucket:
         self.spikes = 0
         self.kind = ""
         self.label = ""
+        self.verdict = ""
+        self.verdict_detail = ""
 
     def add(self, sample: LatencySample) -> None:
         self.count += 1
@@ -142,6 +153,7 @@ class _OpenBucket:
             jitter_ms=jitter,
             stalls=self.stalls, spikes=self.spikes,
             kind=self.kind, label=self.label,
+            verdict=self.verdict, verdict_detail=self.verdict_detail,
         )
 
 
@@ -182,6 +194,38 @@ class History:
             self._open.stalls += 1
         elif kind == "spike":
             self._open.spikes += 1
+
+    def note_verdict(self, key: str, detail: str = "",
+                     ts: Optional[float] = None) -> None:
+        """File what an automatic check found against the minute it ran in."""
+        if not key:
+            return
+        start = self._align(ts if ts is not None else time.time())
+        if self._open is not None and start >= self._open.start:
+            self._open.verdict = key
+            self._open.verdict_detail = detail
+            return
+        # The check finished after its minute rolled over, which is normal for
+        # something that takes seconds: attach it to the minute it belongs to.
+        for index in range(len(self._closed) - 1, -1, -1):
+            bucket = self._closed[index]
+            if bucket.start == start:
+                self._closed[index] = replace(bucket, verdict=key, verdict_detail=detail)
+                self._dirty = True
+                return
+        if self._open is not None:
+            self._open.verdict = key
+            self._open.verdict_detail = detail
+
+    def findings(self, hours: Optional[float] = 24.0, limit: int = 12) -> List[dict]:
+        """The automatic checks that ran, newest first - "what went wrong when"."""
+        found = [
+            {"start": row.start, "verdict": row.verdict, "detail": row.verdict_detail,
+             "stalls": row.stalls, "spikes": row.spikes}
+            for row in self.buckets(hours) if row.verdict
+        ]
+        found.reverse()
+        return found[:max(0, limit)]
 
     def _align(self, ts: float) -> float:
         return math.floor(float(ts) / self.bucket_s) * self.bucket_s

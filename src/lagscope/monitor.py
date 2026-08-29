@@ -51,6 +51,7 @@ class MonitorWorker(QObject):
     targetChanged = Signal(object)    # WatchTarget
     linesChanged = Signal(object)     # list[CdnLine] - CDN edges, fastest first
     diagnosisReady = Signal(object)   # (PathReport, verdict key, detail)
+    quickCheckReady = Signal(object)  # (timestamp, verdict key, detail) - unattended
     extraUpdated = Signal(object)     # ExtraResult - one side watch, refreshed
 
     def __init__(self, config: Config) -> None:
@@ -157,6 +158,29 @@ class MonitorWorker(QObject):
             return
         key, detail = verdict(report)
         self.diagnosisReady.emit((report, key, detail))
+
+    @Slot()
+    def runQuickCheck(self) -> None:
+        """A cut-down path check, run unattended the moment something breaks.
+
+        Three pings and no traceroute: this fires while the connection is
+        already in trouble, so it has to be over in a couple of seconds and
+        must not add load of its own. Nobody is watching a dialog for it - the
+        answer is filed against the minute it happened, and shows up later in
+        the history and the report.
+        """
+        from .probes.path import analyse, verdict
+
+        with self._lock:
+            config = self._config
+        host = self._diagnosis_host(config)
+        try:
+            report = analyse(host, count=3, timeout_s=1.0, include_trace=False)
+        except Exception:
+            LOG.exception("automatic check failed")
+            return
+        key, detail = verdict(report)
+        self.quickCheckReady.emit((time.time(), key, detail))
 
     def _diagnosis_host(self, config: Config) -> str:
         """Diagnose the path to whatever is being watched right now."""

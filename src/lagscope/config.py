@@ -199,6 +199,19 @@ class HistoryConfig:
     enabled: bool = True
     keep_hours: int = 48
     bucket_s: int = 60
+    # When something breaks, find out why without being asked: a cut-down path
+    # check runs in the background and its verdict is filed against that minute.
+    auto_check: bool = True
+    auto_check_cooldown_s: int = 600
+
+
+@dataclass
+class UpdateConfig:
+    """Checking whether a newer release exists. One request, nothing sent."""
+
+    enabled: bool = True
+    last_checked: float = 0.0     # unix time of the last successful check
+    skip_version: str = ""        # "remind me about anything newer than this"
 
 
 @dataclass
@@ -225,6 +238,8 @@ class Config:
     # "Is my game laggy, or is the whole line?" needs more than one number.
     watch_extras: list = field(default_factory=list)
     notify_enabled: bool = True     # tray balloon when a stall or spike happens
+    # False until the setup wizard has been through once, on a fresh install.
+    setup_done: bool = False
     sample_window: int = 180
     autostart: bool = False
     overlay: OverlayConfig = field(default_factory=OverlayConfig)
@@ -233,6 +248,7 @@ class Config:
     display: DisplayConfig = field(default_factory=DisplayConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     history: HistoryConfig = field(default_factory=HistoryConfig)
+    updates: UpdateConfig = field(default_factory=UpdateConfig)
     thresholds: ThresholdConfig = field(default_factory=ThresholdConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
     web: WebConfig = field(default_factory=WebConfig)
@@ -308,6 +324,10 @@ class Config:
         self.detect.bridge_timeout_s = int(_clamp(self.detect.bridge_timeout_s, 10, 3600))
         self.history.keep_hours = int(_clamp(self.history.keep_hours, 1, 720))
         self.history.bucket_s = int(_clamp(self.history.bucket_s, 15, 3600))
+        self.history.auto_check_cooldown_s = int(
+            _clamp(self.history.auto_check_cooldown_s, 60, 86_400))
+        self.updates.skip_version = str(self.updates.skip_version or "").strip()[:32]
+        self.updates.last_checked = float(_clamp(self.updates.last_checked, 0, 4e10))
         self.web.port = int(_clamp(self.web.port, 1024, 65535))
         self.web.access_code = "".join(
             ch for ch in str(self.web.access_code or "") if ch.isalnum()
@@ -407,6 +427,7 @@ _NESTED = {
     "display": DisplayConfig,
     "recording": RecordingConfig,
     "history": HistoryConfig,
+    "updates": UpdateConfig,
     "thresholds": ThresholdConfig,
     "detect": DetectConfig,
     "web": WebConfig,

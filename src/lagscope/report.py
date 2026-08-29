@@ -257,6 +257,16 @@ def worst_hour_line(worst: Optional[dict]) -> str:
     )
 
 
+def finding_rows(findings: Sequence) -> List[tuple]:
+    """(when, what was blamed) for each unattended check, newest first."""
+    rows = []
+    for entry in findings or ():
+        when = time.strftime("%m-%d %H:%M", time.localtime(entry.get("start", 0)))
+        events = (entry.get("stalls", 0) or 0) + (entry.get("spikes", 0) or 0)
+        rows.append((when, tr(entry.get("verdict", "")), events))
+    return rows
+
+
 def segment_rows(path_report) -> List[tuple]:
     """The three path segments as (label, value) pairs, or [] without a check."""
     if path_report is None:
@@ -277,12 +287,15 @@ def segment_rows(path_report) -> List[tuple]:
                 f"{format_ms(stats.avg_ms)}   {tr('diag.loss')} {stats.loss_pct:.0f}%",
                 stats.host,
             ))
+    if path_report.dns_ms is not None:
+        rows.append((tr("diag.dns"), format_ms(path_report.dns_ms), ""))
     return rows
 
 
 def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60.0,
                worst: Optional[dict] = None, path_report=None, verdict_key: str = "",
                verdict_detail: str = "", extras: Sequence = (), target_label: str = "",
+               auto_findings: Sequence = (),
                good_ms: Optional[float] = None, warn_ms: Optional[float] = None) -> str:
     """The whole report as one HTML document with nothing external in it."""
     esc = html.escape
@@ -378,6 +391,16 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
             detail = f"  [{verdict_detail}]" if verdict_detail else ""
             body.append(f'<div class="verdict">{esc(tr(verdict_key) + detail)}</div>')
 
+    findings = finding_rows(auto_findings)
+    if findings:
+        rows = "".join(
+            f'<tr><td class="n">{esc(when)}</td><td>{esc(what)}</td>'
+            f'<td class="n">{esc(str(events) if events else "")}</td></tr>'
+            for when, what, events in findings
+        )
+        body.append(f"<h2>{esc(tr('report.findings'))}</h2>")
+        body.append(f'<div class="card"><table>{rows}</table></div>')
+
     live_extras = [entry for entry in extras if entry is not None]
     if live_extras:
         rows = "".join(
@@ -400,7 +423,7 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
 
 def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
                verdict_key: str = "", verdict_detail: str = "",
-               target_label: str = "") -> str:
+               target_label: str = "", auto_findings: Sequence = ()) -> str:
     """The same findings as something you can paste into a forum reply."""
     hours = summary.get("hours")
     window = tr("report.hours", n=int(hours)) if hours else tr("report.all")
@@ -427,6 +450,13 @@ def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
         for seg_label, value, host in segments:
             suffix = f"  ({host})" if host else ""
             lines.append(f"  {_pad(seg_label, seg_width)}  {value}{suffix}")
+    findings = finding_rows(auto_findings)
+    if findings:
+        lines.append("")
+        lines.append(f"{tr('report.findings')}:")
+        for when, what, _events in findings:
+            lines.append(f"  {when}  {what}")
+
     if verdict_key:
         lines.append("")
         lines.append(f"=> {tr(verdict_key)}" + (f"  [{verdict_detail}]" if verdict_detail else ""))

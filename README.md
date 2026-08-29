@@ -9,7 +9,13 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
+
+<img src="docs/images/overlay-demo.gif" width="260" alt="懸浮窗即時變化">
+
+<em>延遲上去時數字和折線一起變色；右邊掛著的路由器和 DNS 還是綠的，一眼就知道問題不在你家。</em>
+
+<br>
 
 <img src="docs/images/overlay-app.png" width="232" alt="任意應用模式懸浮窗">
 <img src="docs/images/overlay-dark.png" width="232" alt="直播模式懸浮窗">
@@ -38,6 +44,8 @@
 - **歷史走勢圖**：每分鐘存一行摘要，關掉程式也不會丟。回頭就看得出「昨晚九點特別卡」
   （見[歷史與報告](#-歷史走勢與一鍵體檢報告)）。
 - **一鍵體檢報告**：走勢圖＋分段診斷輸出成一個自包含的 HTML 檔，可以直接寄給客服或貼到論壇。
+- **卡頓時自動查原因**：探測失敗或延遲突增時，背景自動跑一次精簡診斷，把結論記在那一分鐘上——
+  事後看得到「昨晚 9 點是 Wi-Fi 的問題」，而不只是「那時候卡過」。
 - **卡頓與延遲突增偵測**：探測失敗或延遲跳到平常的兩倍以上就記一次事件，
   可選擇彈出提示（有冷卻時間，不會一直吵）。
 
@@ -78,12 +86,20 @@
 ### 方式一：下載現成的執行檔（最簡單，Windows 推薦）
 
 1. 打開 [Releases](https://github.com/cxu4425-beep/LagScope/releases) 頁面。
-2. 下載對應系統的壓縮檔：
-   - Windows：`LagScope-windows-x64.zip`
+2. 下載對應系統的檔案：
+   - **Windows（推薦）**：`LagScope-setup.exe` —— 安裝程式，雙擊下一步就好，
+     會建立開始功能表捷徑、可選開機自動啟動，解除安裝也乾淨。
+     **不需要系統管理員權限**（裝在你自己的使用者資料夾裡），所以公司或學校的電腦也能裝。
+   - Windows（免安裝）：`LagScope-windows-x64.zip` —— 解壓縮就能跑，適合放隨身碟。
    - macOS：`LagScope-macos-arm64.zip`
    - Linux：`LagScope-linux-x64.tar.gz`
-3. 解壓縮後直接執行 `LagScope`（Windows 是 `LagScope.exe`）。
+3. 壓縮檔版本解壓縮後直接執行 `LagScope`（Windows 是 `LagScope.exe`）。
    免安裝、不寫登錄檔（除非你自己勾選「開機自動啟動」）。
+
+第一次開啟會有一個**三個問題的設定精靈**（要監測什麼／懸浮窗放哪／要不要檢查更新），
+回答完就開始跑，其它設定都有合理預設值。
+
+<div align="center"><img src="docs/images/wizard.png" width="460" alt="初次設定精靈"></div>
 
 > Windows SmartScreen 可能提示「未知發行者」——這是沒有付費程式碼簽章憑證的開源程式的正常現象，
 > 點「其他資訊 → 仍要執行」即可。不放心的話請用方式二／方式三自行打包。
@@ -276,6 +292,7 @@ Minecraft（`javaw.exe`）、OBS 推流、任何下載工具……
 你 → 路由器:      38 ms   丟包 0%   (192.168.1.1)
 路由器 → 電信商:  44 ms   丟包 0%   (100.64.0.1)
 → 目標伺服器:     71 ms   丟包 0%   (8.8.8.8)
+網域解析:         18 ms
 Wi-Fi: 家裡的路由器  41%  802.11n
 
 延遲主要卡在你和路由器之間，而且 Wi-Fi 訊號偏弱——靠近路由器或改用網線會明顯改善。
@@ -293,6 +310,10 @@ Wi-Fi: 家裡的路由器  41%  802.11n
 | **電信商** | 你家正常，出門那一段開始變慢 | 你改不了——拿這份報告去問客服 |
 | **伺服器** | 你的線路正常，是伺服器太遠 | 換伺服器／節點最有效 |
 | **丟包** | 有封包遺失 | 比延遲更傷遊戲和通話，優先處理 |
+| **DNS** | 線路正常，但網域解析很慢 | 換成 8.8.8.8 或 1.1.1.1 常常立刻見效 |
+
+> **網域解析（DNS）也會量**：這是最常被漏掉的一段——每個 ping 都正常、網頁就是慢半拍，
+> 通常就是它。位址型目標（像 `8.8.8.8`）不需要解析，會顯示 0。
 
 **技術上**：全部用系統內建工具（`ping`、`tracert`/`traceroute`、`netsh`/`iw`），
 不需要管理員權限、不用 raw socket。統計值是從**每一筆回應**自己算的，不解析會被翻譯的摘要行，
@@ -315,10 +336,24 @@ Wi-Fi: 家裡的路由器  41%  802.11n
 - 儲存的是**每分鐘一行摘要**（均值／最好／最差／P95／抖動／丟失／事件數），不是每一筆樣本，
   所以一天約 130 KB、48 小時約 260 KB，預設保留 48 小時（可在設定→高級改，或整個關掉）。
 
+**卡頓時自動查原因**（設定 → 高級可關）
+
+底部的紅色小豎線告訴你「這時候卡過」，但不會告訴你為什麼——除非當時有人在電腦前按下體檢。
+所以現在只要偵測到卡頓或延遲突增，就會在背景自動跑一次**精簡版分段診斷**（3 個 ping、約 2 秒、
+不跑 traceroute，不會加重當下的網路負擔），把結論記在那一分鐘上。事後打開報告會多一段：
+
+```
+卡頓時發生了什麼
+  08-28 21:14   延遲主要卡在你和路由器之間，而且 Wi-Fi 訊號偏弱……
+  08-28 23:02   你家網路正常，延遲是從電信商那一段開始變大的……
+```
+
+同一個問題最多每 10 分鐘查一次，所以整晚不穩也不會變成幾百次 ping。
+
 **體檢報告**（托盤選單 → **匯出體檢報告…**，或歷史視窗右下角）
 
 按下去會產生一個 HTML 檔並自動用瀏覽器打開，裡面有：總覽數字、走勢圖、最不穩定的時段、
-分段診斷結論、其他監測目標。
+上面那份「卡頓時發生了什麼」、分段診斷結論、其他監測目標。
 
 - **完全自包含**：圖是內嵌 SVG，樣式是內嵌 CSS，沒有任何外部檔案、沒有 JavaScript。
   可以直接當附件寄出去，離線三週後打開一樣正常。
@@ -538,6 +573,8 @@ lagscope --history                    # 把最近 24 小時的歷史摘要印成
 | 綠色 / 黃色門檻 | 顏色變化的門檻，預設 2000 / 5000 ms |
 | 記錄到 CSV | 把每一筆樣本寫進 `logs/latency.csv`（自動輪替，保留 3 份） |
 | 保存延遲歷史 | 每分鐘一行摘要，走勢圖和體檢報告的資料來源；可改保留時長（預設 48 小時） |
+| 卡頓時自動查原因 | 偵測到卡頓／突增時背景跑一次精簡診斷，把結論記進歷史（最多 10 分鐘一次） |
+| 有新版本時提醒我 | 每天最多一次向 GitHub 查最新版本號；不上傳任何資訊，也不會自動下載 |
 
 歷史記錄可以在**高級**分頁關掉或改保留時長；關掉之後走勢圖和報告就沒有資料可畫，
 但即時監測完全不受影響。
@@ -552,6 +589,26 @@ lagscope --history                    # 把最近 24 小時的歷史摘要印成
 
 日誌與 CSV 在同目錄的 `logs/` 底下。選單的「打開配置目錄」會直接幫你開啟。
 用 `--config-dir` 可以指定到 USB 隨身碟，做成攜帶式版本。
+
+---
+
+## 🔄 更新與隱私
+
+**更新提醒**：預設每天最多一次，向 GitHub 查詢「最新的版本號是多少」——就是讀一個公開頁面。
+**不會上傳任何資訊、不含任何識別碼、不會自動下載或安裝**，發現新版只是跳一個提示問你要不要去下載。
+可以在初次設定精靈或「設定 → 高級 → 更新」關掉，也可以對某個版本按「跳過這個版本」。
+托盤選單的「檢查更新…」則是手動查一次。
+
+**這個程式總共會連的地方**（除此之外沒有了）：
+
+| 連到哪裡 | 什麼時候 | 為什麼 |
+| --- | --- | --- |
+| 你正在監測的對象 | 每次探測 | 就是要量它的延遲 |
+| B 站公開 API | 只在監測 B 站直播／影片時 | 取播放位址和房間資訊（免登入、不帶 Cookie） |
+| 你的路由器／第一跳／目標 | 按下體檢，或卡頓時自動查 | 分段診斷（系統內建 ping） |
+| GitHub Releases | 每天最多一次，可關 | 查最新版本號 |
+
+沒有統計、沒有回報、沒有帳號、沒有 Cookie。
 
 ---
 
@@ -718,6 +775,9 @@ measures server → client → screen.
 - **History and a report**: one summary row per minute is kept on disk, so the chart shows
   the evening that went wrong days later - and exports as a self-contained HTML report
   (see [History and report](#history-and-report)).
+- **Finds out why, unattended**: when a probe fails or latency jumps, a cut-down path check
+  runs in the background and its verdict is filed against that minute - so afterwards you
+  know last night was the Wi-Fi, not just that it was bad.
 
 **Which apps are supported?** There is no whitelist - anything that opens a network
 connection works, because the monitor reads the system connection table rather than
@@ -772,11 +832,22 @@ them never slows the main figure down. Quick-add buttons fill in your router and
 
 ### Network check: which segment is to blame
 
-`lagscope --diagnose` (or the tray menu) splits the path into **you → router → ISP → server**,
+`lagscope --diagnose` (or the tray menu) splits the path into **you → router → ISP → server**
+(plus how long a name lookup takes, the segment most often missed when every ping looks fine),
 measures each segment's latency and packet loss, reads the Wi-Fi signal, and names the culprit:
 your Wi-Fi, your home network, your provider, the distance to the server, or packet loss. It uses
 only the tools that ship with the OS - no admin rights, no raw sockets - and computes its
 statistics from the individual replies, so it reads the same in any system language.
+
+### Updates and what it connects to
+
+Once a day at most, LagScope asks GitHub what the newest version number is - one public page,
+no identifier, nothing uploaded, and nothing downloaded or installed automatically. The setup
+wizard asks before it ever runs, and it can be turned off in Settings.
+
+That is the entire list of things it talks to: whatever you are measuring, Bilibili's public
+API (only in Bilibili mode, no login and no cookies), your own router and first hop during a
+path check, and the releases page. No analytics, no accounts, no telemetry.
 
 ### History and report
 
@@ -843,8 +914,16 @@ Tampermonkey and tick "Accept userscript reports".
 
 ### Install
 
-Download a build from [Releases](https://github.com/cxu4425-beep/LagScope/releases)
-(`.exe` for Windows, `.app` for macOS, a binary for Linux) — no installation needed.
+From [Releases](https://github.com/cxu4425-beep/LagScope/releases):
+
+- **Windows**: `LagScope-setup.exe` is an installer that needs no administrator rights (it
+  goes in your own profile, so a work or school machine is fine), adds a Start menu entry and
+  an optional autostart, and uninstalls cleanly. `LagScope-windows-x64.zip` is the same
+  program with nothing to install, for a USB stick.
+- **macOS**: `LagScope-macos-arm64.zip` · **Linux**: `LagScope-linux-x64.tar.gz`
+
+A first run asks three questions - what to watch, where the overlay goes, and whether it may
+check for updates - and everything else has a default.
 
 From source (Python 3.9+):
 

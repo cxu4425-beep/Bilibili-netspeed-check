@@ -17,11 +17,14 @@ in English, Chinese or anything else.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
+import socket
 import statistics
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -41,6 +44,9 @@ GATEWAY_BAD_MS = 40.0
 LOSS_WARN_PCT = 2.0
 LOSS_BAD_PCT = 8.0
 WIFI_WEAK_PCT = 55
+# Name resolution above this is felt as "the internet is slow" even when every
+# ping is fine: nothing starts until the name is answered.
+DNS_SLOW_MS = 300.0
 
 
 @dataclass(frozen=True)
@@ -88,6 +94,7 @@ class PathReport:
     hop_host: Optional[str] = None          # first hop beyond the router
     hop_stats: Optional[PingStats] = None
     target_stats: Optional[PingStats] = None
+    dns_ms: Optional[float] = None          # how long the name took to resolve
     wifi: Optional[WifiInfo] = None
     notes: list = field(default_factory=list)
 
@@ -105,6 +112,7 @@ class PathReport:
         return {
             "target": self.target,
             "gateway": self.gateway,
+            "dns_ms": self.dns_ms,
             "segments": {
                 "you_to_router": stats(self.gateway_stats),
                 "router_to_isp": stats(self.hop_stats),
@@ -178,6 +186,36 @@ def ping_stats(host: str, count: int = 5, timeout_s: float = 1.0) -> PingStats:
         avg_ms=statistics.fmean(times), min_ms=min(times), max_ms=max(times),
         jitter_ms=jitter,
     )
+
+
+# ---------------------------------------------------------------------- DNS
+def dns_ms(host: str, timeout_s: float = 3.0) -> Optional[float]:
+    """How long this machine takes to turn a name into an address.
+
+    A slow resolver is one of the most common causes of "everything feels
+    slow" while every ping looks healthy - nothing can start until the name
+    comes back. An address that needs no lookup returns 0.0, and a name that
+    cannot be resolved returns ``None``.
+    """
+    host = (host or "").strip()
+    if not host:
+        return None
+    try:
+        ipaddress.ip_address(host)
+        return 0.0                       # already an address: nothing to resolve
+    except ValueError:
+        pass
+
+    previous = socket.getdefaulttimeout()
+    started = time.perf_counter()
+    try:
+        socket.setdefaulttimeout(timeout_s)
+        socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except (OSError, UnicodeError):
+        return None
+    finally:
+        socket.setdefaulttimeout(previous)
+    return (time.perf_counter() - started) * 1000.0
 
 
 # ------------------------------------------------------------------ gateway
@@ -387,6 +425,11 @@ def verdict(report: PathReport) -> tuple:
         if (hop.avg_ms or 0.0) - (gateway.avg_ms or 0.0) >= 60.0:
             return "verdict.isp", f"{hop.avg_ms:.0f} ms @ {hop.host}"
 
+    if report.dns_ms is not None and report.dns_ms >= DNS_SLOW_MS:
+        # Checked after the segments above: a broken path explains a slow
+        # lookup, not the other way round.
+        return "verdict.dns", f"{report.dns_ms:.0f} ms"
+
     if target is not None and target.ok:
         loss = target.loss_pct or 0.0
         if loss >= LOSS_WARN_PCT:
@@ -413,5 +456,6 @@ def analyse(target: str, count: int = 5, timeout_s: float = 1.0,
             report.hop_stats = ping_stats(hop[0], count, timeout_s)
     if target:
         report.target_stats = ping_stats(target, count, timeout_s)
+        report.dns_ms = dns_ms(target, timeout_s=max(1.0, timeout_s * 3))
     report.wifi = wifi_info()
     return report

@@ -84,6 +84,7 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "diag.to_target": ("→ 目标服务器", "→ 目標伺服器", "→ target server"),
     "diag.wifi": ("Wi-Fi", "Wi-Fi", "Wi-Fi"),
     "diag.loss": ("丢包", "丟包", "loss"),
+    "diag.dns": ("域名解析", "網域解析", "Name lookup"),
     "diag.no_gateway": ("找不到默认网关", "找不到預設閘道", "No default gateway found"),
     "diag.gateway_silent": (
         "路由器不回应 ping（很多路由器默认如此，不代表有问题）",
@@ -133,6 +134,14 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "這台電腦上找不到可用的 ping 指令，無法做分段診斷（其它功能不受影響）。",
         "No usable ping command on this machine, so the path cannot be split up "
         "(everything else still works).",
+    ),
+    "verdict.dns": (
+        "线路本身正常，但域名解析很慢——网页和游戏都要等它才开始。"
+        "把 DNS 改成 8.8.8.8 或 223.5.5.5 通常立刻见效。",
+        "線路本身正常，但網域解析很慢——網頁和遊戲都要等它才開始。"
+        "把 DNS 改成 8.8.8.8 或 1.1.1.1 通常立刻見效。",
+        "The line itself is fine, but name lookups are slow - nothing starts until they "
+        "come back. Switching your DNS to 8.8.8.8 or 1.1.1.1 usually fixes it immediately.",
     ),
     "verdict.unknown": ("资料不足，无法判断", "資料不足，無法判斷", "Not enough data to tell"),
 
@@ -491,6 +500,106 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "report.saved": ("报告已保存到：", "報告已儲存到：", "Report saved to:"),
     "report.copied": ("摘要已复制到剪贴板", "摘要已複製到剪貼簿", "Summary copied to the clipboard"),
     "report.failed": ("无法写入报告文件", "無法寫入報告檔案", "Could not write the report file"),
+    "report.findings": ("卡顿时发生了什么", "卡頓時發生了什麼", "What happened when it broke"),
+    "report.auto_check": ("自动检查", "自動檢查", "checked automatically"),
+
+    # ------------------------------------------------------------- setup wizard
+    "wizard.title": ("初次设置", "初次設定", "Setup"),
+    "wizard.welcome": ("欢迎使用 {app}", "歡迎使用 {app}", "Welcome to {app}"),
+    "wizard.blurb": (
+        "回答三个问题就能开始，其它都有合理的默认值，之后随时可以在设置里改。",
+        "回答三個問題就能開始，其它都有合理的預設值，之後隨時可以在設定裡改。",
+        "Three questions and you are running. Everything else has a sensible default "
+        "and can be changed later in Settings.",
+    ),
+    "wizard.watch": ("① 要监测什么？", "① 要監測什麼？", "1. What should it watch?"),
+    "wizard.watch.auto": (
+        "我在看的 B 站直播／视频（自动跟随）",
+        "我在看的 B 站直播／影片（自動跟隨）",
+        "The Bilibili live room or video I am watching (follows me)",
+    ),
+    "wizard.watch.app": (
+        "某个程序（游戏、语音、浏览器…）", "某個程式（遊戲、語音、瀏覽器…）",
+        "A program - a game, a voice app, a browser",
+    ),
+    "wizard.watch.target": (
+        "某个服务器地址", "某個伺服器位址", "A server address",
+    ),
+    "wizard.watch.network": (
+        "先只看整体网络就好", "先只看整體網路就好", "Just my connection in general, for now",
+    ),
+    "wizard.detail.app": ("程序名称", "程式名稱", "Program"),
+    "wizard.detail.target": ("地址", "位址", "Address"),
+    "wizard.hint.auto": (
+        "浏览器和官方 PC 客户端都支持，换直播间会自己切过去。",
+        "瀏覽器和官方 PC 用戶端都支援，換直播間會自己切過去。",
+        "Works with the browser and the official desktop client, and follows you when "
+        "you switch rooms.",
+    ),
+    "wizard.hint.app": (
+        "留空＝自动跟随你当前使用的程序。之后在设置里可以从列表挑。",
+        "留空＝自動跟隨你目前使用的程式。之後在設定裡可以從清單挑。",
+        "Leave it empty to follow whichever program is in front. You can pick from a "
+        "list later in Settings.",
+    ),
+    "wizard.hint.target": (
+        "例如 8.8.8.8、游戏服务器、公司 VPN。",
+        "例如 8.8.8.8、遊戲伺服器、公司 VPN。",
+        "For example 8.8.8.8, a game server, or a VPN gateway.",
+    ),
+    "wizard.place": ("② 悬浮窗放哪里？", "② 懸浮視窗放哪裡？", "2. Where should the overlay sit?"),
+    "wizard.place.free": (
+        "自由拖动（我自己放）", "自由拖曳（我自己放）", "Wherever I drag it",
+    ),
+    "wizard.updates": ("③ 检查更新？", "③ 檢查更新？", "3. Check for updates?"),
+    "wizard.footer": (
+        "版本 {version}　·　不需要登录，不收集任何使用数据。",
+        "版本 {version}　·　不需要登入，不收集任何使用資料。",
+        "Version {version} · No login, and no usage data is collected.",
+    ),
+    "wizard.start": ("开始使用", "開始使用", "Start"),
+
+    # ----------------------------------------------------------------- updates
+    "update.enabled": (
+        "有新版本时提醒我", "有新版本時提醒我", "Tell me when a new version is out",
+    ),
+    "update.hint": (
+        "每天最多向 GitHub 查询一次「最新版本号是多少」，只读取一个公开页面："
+        "不上传任何信息、不含标识符，也不会自动下载或安装。关掉也完全不影响使用。",
+        "每天最多向 GitHub 查詢一次「最新版本號是多少」，只讀取一個公開頁面："
+        "不上傳任何資訊、不含識別碼，也不會自動下載或安裝。關掉也完全不影響使用。",
+        "At most once a day it asks GitHub what the newest version number is - one public "
+        "page, no identifier, nothing uploaded, and nothing downloaded or installed "
+        "automatically. Turning it off changes nothing else.",
+    ),
+    "update.available": (
+        "有新版本 {version}（你在用 {current}）", "有新版本 {version}（你在用 {current}）",
+        "Version {version} is out (you have {current})",
+    ),
+    "update.open": ("去下载", "去下載", "Open the page"),
+    "update.skip": ("跳过这个版本", "跳過這個版本", "Skip this version"),
+    "update.later": ("以后再说", "以後再說", "Later"),
+    "update.none": ("已经是最新版本", "已經是最新版本", "You are on the newest version"),
+    "update.failed": (
+        "查不到版本信息（可能没联网）", "查不到版本資訊（可能沒連網）",
+        "Could not reach the release page (offline?)",
+    ),
+    "menu.check_update": ("检查更新…", "檢查更新…", "Check for updates…"),
+    "update.group": ("更新", "更新", "Updates"),
+
+    # ------------------------------------------------------ automatic checking
+    "history.auto_check": (
+        "卡顿时自动查一次原因", "卡頓時自動查一次原因", "Find out why when it stalls",
+    ),
+    "history.auto_check_hint": (
+        "探测失败或延迟突增时，在后台跑一次精简版分段诊断（3 个 ping，约 2 秒），"
+        "把结论记在那一分钟上——事后就知道「昨晚 9 点是 Wi-Fi 的问题」而不只是「卡过」。",
+        "偵測失敗或延遲突增時，在背景跑一次精簡版分段診斷（3 個 ping，約 2 秒），"
+        "把結論記在那一分鐘上——事後就知道「昨晚 9 點是 Wi-Fi 的問題」而不只是「卡過」。",
+        "When a probe fails or latency jumps, a cut-down path check (three pings, about two "
+        "seconds) runs in the background and its verdict is filed against that minute - so "
+        "afterwards you know last night was the Wi-Fi, not just that it was bad.",
+    ),
 }
 
 

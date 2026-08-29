@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import threading
+import time
 from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, QTimer, QUrl, Qt, Signal, Slot
@@ -15,7 +17,7 @@ from . import APP_NAME, REPO_URL, __version__
 from .autostart import get_autostart, is_supported as autostart_supported, set_autostart
 from .config import Config, app_config_dir
 from .i18n import set_language, tr
-from .events import SPIKE, STALL, EventLog, Notifier
+from .events import STALL, EventLog, Notifier
 from .history import History
 from .models import (
     KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO, LatencySample, RollingStats,
@@ -30,12 +32,14 @@ from .report import (
     build_html, build_text, default_report_path, write_report,
 )
 from .single_instance import SingleInstance
+from .update import UpdateInfo, check as check_for_update
 from .web import DashboardServer
 from .ui.icons import app_icon
 from .ui.theme import format_mbps, format_ms, level_for
 from .ui.overlay import OverlayWindow
 from .ui.history_window import HistoryWindow
 from .ui.settings import SettingsDialog
+from .ui.wizard import SetupWizard
 from .ui.tray import TrayIcon
 
 LOG = logging.getLogger(__name__)
@@ -69,6 +73,8 @@ class MonitorApplication(QObject):
     stopRequested = Signal()
     clipboardText = Signal(str)
     diagnosisRequested = Signal()
+    quickCheckRequested = Signal()
+    updateFound = Signal(object)      # UpdateInfo, from the checker thread
 
     def __init__(self, app: QApplication, config: Config,
                  instance: Optional[SingleInstance] = None) -> None:
@@ -95,6 +101,10 @@ class MonitorApplication(QObject):
         self._history_window: Optional[HistoryWindow] = None
         # Kept so an exported report carries the last check, not a blank section.
         self._last_diagnosis: Optional[tuple] = None
+        self._last_auto_check = 0.0
+        self._update_available: Optional[UpdateInfo] = None
+        self._update_manual = False
+        self._update_announced = False
 
         self._overlay = OverlayWindow(self._config, self._display)
         self._overlay.positionChanged.connect(self._on_overlay_moved)
@@ -135,6 +145,8 @@ class MonitorApplication(QObject):
         self.stopRequested.connect(self._worker.stop)
         self.clipboardText.connect(self._worker.submitClipboard)
         self.diagnosisRequested.connect(self._worker.runDiagnosis)
+        self.quickCheckRequested.connect(self._worker.runQuickCheck)
+        self._worker.quickCheckReady.connect(self._on_quick_check)
         self._worker.diagnosisReady.connect(self._on_diagnosis)
         self._worker.extraUpdated.connect(self._on_extra)
 
@@ -160,6 +172,23 @@ class MonitorApplication(QObject):
             self._overlay.show()
         self._update_status_text()
         self._thread.start()
+        self.updateFound.connect(self._on_update_found)
+        self._start_update_check()
+
+    def run_setup_if_needed(self) -> bool:
+        """Ask the three first-run questions. True when the wizard ran."""
+        if self._config.setup_done:
+            return False
+        wizard = SetupWizard(copy.deepcopy(self._config))
+        wizard.exec()
+        # Closing it with the window button still counts as answered: the
+        # defaults it was showing are the ones that get saved.
+        self.apply_config(wizard.apply_to(copy.deepcopy(self._config)))
+        set_language(self._config.language)
+        self._build_menu()
+        if self._tray is not None:
+            self._tray.set_menu(self._menu)
+        return True
 
     def instance_guard(self) -> SingleInstance:
         return self._instance
@@ -247,6 +276,15 @@ class MonitorApplication(QObject):
         folder_action = QAction(tr("menu.open_config"), self._menu)
         folder_action.triggered.connect(self._open_config_folder)
         self._menu.addAction(folder_action)
+
+        if self._update_available is not None:
+            label = tr("update.available", version=self._update_available.version,
+                       current=__version__)
+        else:
+            label = tr("menu.check_update")
+        update_action = QAction(label, self._menu)
+        update_action.triggered.connect(self._check_updates_now)
+        self._menu.addAction(update_action)
 
         about_action = QAction(tr("menu.about"), self._menu)
         about_action.triggered.connect(self._show_about)
@@ -382,6 +420,8 @@ class MonitorApplication(QObject):
                     f"{label}:  {format_ms(stats.avg_ms)}   "
                     f"{tr('diag.loss')} {stats.loss_pct:.0f}%   ({stats.host})"
                 )
+        if report.dns_ms is not None:
+            lines.append(f"{tr('diag.dns')}:  {format_ms(report.dns_ms)}")
         if report.wifi is not None:
             wifi = report.wifi
             signal = f"{wifi.signal_pct}%" if wifi.signal_pct is not None else "--"
@@ -421,6 +461,7 @@ class MonitorApplication(QObject):
             "verdict_key": verdict_key,
             "verdict_detail": verdict_detail,
             "extras": self._ordered_extras(),
+            "auto_findings": self._history.findings(hours),
             "target_label": self._room_title or self._watch_label(),
             "good_ms": self._config.thresholds.good_ms,
             "warn_ms": self._config.thresholds.warn_ms,
@@ -455,6 +496,7 @@ class MonitorApplication(QObject):
             summary=context["summary"], worst=context["worst"],
             path_report=context["path_report"], verdict_key=context["verdict_key"],
             verdict_detail=context["verdict_detail"], target_label=context["target_label"],
+            auto_findings=context["auto_findings"],
         ))
         if self._tray is not None:
             self._tray.showMessage(tr("report.title"), tr("report.copied"), app_icon(), 4000)
@@ -462,6 +504,102 @@ class MonitorApplication(QObject):
     def _flush_history(self) -> None:
         if self._config.history.enabled:
             self._history.flush()
+
+    # ------------------------------------------------------------- updates
+    def _start_update_check(self, manual: bool = False) -> None:
+        """Ask GitHub for the newest tag, off the GUI thread.
+
+        A plain thread rather than the worker: it must not sit in front of a
+        measurement, and it has nothing to do with monitoring.
+        """
+        if not manual and not self._config.updates.enabled:
+            return
+        config = self._config.updates
+        last_checked = 0.0 if manual else config.last_checked
+        skip = "" if manual else config.skip_version
+
+        def run() -> None:
+            found = check_for_update(__version__, last_checked, skip)
+            # Emitted either way: a manual check has to say "you are up to date".
+            self.updateFound.emit(found if found is not None else (None if not manual else False))
+
+        threading.Thread(target=run, name="lagscope-update", daemon=True).start()
+
+    @Slot(object)
+    def _on_update_found(self, found) -> None:
+        if found is None:
+            return
+        self._config.updates.last_checked = time.time()
+        self._schedule_save()
+        if found is False:                     # a manual check that found nothing
+            QMessageBox.information(None, tr("update.group"), tr("update.none"))
+            return
+        if not isinstance(found, UpdateInfo):
+            return
+        self._update_available = found
+        self._build_menu()
+        if self._tray is not None:
+            self._tray.set_menu(self._menu)
+        if self._update_manual:
+            self._update_manual = False
+            self._offer_update(found)
+        elif self._tray is not None and not self._update_announced:
+            # Never a modal dialog on its own initiative: this app runs behind
+            # fullscreen games. A balloon, and a menu entry that stays put.
+            self._update_announced = True
+            self._tray.showMessage(
+                tr("update.group"),
+                tr("update.available", version=found.version, current=__version__),
+                app_icon(), 8000,
+            )
+
+    def _offer_update(self, found: UpdateInfo) -> None:
+        """The dialog with the three choices - only when it was asked for."""
+        box = QMessageBox(QMessageBox.Information, tr("update.group"),
+                          tr("update.available", version=found.version, current=__version__))
+        open_button = box.addButton(tr("update.open"), QMessageBox.AcceptRole)
+        skip_button = box.addButton(tr("update.skip"), QMessageBox.DestructiveRole)
+        box.addButton(tr("update.later"), QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is open_button:
+            QDesktopServices.openUrl(QUrl(found.url))
+        elif box.clickedButton() is skip_button:
+            self._config.updates.skip_version = found.version
+            self._update_available = None
+            self._build_menu()
+            if self._tray is not None:
+                self._tray.set_menu(self._menu)
+            self._schedule_save()
+
+    def _check_updates_now(self) -> None:
+        """The tray menu asked, so an answer either way is expected."""
+        if self._update_available is not None:
+            self._offer_update(self._update_available)
+            return
+        self._update_manual = True
+        self._start_update_check(manual=True)
+
+    # ------------------------------------------------- automatic path checks
+    @Slot(object)
+    def _on_quick_check(self, payload) -> None:
+        """File what the unattended check blamed against the minute it ran in."""
+        if not payload or not self._config.history.enabled:
+            return
+        ts, key, detail = payload
+        self._history.note_verdict(key, detail, ts)
+        if self._history_window is not None and self._history_window.isVisible():
+            self._history_window.refresh()
+
+    def _maybe_auto_check(self) -> None:
+        """Run one background check per cooldown, when something breaks."""
+        history = self._config.history
+        if not (history.enabled and history.auto_check):
+            return
+        now = time.monotonic()
+        if self._last_auto_check and now - self._last_auto_check < history.auto_check_cooldown_s:
+            return
+        self._last_auto_check = now
+        self.quickCheckRequested.emit()
 
     def _show_phone_url(self) -> None:
         """Show (and copy) the address to type into a phone browser."""
@@ -731,6 +869,9 @@ class MonitorApplication(QObject):
 
     def _announce(self, event) -> None:
         """One tray balloon per problem, never one per sample."""
+        # Whether or not it is worth interrupting the user, it is worth finding
+        # out why while the problem is still happening.
+        self._maybe_auto_check()
         if self._tray is None or not self._config.notify_enabled:
             return
         if not self._notifier.should_notify():

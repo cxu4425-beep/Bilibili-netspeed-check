@@ -36,6 +36,7 @@ from lagscope.ui.icons import value_pixmap  # noqa: E402
 from lagscope.ui.history_window import HistoryWindow  # noqa: E402
 from lagscope.ui.overlay import OverlayWindow  # noqa: E402
 from lagscope.ui.settings import SettingsDialog  # noqa: E402
+from lagscope.ui.wizard import SetupWizard  # noqa: E402
 
 OUT = ROOT / "docs" / "images"
 
@@ -184,6 +185,12 @@ def main() -> int:
     QApplication.processEvents()
     window.grab().save(str(OUT / "history.png"), "PNG")
     window.close()
+
+    wizard = SetupWizard(Config())
+    wizard.show()
+    QApplication.processEvents()
+    wizard.grab().save(str(OUT / "wizard.png"), "PNG")
+    wizard.close()
 
     dialog = SettingsDialog(Config())
     dialog.room_edit.setText("https://live.bilibili.com/21452505")

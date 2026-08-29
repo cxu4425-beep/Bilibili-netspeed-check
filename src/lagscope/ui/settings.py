@@ -354,7 +354,9 @@ class SettingsDialog(QDialog):
         return box
 
     def _sync_history_state(self) -> None:
-        self.history_keep_spin.setEnabled(self.history_check.isChecked())
+        enabled = self.history_check.isChecked()
+        self.history_keep_spin.setEnabled(enabled)
+        self.auto_check_check.setEnabled(enabled)
 
     def _sync_web_state(self) -> None:
         enabled = self.web_check.isChecked()
@@ -563,11 +565,27 @@ class SettingsDialog(QDialog):
         self.history_keep_spin = QSpinBox(history_box)
         self.history_keep_spin.setRange(1, 720)
         history_form.addRow(tr("history.keep"), self.history_keep_spin)
+        self.auto_check_check = QCheckBox(tr("history.auto_check"), history_box)
+        history_form.addRow("", self.auto_check_check)
+        auto_hint = QLabel(tr("history.auto_check_hint"), history_box)
+        auto_hint.setWordWrap(True)
+        auto_hint.setStyleSheet("color: palette(mid);")
+        history_form.addRow(auto_hint)
         history_hint = QLabel(tr("history.hint"), history_box)
         history_hint.setWordWrap(True)
         history_hint.setStyleSheet("color: palette(mid);")
         history_form.addRow(history_hint)
         form.addRow(history_box)
+
+        update_box = QGroupBox(tr("update.group"), page)
+        update_layout = QVBoxLayout(update_box)
+        self.update_check_box = QCheckBox(tr("update.enabled"), update_box)
+        update_layout.addWidget(self.update_check_box)
+        update_hint = QLabel(tr("update.hint"), update_box)
+        update_hint.setWordWrap(True)
+        update_hint.setStyleSheet("color: palette(mid);")
+        update_layout.addWidget(update_hint)
+        form.addRow(update_box)
 
         open_button = QPushButton(tr("menu.open_config"), page)
         open_button.clicked.connect(self.openConfigFolderRequested.emit)
@@ -662,6 +680,8 @@ class SettingsDialog(QDialog):
         self.csv_check.setChecked(self._config.recording.csv_enabled)
         self.history_check.setChecked(self._config.history.enabled)
         self.history_keep_spin.setValue(self._config.history.keep_hours)
+        self.auto_check_check.setChecked(self._config.history.auto_check)
+        self.update_check_box.setChecked(self._config.updates.enabled)
 
         self._sync_history_state()
         self._sync_anchor_state()
@@ -806,6 +826,8 @@ class SettingsDialog(QDialog):
         config.recording.csv_enabled = self.csv_check.isChecked()
         config.history.enabled = self.history_check.isChecked()
         config.history.keep_hours = self.history_keep_spin.value()
+        config.history.auto_check = self.auto_check_check.isChecked()
+        config.updates.enabled = self.update_check_box.isChecked()
         return config.sanitized()
 
     # ---------------------------------------------------------------- actions

@@ -27,6 +27,7 @@ jobs:
         include:
           - os: windows-latest
             asset: LagScope-windows-x64.zip
+            installer: LagScope-setup.exe
           - os: macos-latest
             asset: LagScope-macos-arm64.zip
           - os: ubuntu-latest
@@ -62,6 +63,28 @@ jobs:
           Copy-Item README.md dist/
           Copy-Item LICENSE dist/
           Compress-Archive -Path dist/LagScope.exe, dist/README.md, dist/LICENSE -DestinationPath ${{ matrix.asset }}
+
+      - name: Build the installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # The runner image ships Inno Setup; install it if that ever changes.
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+          if (-not (Test-Path $iscc)) { $iscc = "iscc" }
+          $version = (python -c "import sys; sys.path.insert(0, 'src'); import lagscope; print(lagscope.__version__)")
+          & $iscc "/DAppVersion=$version" packaging\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+          Move-Item dist/LagScope-setup.exe ${{ matrix.installer }}
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: ${{ matrix.installer }}
+          path: ${{ matrix.installer }}
+          if-no-files-found: error
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
@@ -106,4 +129,8 @@ jobs:
             gh release edit "$TAG" --notes-file "$NOTES"
           fi
           gh release upload "$TAG" "${{ matrix.asset }}" --clobber
+          # Windows also gets an installer; the other platforms have none.
+          if [ -n "${{ matrix.installer }}" ] && [ -f "${{ matrix.installer }}" ]; then
+            gh release upload "$TAG" "${{ matrix.installer }}" --clobber
+          fi
         shell: bash
