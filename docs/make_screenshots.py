@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import math
 import os
+import random
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -24,12 +26,14 @@ from PySide6.QtGui import QPainter, QPixmap  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from lagscope.config import Config  # noqa: E402
+from lagscope.history import History  # noqa: E402
 from lagscope.i18n import set_language  # noqa: E402
 from lagscope.models import (  # noqa: E402
     KIND_APP, KIND_TARGET, KIND_VIDEO, ExtraResult, LatencySample, RollingStats,
 )
 from lagscope.probes.display import DisplayProbe  # noqa: E402
 from lagscope.ui.icons import value_pixmap  # noqa: E402
+from lagscope.ui.history_window import HistoryWindow  # noqa: E402
 from lagscope.ui.overlay import OverlayWindow  # noqa: E402
 from lagscope.ui.settings import SettingsDialog  # noqa: E402
 
@@ -108,6 +112,28 @@ DEMO_EXTRAS = [
 ]
 
 
+def demo_history() -> History:
+    """Six hours with a quiet stretch, a sleeping machine and one bad evening."""
+    history = History(load=False)
+    now = math.floor(time.time() / 60) * 60
+    random.seed(7)
+    for minute in range(6 * 60):
+        ts = now - (6 * 60 - minute) * 60
+        if 150 < minute < 170:                  # the machine was asleep
+            continue
+        base = 120 + 30 * math.sin(minute / 40)
+        if 300 < minute < 330:                  # the evening that went wrong
+            base = 420 + random.random() * 260
+        for step in range(3):
+            history.add(LatencySample(ts=ts + step * 20, ok=True, title="房间 21452505",
+                                      total_ms=base + random.random() * 40))
+        if 305 < minute < 315 and minute % 3 == 0:
+            history.note_event("stall")
+        if 300 < minute < 330 and minute % 7 == 0:
+            history.note_event("spike")
+    return history
+
+
 def shoot_overlay(name: str, config: Config, sample, stats, label="房间 21452505",
                   extras=()) -> None:
     window = OverlayWindow(config, DisplayProbe())
@@ -148,6 +174,16 @@ def main() -> int:
     app_config.thresholds.warn_ms = 150
     shoot_overlay("overlay-app.png", app_config, app_sample, app_series,
                   label="应用 ValorantGame.exe", extras=DEMO_EXTRAS)
+
+    history_config = Config()
+    history_config.thresholds.good_ms = 200
+    history_config.thresholds.warn_ms = 500
+    window = HistoryWindow(history_config, demo_history())
+    window.resize(900, 470)
+    window.show()
+    QApplication.processEvents()
+    window.grab().save(str(OUT / "history.png"), "PNG")
+    window.close()
 
     dialog = SettingsDialog(Config())
     dialog.room_edit.setText("https://live.bilibili.com/21452505")

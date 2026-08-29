@@ -47,6 +47,16 @@ def build_parser() -> argparse.ArgumentParser:
              "delay is; defaults to whatever is being monitored",
     )
     parser.add_argument(
+        "--report", nargs="?", const="", metavar="FILE",
+        help="write a shareable health report (chart + segment check) from the recorded "
+             "history and print where it went; defaults to the reports folder",
+    )
+    parser.add_argument(
+        "--history", nargs="?", const="24", metavar="HOURS",
+        help="print a summary of the recorded history (default: the last 24 hours; "
+             "'all' for everything kept)",
+    )
+    parser.add_argument(
         "--detect-report", action="store_true",
         help="print what each detection source can see on this machine, then exit",
     )
@@ -121,6 +131,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.diagnose is not None:
         return _diagnose(config, args.diagnose)
+
+    if args.report is not None:
+        return _write_report(config, args.report)
+
+    if args.history is not None:
+        return _print_history(config, args.history)
 
     if args.list_apps:
         return _list_apps()
@@ -301,6 +317,77 @@ def _diagnosis_host(config) -> str:
     # Anything else (a Bilibili room, a video, network-only) is reached through
     # the same line, so the API host is a fair stand-in.
     return config.probe.rtt_host
+
+
+def _history_hours(text: str):
+    """``24`` -> 24.0, ``all`` -> None (everything kept)."""
+    text = (text or "").strip().lower()
+    if text in ("", "all", "0"):
+        return None if text == "all" else 24.0
+    try:
+        return max(0.1, float(text))
+    except ValueError:
+        return 24.0
+
+
+def _load_history(config):
+    from .history import History
+
+    return History(bucket_s=config.history.bucket_s, keep_hours=config.history.keep_hours)
+
+
+def _print_history(config, window: str) -> int:
+    """What the chart shows, as text - useful over SSH and in a bug report."""
+    from .i18n import tr
+    from .report import build_text
+
+    hours = _history_hours(window)
+    history = _load_history(config)
+    summary = history.summary(hours)
+    if not summary["buckets"]:
+        print(tr("history.empty"))
+        return 0
+    print(build_text(summary=summary, worst=history.worst_hour(hours)))
+    return 0
+
+
+def _write_report(config, path: str) -> int:
+    """The one-click report, from the command line: history plus a fresh check."""
+    from pathlib import Path
+
+    from .i18n import tr
+    from .probes.path import analyse, verdict
+    from .report import build_html, default_report_path, write_report
+
+    hours = 24.0
+    history = _load_history(config)
+    summary = history.summary(hours)
+
+    # A report without the path check is only half of one, so it runs here too.
+    target = _diagnosis_host(config)
+    print(tr("diag.running"), flush=True)
+    path_report = analyse(target) if target else None
+    key, detail = verdict(path_report) if path_report is not None else ("", "")
+
+    document = build_html(
+        buckets=history.buckets(hours), summary=summary, bucket_s=history.bucket_s,
+        worst=history.worst_hour(hours), path_report=path_report,
+        verdict_key=key, verdict_detail=detail,
+        target_label=summary.get("label", ""),
+        good_ms=config.thresholds.good_ms, warn_ms=config.thresholds.warn_ms,
+    )
+    # Said before the path is printed: the two streams interleave otherwise.
+    if not summary["buckets"]:
+        print(tr("history.empty"), file=sys.stderr)
+
+    destination = Path(path).expanduser() if path else default_report_path()
+    try:
+        written = write_report(document, destination)
+    except OSError as exc:
+        print(f"{tr('report.failed')}: {exc}", file=sys.stderr)
+        return 1
+    print(f"{tr('report.saved')} {written}")
+    return 0
 
 
 def _list_apps() -> int:

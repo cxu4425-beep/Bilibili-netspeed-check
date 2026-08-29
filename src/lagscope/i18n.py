@@ -415,6 +415,82 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "懸浮視窗已隱藏，可從系統匣圖示重新開啟。",
         "Overlay hidden. Reopen it from the tray icon.",
     ),
+
+    # --------------------------------------------------------- history window
+    "menu.history": ("延迟历史…", "延遲歷史…", "Latency history…"),
+    "menu.report": ("导出体检报告…", "匯出體檢報告…", "Export a health report…"),
+    "history.title": ("延迟历史", "延遲歷史", "Latency history"),
+    "history.range.1h": ("1 小时", "1 小時", "1 hour"),
+    "history.range.6h": ("6 小时", "6 小時", "6 hours"),
+    "history.range.24h": ("24 小时", "24 小時", "24 hours"),
+    "history.range.all": ("全部", "全部", "All"),
+    "history.export": ("导出体检报告", "匯出體檢報告", "Export report"),
+    "history.copy": ("复制摘要", "複製摘要", "Copy summary"),
+    "history.empty": (
+        "还没有历史数据。让它跑几分钟，这里就会出现走势。",
+        "還沒有歷史資料。讓它跑幾分鐘，這裡就會出現走勢。",
+        "No history yet. Leave it running for a few minutes and the trend appears here.",
+    ),
+    "history.group": ("历史记录", "歷史紀錄", "History"),
+    "history.enabled": (
+        "保存延迟历史（用于走势图和体检报告）",
+        "儲存延遲歷史（用於走勢圖和體檢報告）",
+        "Keep a latency history (for the chart and the report)",
+    ),
+    "history.keep": ("保留时长（小时）", "保留時長（小時）", "Keep for (hours)"),
+    "history.clear": ("清空历史", "清空歷史", "Clear history"),
+    "history.hint": (
+        "每分钟只存一行摘要（均值／最好／最差／丢失），所以一天约 130 KB，"
+        "关掉程序也不会丢。文件在配置目录里，随时可以删。",
+        "每分鐘只存一行摘要（均值／最好／最差／遺失），所以一天約 130 KB，"
+        "關掉程式也不會丟。檔案在設定目錄裡，隨時可以刪。",
+        "One summary row per minute (average, best, worst, loss), so a day costs about "
+        "130 KB and survives a restart. The file sits in the config folder and can be "
+        "deleted at any time.",
+    ),
+
+    # ---------------------------------------------------------------- report
+    "report.title": ("网络体检报告", "網路體檢報告", "Connection health report"),
+    "report.generated": ("生成时间", "產生時間", "Generated"),
+    "report.window": ("统计范围", "統計範圍", "Window"),
+    "report.watching": ("监测对象", "監測對象", "Watching"),
+    "report.chart": ("延迟走势", "延遲走勢", "Latency over time"),
+    "report.worst": ("最不稳定的时段", "最不穩定的時段", "The roughest hour"),
+    "report.segments": ("分段诊断", "分段診斷", "Path segments"),
+    "report.extras": ("其他监测目标", "其他監測目標", "Other watches"),
+    "report.uptime": ("探测成功率", "偵測成功率", "Probes answered"),
+    "report.samples": ("样本数", "樣本數", "Samples"),
+    "report.stalls": ("卡顿", "卡頓", "Stalls"),
+    "report.spikes": ("延迟突增", "延遲突增", "Spikes"),
+    "report.hours": ("最近 {n} 小时", "最近 {n} 小時", "Last {n} h"),
+    "report.all": ("全部记录", "全部紀錄", "Everything recorded"),
+    "report.no_data": (
+        "还没有足够的历史数据", "還沒有足夠的歷史資料", "Not enough history yet",
+    ),
+    "report.legend_avg": ("平均延迟", "平均延遲", "average"),
+    "report.legend_range": ("每分钟最好～最差", "每分鐘最好～最差", "best to worst, per minute"),
+    "report.legend_marks": ("卡顿／突增", "卡頓／突增", "stalls and spikes"),
+    "report.worst_line": (
+        "{time}　平均 {avg}，最高 {max}，{stalls} 次卡顿或突增",
+        "{time}　平均 {avg}，最高 {max}，{stalls} 次卡頓或突增",
+        "{time} — average {avg}, worst {max}, {stalls} stalls or spikes",
+    ),
+    "report.no_trouble": (
+        "这段时间没有卡顿，也没有延迟突增。",
+        "這段時間沒有卡頓，也沒有延遲突增。",
+        "No stalls and no spikes in this window.",
+    ),
+    "report.privacy": (
+        "这份报告只包含延迟数字、你家内网地址和被测服务器；不含公网 IP、账号、"
+        "浏览记录或任何 Cookie。",
+        "這份報告只包含延遲數字、你家內網位址和被測伺服器；不含公網 IP、帳號、"
+        "瀏覽紀錄或任何 Cookie。",
+        "This report contains latency figures, addresses inside your own home network and "
+        "the server being measured. No public IP, no account, no browsing history, no cookies.",
+    ),
+    "report.saved": ("报告已保存到：", "報告已儲存到：", "Report saved to:"),
+    "report.copied": ("摘要已复制到剪贴板", "摘要已複製到剪貼簿", "Summary copied to the clipboard"),
+    "report.failed": ("无法写入报告文件", "無法寫入報告檔案", "Could not write the report file"),
 }
 
 

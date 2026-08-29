@@ -16,6 +16,7 @@ from .autostart import get_autostart, is_supported as autostart_supported, set_a
 from .config import Config, app_config_dir
 from .i18n import set_language, tr
 from .events import SPIKE, STALL, EventLog, Notifier
+from .history import History
 from .models import (
     KIND_APP, KIND_LIVE, KIND_NETWORK, KIND_TARGET, KIND_VIDEO, LatencySample, RollingStats,
     WatchTarget,
@@ -25,11 +26,15 @@ from .monitor import (
 )
 from .probes.display import DisplayProbe
 from .recording import CsvRecorder
+from .report import (
+    build_html, build_text, default_report_path, write_report,
+)
 from .single_instance import SingleInstance
 from .web import DashboardServer
 from .ui.icons import app_icon
 from .ui.theme import format_mbps, format_ms, level_for
 from .ui.overlay import OverlayWindow
+from .ui.history_window import HistoryWindow
 from .ui.settings import SettingsDialog
 from .ui.tray import TrayIcon
 
@@ -38,6 +43,7 @@ LOG = logging.getLogger(__name__)
 DISPLAY_PUSH_INTERVAL_MS = 1000
 CONFIG_SAVE_DEBOUNCE_MS = 1500
 CLIPBOARD_POLL_INTERVAL_MS = 1500
+HISTORY_FLUSH_INTERVAL_MS = 60_000
 # Probe error codes that have a sentence a person can act on.
 ERROR_MESSAGES = {
     "no-connections": "status.no_connections",
@@ -84,6 +90,11 @@ class MonitorApplication(QObject):
         self._notifier = Notifier()
         self._extras: dict = {}      # key -> ExtraResult, newest per side watch
         self._dashboard: Optional[DashboardServer] = None
+        self._history = History(bucket_s=self._config.history.bucket_s,
+                                keep_hours=self._config.history.keep_hours)
+        self._history_window: Optional[HistoryWindow] = None
+        # Kept so an exported report carries the last check, not a blank section.
+        self._last_diagnosis: Optional[tuple] = None
 
         self._overlay = OverlayWindow(self._config, self._display)
         self._overlay.positionChanged.connect(self._on_overlay_moved)
@@ -102,6 +113,12 @@ class MonitorApplication(QObject):
         self._display_timer = QTimer(self)
         self._display_timer.timeout.connect(self._push_display_latency)
         self._display_timer.start(DISPLAY_PUSH_INTERVAL_MS)
+
+        # History is written once a minute, not once a sample: a crash costs
+        # at most the minute in progress.
+        self._history_timer = QTimer(self)
+        self._history_timer.timeout.connect(self._flush_history)
+        self._history_timer.start(HISTORY_FLUSH_INTERVAL_MS)
 
         self._thread = QThread(self)
         # The worker gets its own copy: the GUI thread keeps mutating settings.
@@ -176,6 +193,14 @@ class MonitorApplication(QObject):
         diagnose_action = QAction(tr("menu.diagnose"), self._menu)
         diagnose_action.triggered.connect(self._run_diagnosis)
         self._menu.addAction(diagnose_action)
+
+        history_action = QAction(tr("menu.history"), self._menu)
+        history_action.triggered.connect(self.open_history)
+        self._menu.addAction(history_action)
+
+        report_action = QAction(tr("menu.report"), self._menu)
+        report_action.triggered.connect(self.export_report)
+        self._menu.addAction(report_action)
 
         phone_action = QAction(tr("menu.phone"), self._menu)
         phone_action.triggered.connect(self._show_phone_url)
@@ -336,6 +361,7 @@ class MonitorApplication(QObject):
             QMessageBox.warning(None, tr("diag.title"), tr("verdict.unknown"))
             return
         report, key, detail = payload
+        self._last_diagnosis = payload
         QMessageBox.information(None, tr("diag.title"), self._diagnosis_text(report, key, detail))
 
     def _diagnosis_text(self, report, key: str, detail: str) -> str:
@@ -365,6 +391,77 @@ class MonitorApplication(QObject):
         lines.append("")
         lines.append(tr(key) + (f"  [{detail}]" if detail else ""))
         return "\n".join(lines)
+
+    # -------------------------------------------------------------- history
+    def open_history(self) -> None:
+        """The chart of everything recorded so far, kept live while it is open."""
+        if self._history_window is None:
+            self._history_window = HistoryWindow(self._config, self._history)
+            self._history_window.exportRequested.connect(self.export_report)
+            self._history_window.copyRequested.connect(self._copy_report_summary)
+        else:
+            self._history_window.refresh()
+        self._history_window.show()
+        self._history_window.raise_()
+        self._history_window.activateWindow()
+
+    def _report_context(self) -> dict:
+        """Everything the report needs, gathered from what is already known."""
+        hours = 24.0
+        if self._history_window is not None:
+            hours = self._history_window.hours()
+        path_report, verdict_key, verdict_detail = (self._last_diagnosis
+                                                    or (None, "", ""))
+        return {
+            "buckets": self._history.buckets(hours),
+            "summary": self._history.summary(hours),
+            "bucket_s": self._history.bucket_s,
+            "worst": self._history.worst_hour(hours),
+            "path_report": path_report,
+            "verdict_key": verdict_key,
+            "verdict_detail": verdict_detail,
+            "extras": self._ordered_extras(),
+            "target_label": self._room_title or self._watch_label(),
+            "good_ms": self._config.thresholds.good_ms,
+            "warn_ms": self._config.thresholds.warn_ms,
+        }
+
+    def _watch_label(self) -> str:
+        target = self._target
+        if target is None or target.is_empty:
+            return ""
+        return target.title or target.ident
+
+    def export_report(self) -> None:
+        """Write the health report and open it in the browser."""
+        self._flush_history()
+        context = self._report_context()
+        document = build_html(**context)
+        try:
+            path = write_report(document, default_report_path())
+        except OSError as exc:
+            LOG.warning("could not write the report: %s", exc)
+            QMessageBox.warning(None, tr("report.title"), f"{tr('report.failed')}\n{exc}")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        if self._tray is not None:
+            self._tray.showMessage(tr("report.title"), f"{tr('report.saved')} {path}",
+                                   app_icon(), 6000)
+
+    def _copy_report_summary(self) -> None:
+        """The same findings as text, for a forum reply or a chat message."""
+        context = self._report_context()
+        QGuiApplication.clipboard().setText(build_text(
+            summary=context["summary"], worst=context["worst"],
+            path_report=context["path_report"], verdict_key=context["verdict_key"],
+            verdict_detail=context["verdict_detail"], target_label=context["target_label"],
+        ))
+        if self._tray is not None:
+            self._tray.showMessage(tr("report.title"), tr("report.copied"), app_icon(), 4000)
+
+    def _flush_history(self) -> None:
+        if self._config.history.enabled:
+            self._history.flush()
 
     def _show_phone_url(self) -> None:
         """Show (and copy) the address to type into a phone browser."""
@@ -411,6 +508,10 @@ class MonitorApplication(QObject):
             if self._settings_dialog is not None:
                 self._settings_dialog.deleteLater()
                 self._settings_dialog = None
+            # Its labels are built once, so it is rebuilt in the new language too.
+            if self._history_window is not None:
+                self._history_window.deleteLater()
+                self._history_window = None
 
         self._stats.resize(self._config.sample_window)
         self._overlay.apply_config(self._config)
@@ -444,6 +545,7 @@ class MonitorApplication(QObject):
         self._prune_extras()
         self._overlay.set_extras(self._ordered_extras())
         self._apply_recording()
+        self._apply_history()
         self._apply_dashboard()
         self.configChanged.emit(copy.deepcopy(self._config))
         self._save_config_now()
@@ -532,6 +634,21 @@ class MonitorApplication(QObject):
                     f"{events['stalls'] + events['spikes']} / {events['window_min']}min",
         })
 
+    def _apply_history(self) -> None:
+        """Follow a changed retention setting without losing what is stored."""
+        history = self._config.history
+        if history.keep_hours != self._history.keep_hours or \
+                history.bucket_s != self._history.bucket_s:
+            self._history.close()
+            self._history = History(bucket_s=history.bucket_s, keep_hours=history.keep_hours)
+            if self._history_window is not None:
+                self._history_window.deleteLater()
+                self._history_window = None
+        if not history.enabled:
+            self._history.flush()
+        if self._history_window is not None:
+            self._history_window.apply_config(self._config)
+
     def _apply_recording(self) -> None:
         if self._config.recording.csv_enabled:
             if self._recorder is None:
@@ -593,6 +710,12 @@ class MonitorApplication(QObject):
         if event is not None:
             self._announce(event)
         self._stats.append(sample)
+        if self._config.history.enabled:
+            self._history.add(sample)
+            if event is not None:
+                self._history.note_event(event.kind)
+            if self._history_window is not None and self._history_window.isVisible():
+                self._history_window.refresh()
         self._overlay.update_sample(sample, self._stats)
         if self._tray is not None:
             self._tray.update_sample(sample, self._status_line())
@@ -769,6 +892,8 @@ class MonitorApplication(QObject):
     def _shutdown(self) -> None:
         self._display_timer.stop()
         self._clipboard_timer.stop()
+        self._history_timer.stop()
+        self._history.close()
         if self._save_timer.isActive():
             self._save_timer.stop()
         self._save_config_now()

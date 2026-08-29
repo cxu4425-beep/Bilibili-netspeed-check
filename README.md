@@ -9,7 +9,7 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-app.png" width="232" alt="任意應用模式懸浮窗">
 <img src="docs/images/overlay-dark.png" width="232" alt="直播模式懸浮窗">
@@ -35,6 +35,9 @@
   分辨「只有這個卡」還是「整條線都卡」。
 - **網路體檢**：一鍵拆出「你→路由器→電信商→伺服器」各段延遲與丟包，直接告訴你該怪誰
   （見[網路體檢](#-網路體檢告訴你是誰的錯)）。
+- **歷史走勢圖**：每分鐘存一行摘要，關掉程式也不會丟。回頭就看得出「昨晚九點特別卡」
+  （見[歷史與報告](#-歷史走勢與一鍵體檢報告)）。
+- **一鍵體檢報告**：走勢圖＋分段診斷輸出成一個自包含的 HTML 檔，可以直接寄給客服或貼到論壇。
 - **卡頓與延遲突增偵測**：探測失敗或延遲跳到平常的兩倍以上就記一次事件，
   可選擇彈出提示（有冷卻時間，不會一直吵）。
 
@@ -297,6 +300,43 @@ Wi-Fi: 家裡的路由器  41%  802.11n
 
 ---
 
+## 📈 歷史走勢與一鍵體檢報告
+
+「我家網路很爛」不是一份報告。能讓客服動起來、能在論壇問出答案的，是一張**什麼時候爛、爛到什麼程度、
+爛在哪一段**的圖。
+
+<div align="center"><img src="docs/images/history.png" width="820" alt="延遲歷史走勢"></div>
+
+**歷史走勢**（托盤選單 → **延遲歷史…**）
+
+- 藍線是每分鐘的平均，淡色帶是那一分鐘的**最好～最差**，底部的紅／黃小豎線是**卡頓／延遲突增**。
+- 電腦睡著、程式關掉的那段時間，線是**斷開的**——不會用一條直線把不存在的資料連起來。
+- 可切 1 小時／6 小時／24 小時／全部，下面直接寫出「最不穩定的時段」。
+- 儲存的是**每分鐘一行摘要**（均值／最好／最差／P95／抖動／丟失／事件數），不是每一筆樣本，
+  所以一天約 130 KB、48 小時約 260 KB，預設保留 48 小時（可在設定→高級改，或整個關掉）。
+
+**體檢報告**（托盤選單 → **匯出體檢報告…**，或歷史視窗右下角）
+
+按下去會產生一個 HTML 檔並自動用瀏覽器打開，裡面有：總覽數字、走勢圖、最不穩定的時段、
+分段診斷結論、其他監測目標。
+
+- **完全自包含**：圖是內嵌 SVG，樣式是內嵌 CSS，沒有任何外部檔案、沒有 JavaScript。
+  可以直接當附件寄出去，離線三週後打開一樣正常。
+- **可以貼的純文字版**：歷史視窗的「複製摘要」會把同一份結論複製成純文字，適合論壇回覆或聊天室。
+- **裡面沒有什麼**：不含公網 IP、不含帳號、不含 Cookie、不含你看過的網址。
+  出現的位址只有你家內網的（192.168.x.x）和被測的那台伺服器。
+
+命令列也可以：
+
+```bash
+lagscope --report              # 產生報告（順便跑一次分段診斷），印出檔案路徑
+lagscope --report ~/net.html   # 指定輸出位置
+lagscope --history             # 把最近 24 小時的摘要印成文字
+lagscope --history all         # 全部保留的紀錄
+```
+
+---
+
 ## 📱 用手機看（不用裝 App）
 
 <div align="center"><img src="docs/images/phone-dashboard.png" width="300" alt="手機儀表板"></div>
@@ -422,6 +462,9 @@ lagscope --app ValorantGame.exe       # 量某個程式的延遲
 lagscope --app-foreground             # 量目前最前面那個程式
 lagscope --ping 8.8.8.8               # 量某個位址（用 --ping-port 指定連接埠）
 lagscope --list-apps                  # 列出正在連網的程式（挑名字用）
+lagscope --diagnose                   # 分段診斷（可加位址：--diagnose 8.8.8.8）
+lagscope --report                     # 匯出體檢報告 HTML，印出檔案位置
+lagscope --history                    # 把最近 24 小時的歷史摘要印成文字（all＝全部）
 ```
 
 `--probe-once` 很適合排查問題或寫成腳本定時記錄：
@@ -494,6 +537,10 @@ lagscope --list-apps                  # 列出正在連網的程式（挑名字�
 | 總延遲包含顯示延遲 | 關掉後總延遲只算到「客戶端拿到影格」為止 |
 | 綠色 / 黃色門檻 | 顏色變化的門檻，預設 2000 / 5000 ms |
 | 記錄到 CSV | 把每一筆樣本寫進 `logs/latency.csv`（自動輪替，保留 3 份） |
+| 保存延遲歷史 | 每分鐘一行摘要，走勢圖和體檢報告的資料來源；可改保留時長（預設 48 小時） |
+
+歷史記錄可以在**高級**分頁關掉或改保留時長；關掉之後走勢圖和報告就沒有資料可畫，
+但即時監測完全不受影響。
 
 ### 設定檔位置
 
@@ -668,6 +715,9 @@ measures server → client → screen.
   is eating the line.
 - **Stall and spike detection**: a failed probe, or latency jumping past twice its recent
   normal, is recorded as an event and can raise one (rate-limited) notification.
+- **History and a report**: one summary row per minute is kept on disk, so the chart shows
+  the evening that went wrong days later - and exports as a self-contained HTML report
+  (see [History and report](#history-and-report)).
 
 **Which apps are supported?** There is no whitelist - anything that opens a network
 connection works, because the monitor reads the system connection table rather than
@@ -727,6 +777,26 @@ measures each segment's latency and packet loss, reads the Wi-Fi signal, and nam
 your Wi-Fi, your home network, your provider, the distance to the server, or packet loss. It uses
 only the tools that ship with the OS - no admin rights, no raw sockets - and computes its
 statistics from the individual replies, so it reads the same in any system language.
+
+### History and report
+
+The overlay answers "how is it right now"; nobody can answer "when did it break" from that.
+One summary row per minute - average, best, worst, p95, jitter, loss, events - is kept on
+disk, which is roughly 130 KB a day and survives a restart.
+
+**Latency history** (tray menu) plots it: the average as a line, each minute's best-to-worst
+as a band, stalls and spikes as ticks on the floor. Time the machine spent asleep is a real
+gap in the line, never a straight segment across invented data. Ranges: 1 h / 6 h / 24 h /
+everything, with the roughest hour named underneath.
+
+**Export a health report** turns the same data into one HTML file and opens it: the chart,
+the headline numbers, the roughest hour, the segment verdict and the side watches. The chart
+is inline SVG and the styles are inline, so there is no JavaScript and nothing to fetch - it
+can be attached to a ticket and opened offline weeks later. "Copy summary" produces the same
+findings as plain text for a forum post.
+
+It contains latency figures, addresses inside your own home network and the server being
+measured. No public IP, no account, no cookies, no browsing history.
 
 ### Watch from your phone
 
@@ -805,6 +875,9 @@ lagscope --app ValorantGame.exe        # measure any application
 lagscope --app-foreground              # measure whatever app is in front
 lagscope --ping 8.8.8.8 --ping-port 53 # measure a server address
 lagscope --list-apps                   # which programs are on the network right now
+lagscope --diagnose                    # split the path up (add a host to pick the target)
+lagscope --report                      # write the health report and print where it went
+lagscope --history                     # print the last 24 h as text ("all" for everything)
 ```
 
 ### How the number is computed

@@ -353,6 +353,9 @@ class SettingsDialog(QDialog):
         self._web_box = box
         return box
 
+    def _sync_history_state(self) -> None:
+        self.history_keep_spin.setEnabled(self.history_check.isChecked())
+
     def _sync_web_state(self) -> None:
         enabled = self.web_check.isChecked()
         self.web_port_spin.setEnabled(enabled)
@@ -552,6 +555,20 @@ class SettingsDialog(QDialog):
         csv_hint.setStyleSheet("color: palette(mid);")
         form.addRow(csv_hint)
 
+        history_box = QGroupBox(tr("history.group"), page)
+        history_form = QFormLayout(history_box)
+        self.history_check = QCheckBox(tr("history.enabled"), history_box)
+        self.history_check.toggled.connect(self._sync_history_state)
+        history_form.addRow("", self.history_check)
+        self.history_keep_spin = QSpinBox(history_box)
+        self.history_keep_spin.setRange(1, 720)
+        history_form.addRow(tr("history.keep"), self.history_keep_spin)
+        history_hint = QLabel(tr("history.hint"), history_box)
+        history_hint.setWordWrap(True)
+        history_hint.setStyleSheet("color: palette(mid);")
+        history_form.addRow(history_hint)
+        form.addRow(history_box)
+
         open_button = QPushButton(tr("menu.open_config"), page)
         open_button.clicked.connect(self.openConfigFolderRequested.emit)
         form.addRow("", open_button)
@@ -643,7 +660,10 @@ class SettingsDialog(QDialog):
         self.good_spin.setValue(self._config.thresholds.good_ms)
         self.warn_spin.setValue(self._config.thresholds.warn_ms)
         self.csv_check.setChecked(self._config.recording.csv_enabled)
+        self.history_check.setChecked(self._config.history.enabled)
+        self.history_keep_spin.setValue(self._config.history.keep_hours)
 
+        self._sync_history_state()
         self._sync_anchor_state()
         self._sync_detect_state()
         self._sync_web_state()
@@ -784,6 +804,8 @@ class SettingsDialog(QDialog):
         config.thresholds.good_ms = self.good_spin.value()
         config.thresholds.warn_ms = max(self.warn_spin.value(), self.good_spin.value())
         config.recording.csv_enabled = self.csv_check.isChecked()
+        config.history.enabled = self.history_check.isChecked()
+        config.history.keep_hours = self.history_keep_spin.value()
         return config.sanitized()
 
     # ---------------------------------------------------------------- actions

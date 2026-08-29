@@ -189,6 +189,19 @@ class WebConfig:
 
 
 @dataclass
+class HistoryConfig:
+    """Minute-by-minute history, kept so the chart and the report have data.
+
+    One row per minute rather than one per sample: a day costs around 130 KB,
+    which is what makes keeping two days of it reasonable.
+    """
+
+    enabled: bool = True
+    keep_hours: int = 48
+    bucket_s: int = 60
+
+
+@dataclass
 class ThresholdConfig:
     good_ms: float = 2000.0
     warn_ms: float = 5000.0
@@ -219,6 +232,7 @@ class Config:
     probe: ProbeConfig = field(default_factory=ProbeConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
+    history: HistoryConfig = field(default_factory=HistoryConfig)
     thresholds: ThresholdConfig = field(default_factory=ThresholdConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
     web: WebConfig = field(default_factory=WebConfig)
@@ -292,6 +306,8 @@ class Config:
         self.detect.poll_interval_s = int(_clamp(self.detect.poll_interval_s, 2, 300))
         self.detect.bridge_port = int(_clamp(self.detect.bridge_port, 1024, 65535))
         self.detect.bridge_timeout_s = int(_clamp(self.detect.bridge_timeout_s, 10, 3600))
+        self.history.keep_hours = int(_clamp(self.history.keep_hours, 1, 720))
+        self.history.bucket_s = int(_clamp(self.history.bucket_s, 15, 3600))
         self.web.port = int(_clamp(self.web.port, 1024, 65535))
         self.web.access_code = "".join(
             ch for ch in str(self.web.access_code or "") if ch.isalnum()
@@ -390,6 +406,7 @@ _NESTED = {
     "probe": ProbeConfig,
     "display": DisplayConfig,
     "recording": RecordingConfig,
+    "history": HistoryConfig,
     "thresholds": ThresholdConfig,
     "detect": DetectConfig,
     "web": WebConfig,
