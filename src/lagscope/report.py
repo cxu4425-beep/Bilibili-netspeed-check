@@ -28,7 +28,8 @@ from . import APP_NAME, REPO_URL, __version__
 from .config import app_config_dir
 from .history import Bucket
 from .i18n import tr
-from .ui.theme import format_ms
+from .probes.speed import tier_key
+from .ui.theme import format_mbps, format_ms
 
 CHART_WIDTH = 960
 CHART_HEIGHT = 260
@@ -367,7 +368,7 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
                worst: Optional[dict] = None, path_report=None, verdict_key: str = "",
                verdict_detail: str = "", extras: Sequence = (), target_label: str = "",
                auto_findings: Sequence = (), switches: Sequence = (),
-               comparisons: Sequence = (),
+               comparisons: Sequence = (), speed=None,
                good_ms: Optional[float] = None, warn_ms: Optional[float] = None) -> str:
     """The whole report as one HTML document with nothing external in it."""
     esc = html.escape
@@ -477,6 +478,18 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
         body.append(f"<h2>{esc(tr('report.findings'))}</h2>")
         body.append(f'<div class="card"><table>{rows}</table></div>')
 
+    if speed is not None and getattr(speed, "ok", False):
+        body.append(f"<h2>{esc(tr('speed.title'))}</h2>")
+        body.append(
+            f'<div class="card"><div class="grid">'
+            f'<div class="cell"><div class="k">{esc(tr("label.down"))}</div>'
+            f'<div class="v">{esc(format_mbps(speed.mbps))}</div></div>'
+            f'<div class="cell"><div class="k">{esc(tr("speed.host"))}</div>'
+            f'<div class="v" style="font-size:14px">{esc(speed.host)}</div></div>'
+            f'</div><p class="sub" style="margin:10px 0 0">{esc(tr(tier_key(speed.mbps)))}</p>'
+            "</div>"
+        )
+
     changes = comparison_rows(comparisons)
     if changes:
         rows = "".join(
@@ -525,7 +538,7 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
 def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
                verdict_key: str = "", verdict_detail: str = "",
                target_label: str = "", auto_findings: Sequence = (),
-               switches: Sequence = (), comparisons: Sequence = ()) -> str:
+               switches: Sequence = (), comparisons: Sequence = (), speed=None) -> str:
     """The same findings as something you can paste into a forum reply."""
     hours = summary.get("hours")
     window = tr("report.hours", n=int(hours)) if hours else tr("report.all")
@@ -558,6 +571,12 @@ def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
         lines.append(f"{tr('report.findings')}:")
         for when, what, _events in findings:
             lines.append(f"  {when}  {what}")
+
+    if speed is not None and getattr(speed, "ok", False):
+        lines.append("")
+        lines.append(f"{tr('speed.title')}: {format_mbps(speed.mbps)}"
+                     f"   {tr(tier_key(speed.mbps))}")
+        lines.append(f"  {tr('speed.host')}: {speed.host}")
 
     changes = comparison_rows(comparisons)
     if changes:

@@ -575,6 +575,70 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     ),
     "history.markers": ("标记", "標記", "Markers"),
 
+    # --------------------------------------------------------------- speed test
+    "menu.speedtest": ("测一下网速…", "測一下網速…", "Test my speed…"),
+    "speed.title": ("网速测试", "網速測試", "Speed test"),
+    "speed.host": ("测速对象", "測速對象", "Server measured"),
+    "speed.confirm": (
+        "这会用尽全部带宽下载 {seconds} 秒（最多 {megabytes} MB），期间延迟会飙高、"
+        "直播可能会卡——这是它自己造成的，不是你的网络出问题。\n\n"
+        "会从你正在看的那个 CDN 下载（没有在看东西时才用公开测速点）。要开始吗？",
+        "這會用盡全部頻寬下載 {seconds} 秒（最多 {megabytes} MB），期間延遲會飆高、"
+        "直播可能會卡——這是它自己造成的，不是你的網路出問題。\n\n"
+        "會從你正在看的那個 CDN 下載（沒有在看東西時才用公開測速點）。要開始嗎？",
+        "This downloads flat out for {seconds} seconds (at most {megabytes} MB). "
+        "Latency will spike and the stream may stutter while it runs - that is this "
+        "test doing it, not your connection failing.\n\n"
+        "It downloads from the CDN you are already watching, or a public endpoint "
+        "when there is nothing to watch. Start?",
+    ),
+    "speed.running": ("正在测速，先别管延迟数字…", "正在測速，先別管延遲數字…",
+                      "Testing - ignore the latency figure for a moment…"),
+    "speed.result": ("下载速度：{value}", "下載速度：{value}", "Download: {value}"),
+    "speed.failed": ("测速失败", "測速失敗", "The speed test did not finish"),
+    "speed.source_stream": (
+        "测的是你正在看的那个 CDN——也就是真正影响你的那条路。",
+        "測的是你正在看的那個 CDN——也就是真正影響你的那條路。",
+        "Measured against the CDN you are watching - the path that actually matters.",
+    ),
+    "speed.source_public": (
+        "没有在看东西，所以用了公开测速点（Cloudflare）。",
+        "沒有在看東西，所以用了公開測速點（Cloudflare）。",
+        "Nothing was being watched, so a public endpoint (Cloudflare) was used.",
+    ),
+    "speed.cost": ("用掉 {megabytes} MB，花了 {seconds} 秒。",
+                   "用掉 {megabytes} MB，花了 {seconds} 秒。",
+                   "It used {megabytes} MB over {seconds} seconds."),
+    "speed.short": (
+        "（还没跑到全速就结束了，这个数字可能偏低——TCP 慢启动还没完。）",
+        "（還沒跑到全速就結束了，這個數字可能偏低——TCP 慢啟動還沒完。）",
+        "(It finished before TCP reached full speed, so this may read low.)",
+    ),
+    "speed.marker": ("测速（延迟飙高是正常的）", "測速（延遲飆高是正常的）",
+                     "speed test (the spike is this test)"),
+    "speed.budget": ("测速时长（秒）", "測速時長（秒）", "Test for (seconds)"),
+    "speed.max_mb": ("最多下载（MB）", "最多下載（MB）", "Download at most (MB)"),
+    "speed.group": ("网速测试", "網速測試", "Speed test"),
+    "speed.hint": (
+        "两个上限哪个先到就停，所以千兆线路不会为了证明自己而拉掉一整 GB。",
+        "兩個上限哪個先到就停，所以千兆線路不會為了證明自己而拉掉一整 GB。",
+        "Whichever cap is reached first ends the test, so a gigabit line stops at the "
+        "byte cap rather than pulling down a gigabyte to prove a point.",
+    ),
+
+    "speed.tier.4k": (
+        "足够 4K（25 Mbps 以上）", "足夠 4K（25 Mbps 以上）", "Enough for 4K (25 Mbps+)",
+    ),
+    "speed.tier.1080p60": (
+        "足够 1080p60 / 蓝光", "足夠 1080p60 / 藍光", "Enough for 1080p60 and Blu-ray tiers",
+    ),
+    "speed.tier.1080p": ("足够 1080p", "足夠 1080p", "Enough for 1080p"),
+    "speed.tier.720p": ("足够 720p", "足夠 720p", "Enough for 720p"),
+    "speed.tier.low": (
+        "只够标清，看高画质会转圈", "只夠標清，看高畫質會轉圈",
+        "Only enough for low quality; anything higher will buffer",
+    ),
+
     # ------------------------------------------------------------- setup wizard
     "wizard.title": ("初次设置", "初次設定", "Setup"),
     "wizard.welcome": ("欢迎使用 {app}", "歡迎使用 {app}", "Welcome to {app}"),

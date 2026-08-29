@@ -368,6 +368,34 @@ JA: dict = {
     "compare.marked": "記録しました。しばらく動かすと、レポートに前後の比較が出ます。",
     "compare.waiting": "「後」のデータを収集中",
     "history.markers": "記録した変更",
+
+    # ------------------------------------------------------------ speed test
+    "menu.speedtest": "回線速度を測る…",
+    "speed.title": "速度テスト",
+    "speed.host": "測定先",
+    "speed.confirm": "帯域を使い切って {seconds} 秒ダウンロードします（最大 {megabytes} MB）。"
+                     "その間は遅延が跳ね上がり、配信が止まることもあります——"
+                     "それはこのテストのせいで、回線の異常ではありません。\n\n"
+                     "視聴中の CDN からダウンロードします（何も見ていないときだけ公開測定点）。"
+                     "開始しますか？",
+    "speed.running": "測定中です。遅延の数値はしばらく無視してください…",
+    "speed.result": "ダウンロード速度：{value}",
+    "speed.failed": "速度テストを完了できませんでした",
+    "speed.source_stream": "視聴中の CDN を測りました——実際に効いてくる経路です。",
+    "speed.source_public": "何も視聴していないため、公開測定点（Cloudflare）を使いました。",
+    "speed.cost": "{megabytes} MB を {seconds} 秒で使用しました。",
+    "speed.short": "（TCP が全速に達する前に終わったため、低めに出ている可能性があります。）",
+    "speed.marker": "速度テスト（遅延の急増はこれが原因）",
+    "speed.budget": "測定時間（秒）",
+    "speed.max_mb": "最大ダウンロード量（MB）",
+    "speed.group": "速度テスト",
+    "speed.hint": "どちらかの上限に達した時点で終わるので、"
+                  "高速回線でも 1 GB を引き落とすことはありません。",
+    "speed.tier.4k": "4K に十分（25 Mbps 以上）",
+    "speed.tier.1080p60": "1080p60／高画質に十分",
+    "speed.tier.1080p": "1080p に十分",
+    "speed.tier.720p": "720p に十分",
+    "speed.tier.low": "標準画質が限界で、高画質だと読み込みが入ります",
 }
 
 KO: dict = {
@@ -722,6 +750,34 @@ KO: dict = {
     "compare.marked": "표시했습니다. 조금 더 두면 보고서에 전후 비교가 나타납니다.",
     "compare.waiting": "'이후' 자료를 모으는 중",
     "history.markers": "표시한 변경",
+
+    # ------------------------------------------------------------ speed test
+    "menu.speedtest": "회선 속도 측정…",
+    "speed.title": "속도 측정",
+    "speed.host": "측정 대상",
+    "speed.confirm": "대역폭을 모두 써서 {seconds}초 동안 내려받습니다(최대 {megabytes} MB). "
+                     "그동안 지연이 치솟고 방송이 끊길 수 있는데, 이 측정 때문이지 "
+                     "회선에 문제가 생긴 것이 아닙니다.\n\n"
+                     "보고 있는 CDN에서 내려받습니다(아무것도 보고 있지 않을 때만 공개 측정 서버). "
+                     "시작할까요?",
+    "speed.running": "측정 중입니다. 잠시 지연 수치는 무시하세요…",
+    "speed.result": "다운로드 속도: {value}",
+    "speed.failed": "속도 측정을 끝내지 못했습니다",
+    "speed.source_stream": "보고 있는 CDN을 측정했습니다 — 실제로 영향을 주는 경로입니다.",
+    "speed.source_public": "보고 있는 것이 없어 공개 측정 서버(Cloudflare)를 썼습니다.",
+    "speed.cost": "{megabytes} MB를 {seconds}초 동안 사용했습니다.",
+    "speed.short": "(TCP가 최고 속도에 이르기 전에 끝나 실제보다 낮게 나왔을 수 있습니다.)",
+    "speed.marker": "속도 측정 (지연 급증은 이 때문)",
+    "speed.budget": "측정 시간(초)",
+    "speed.max_mb": "최대 다운로드(MB)",
+    "speed.group": "속도 측정",
+    "speed.hint": "두 상한 중 먼저 도달하는 쪽에서 멈추므로, "
+                  "기가 회선이라도 1 GB를 끌어내리지 않습니다.",
+    "speed.tier.4k": "4K에 충분 (25 Mbps 이상)",
+    "speed.tier.1080p60": "1080p60／고화질에 충분",
+    "speed.tier.1080p": "1080p에 충분",
+    "speed.tier.720p": "720p에 충분",
+    "speed.tier.low": "표준 화질까지만 가능하고, 고화질은 버퍼링이 생깁니다",
 }
 
 OVERLAYS: dict = {"ja": JA, "ko": KO}

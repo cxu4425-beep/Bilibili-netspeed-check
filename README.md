@@ -9,7 +9,7 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English / 日本語 / 한국어
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [測網速](#-測一下這條線到底多快) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-demo.gif" width="260" alt="懸浮窗即時變化">
 
@@ -44,6 +44,7 @@
 - **歷史走勢圖**：每分鐘存一行摘要，關掉程式也不會丟。回頭就看得出「昨晚九點特別卡」
   （見[歷史與報告](#-歷史走勢與一鍵體檢報告)）。
 - **一鍵體檢報告**：走勢圖＋分段診斷輸出成一個自包含的 HTML 檔，可以直接寄給客服或貼到論壇。
+- **測一下線有多快**：主動把線佔滿量真實下載速度，測的是**你正在看的那個 CDN**，有時間和流量雙上限，測速期間會自動在歷史上標記（見[測網速](#-測一下這條線到底多快)）。
 - **改了設定有沒有用**：標記「我剛剛換了 5GHz」，之後報告會用前後**一樣長**的時間窗口告訴你
   到底有沒有變好（見[前後對照](#-我改的設定有用嗎)）。
 - **卡頓時自動查原因**：探測失敗或延遲突增時，背景自動跑一次精簡診斷，把結論記在那一分鐘上——
@@ -478,6 +479,43 @@ lagscope --selftest 21452505     # 帶一個正在直播的房間號，涵蓋全
 
 ---
 
+## 🚀 測一下這條線到底多快
+
+一直以來狀態列上的 `↓46.8M` 是**被動**的——你的機器現在正好在搬多少資料。
+它能回答「是不是有別的東西在吃頻寬」，但回答不了「這條線最快能跑多少」，
+因為那個當下根本沒有人在要求它跑快。
+
+托盤選單的 **測一下網速…** 會真的去要求：
+
+```
+下載速度：94.2 Mbps
+
+足夠 4K（25 Mbps 以上）
+
+測的是你正在看的那個 CDN——也就是真正影響你的那條路。
+用掉 80 MB，花了 9 秒。
+```
+
+有兩件事比那個數字本身更重要，所以按下去之前會先問你一次：
+
+| | |
+| --- | --- |
+| **它會把線佔滿** | 測的時候延遲一定會飆高、直播可能會卡。**這是它自己造成的**，所以它會先在歷史紀錄上標一筆「測速（延遲飆高是正常的）」，免得你等一下看走勢圖，把自己造成的那根尖峰當成故障在查。 |
+| **它會用掉流量** | 預設**時間和流量各有上限**（10 秒 / 80 MB），先到哪個就停哪個。所以千兆的線是停在 80 MB，不會因為「跑滿 10 秒」而拉掉一個 GB。兩個上限都可以在設定裡改。 |
+
+**它去哪裡下載是刻意的**：優先用**你正在看的那個 CDN 節點**，因為會不會卡取決於你到那台機器的那條路，
+而不是取決於你到某個測速網站的那條路——那兩條路常常根本不同家。真的沒有在看東西時，
+才退回公開測速點（Cloudflare）。
+
+結果會寫進體檢報告裡，所以寄給客服的那份會同時有「延遲多少」和「線多快」。
+沒有 GUI 的話用 `lagscope --speedtest`。
+
+**關於 TCP 慢啟動**：連線剛建立的頭一秒鐘一定慢，把那一秒算進去會讓快的線看起來很平庸。
+所以開頭那段是**單獨算完丟掉**的，只有暖機後的那段算數。真的太快結束（檔案太小或線太慢）
+連暖機都沒跑完時，它會直接跟你說「這個數字可能偏低」，而不是假裝那就是你的線速。
+
+---
+
 ## 📱 用手機看（不用裝 App）
 
 <div align="center"><img src="docs/images/phone-dashboard.png" width="300" alt="手機儀表板"></div>
@@ -607,6 +645,7 @@ lagscope --diagnose                   # 分段診斷（可加位址：--diagnose
 lagscope --report                     # 匯出體檢報告 HTML，印出檔案位置
 lagscope --history                    # 把最近 24 小時的歷史摘要印成文字（all＝全部）
 lagscope --selftest                   # 每個探測對真實世界跑一次，印出結果（可加房間號）
+lagscope --speedtest                  # 測一次下載速度（會佔滿頻寬、用掉流量）
 ```
 
 `--probe-once` 很適合排查問題或寫成腳本定時記錄：
@@ -715,6 +754,7 @@ lagscope --selftest                   # 每個探測對真實世界跑一次，�
 | B 站公開 API | 只在監測 B 站直播／影片時 | 取播放位址和房間資訊（免登入、不帶 Cookie） |
 | 你的路由器／第一跳／目標 | 按下體檢，或卡頓時自動查 | 分段診斷（系統內建 ping） |
 | GitHub Releases | 每天最多一次，可關 | 查最新版本號 |
+| `speed.cloudflare.com` | **只在你按下測速、而且當下沒在看任何東西時** | 公開測速點；有在看東西時測的是那個 CDN，不會連這裡 |
 
 沒有統計、沒有回報、沒有帳號、沒有 Cookie。
 
@@ -887,6 +927,10 @@ measures server → client → screen.
 - **Finds out why, unattended**: when a probe fails or latency jumps, a cut-down path check
   runs in the background and its verdict is filed against that minute - so afterwards you
   know last night was the Wi-Fi, not just that it was bad.
+- **An actual speed test**: saturates the line to measure real download speed, against
+  **the CDN edge you are watching**, capped by both time and bytes, and marks the history
+  so the self-inflicted spike is not mistaken for a fault
+  (see [How fast is this line, really?](#how-fast-is-this-line-really)).
 
 **Which apps are supported?** There is no whitelist - anything that opens a network
 connection works, because the monitor reads the system connection table rather than
@@ -978,6 +1022,36 @@ came back, asserting nothing. It is evidence for a person to read and paste into
 report. The output carries addresses inside your own network and the servers measured - no
 Wi-Fi name, no public IP, no account.
 
+### How fast is this line, really?
+
+The `↓46.8M` in the status row is *passive* - what the machine happens to be moving right
+now. That answers "is something else eating my bandwidth" and cannot answer "how fast could
+this line go", because nothing was asking it to go fast.
+
+**Speed test** in the tray menu does ask. Two things about it matter more than the number,
+which is why it asks for confirmation first:
+
+**It saturates the line while it runs.** Latency spikes and the stream may stutter. Because
+that is self-inflicted, the app marks those minutes in the history first, so the spike is not
+later investigated as a fault.
+
+**It costs data.** Time *and* bytes are both capped - 10 seconds or 80 MB by default,
+whichever comes first - so a gigabit line stops at the byte cap instead of pulling down a
+gigabyte to fill its ten seconds. Both limits are settings.
+
+Where it downloads from is deliberate: the CDN edge already serving what you are watching,
+because whether you stutter depends on the path to *that* machine, not on the path to a speed
+test site - they are frequently not even the same carrier. Only when nothing is being watched
+does it fall back to a public endpoint (Cloudflare).
+
+The result is included in the exported report, so the file you send to support carries both
+the latency and the line speed. Headless: `lagscope --speedtest`.
+
+The opening second of any connection is slow, and averaging TCP slow start in makes a fast
+line look mediocre, so that stretch is measured separately and discarded. When a download
+ends before the warm-up finishes it says the figure may read low rather than presenting it
+as the line speed.
+
 ### Updates and what it connects to
 
 Once a day at most, LagScope asks GitHub what the newest version number is - one public page,
@@ -986,7 +1060,9 @@ wizard asks before it ever runs, and it can be turned off in Settings.
 
 That is the entire list of things it talks to: whatever you are measuring, Bilibili's public
 API (only in Bilibili mode, no login and no cookies), your own router and first hop during a
-path check, and the releases page. No analytics, no accounts, no telemetry.
+path check, and the releases page. A speed test started while nothing is being watched
+also reaches speed.cloudflare.com; started while something is, it measures that CDN and
+does not. No analytics, no accounts, no telemetry.
 
 ### History and report
 
@@ -1097,6 +1173,7 @@ lagscope --diagnose                    # split the path up (add a host to pick t
 lagscope --report                      # write the health report and print where it went
 lagscope --history                     # print the last 24 h as text ("all" for everything)
 lagscope --selftest [room]             # run every probe once for real and print the result
+lagscope --speedtest                   # measure download speed once (saturates the line)
 ```
 
 ### How the number is computed

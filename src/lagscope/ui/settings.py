@@ -584,6 +584,22 @@ class SettingsDialog(QDialog):
         history_form.addRow(history_hint)
         form.addRow(history_box)
 
+        speed_box = QGroupBox(tr("speed.group"), page)
+        speed_form = QFormLayout(speed_box)
+        self.speed_budget_spin = QSpinBox(speed_box)
+        self.speed_budget_spin.setRange(3, 60)
+        self.speed_budget_spin.setSuffix(" s")
+        speed_form.addRow(tr("speed.budget"), self.speed_budget_spin)
+        self.speed_mb_spin = QSpinBox(speed_box)
+        self.speed_mb_spin.setRange(5, 2000)
+        self.speed_mb_spin.setSuffix(" MB")
+        speed_form.addRow(tr("speed.max_mb"), self.speed_mb_spin)
+        speed_hint = QLabel(tr("speed.hint"), speed_box)
+        speed_hint.setWordWrap(True)
+        speed_hint.setStyleSheet("color: palette(mid);")
+        speed_form.addRow(speed_hint)
+        form.addRow(speed_box)
+
         update_box = QGroupBox(tr("update.group"), page)
         update_layout = QVBoxLayout(update_box)
         self.update_check_box = QCheckBox(tr("update.enabled"), update_box)
@@ -690,6 +706,8 @@ class SettingsDialog(QDialog):
         self.history_keep_spin.setValue(self._config.history.keep_hours)
         self.auto_check_check.setChecked(self._config.history.auto_check)
         self.update_check_box.setChecked(self._config.updates.enabled)
+        self.speed_budget_spin.setValue(self._config.speed.budget_s)
+        self.speed_mb_spin.setValue(self._config.speed.max_mb)
 
         self._sync_history_state()
         self._sync_anchor_state()
@@ -837,6 +855,8 @@ class SettingsDialog(QDialog):
         config.history.keep_hours = self.history_keep_spin.value()
         config.history.auto_check = self.auto_check_check.isChecked()
         config.updates.enabled = self.update_check_box.isChecked()
+        config.speed.budget_s = self.speed_budget_spin.value()
+        config.speed.max_mb = self.speed_mb_spin.value()
         return config.sanitized()
 
     # ---------------------------------------------------------------- actions

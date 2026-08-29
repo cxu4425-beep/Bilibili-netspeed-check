@@ -53,6 +53,7 @@ class MonitorWorker(QObject):
     diagnosisReady = Signal(object)   # (PathReport, verdict key, detail)
     quickCheckReady = Signal(object)  # (timestamp, verdict key, detail) - unattended
     lineSwitched = Signal(object)     # LineSwitch - moved to a faster CDN edge
+    speedTestReady = Signal(object)   # SpeedResult - the on-demand speed test
     extraUpdated = Signal(object)     # ExtraResult - one side watch, refreshed
 
     def __init__(self, config: Config) -> None:
@@ -183,6 +184,52 @@ class MonitorWorker(QObject):
             return
         key, detail = verdict(report)
         self.quickCheckReady.emit((time.time(), key, detail))
+
+    @Slot()
+    def runSpeedTest(self) -> None:
+        """Download flat out for a few seconds, from the most relevant server.
+
+        Deliberately never automatic: it saturates the line, so the latency
+        figure it runs alongside will spike and the stream may stutter. The
+        app marks the minutes it covers so that spike is not read later as a
+        fault of the connection.
+        """
+        from .probes.speed import measure_download, public_url
+
+        with self._lock:
+            config = self._config
+        budget_s = float(config.speed.budget_s)
+        max_bytes = int(config.speed.max_mb) * 1024 * 1024
+
+        url, source = self._bulk_url()
+        if not url:
+            url, source = public_url(max_bytes), "public"
+
+        assert self._client is not None
+        result = measure_download(self._client.session, url, budget_s=budget_s,
+                                  max_bytes=max_bytes, source=source)
+        if not result.ok and source == "stream":
+            # The CDN refused a long read; the public endpoint still answers
+            # the question, so say so rather than reporting a failure.
+            LOG.debug("speed test on the stream CDN failed (%s); using the public one",
+                      result.error)
+            result = measure_download(self._client.session, public_url(max_bytes),
+                                      budget_s=budget_s, max_bytes=max_bytes,
+                                      source="public")
+        self.speedTestReady.emit(result)
+
+    def _bulk_url(self) -> tuple:
+        """Somewhere worth downloading from: what is being watched, ideally."""
+        target = self._target
+        if target is not None and self._video is not None and target.kind == KIND_VIDEO:
+            url = self._video.bulk_url()
+            if url:
+                return url, "stream"
+        if target is not None and self._stream is not None and target.kind == KIND_LIVE:
+            url = self._stream.bulk_url()
+            if url:
+                return url, "stream"
+        return "", "public"
 
     def _diagnosis_host(self, config: Config) -> str:
         """Diagnose the path to whatever is being watched right now."""

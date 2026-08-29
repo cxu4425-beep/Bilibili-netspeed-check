@@ -452,6 +452,18 @@ class StreamProbe:
         del self._switches[:-20]        # a bounded record, not a log file
         return switch
 
+    def bulk_url(self) -> str:
+        """A URL worth downloading hard from, for a speed test.
+
+        The HLS playlist is a few hundred bytes and says nothing about speed;
+        an FLV endpoint is a continuous byte stream of exactly the traffic the
+        viewer is receiving, which is the honest thing to measure.
+        """
+        for endpoint in self._endpoints:
+            if not endpoint.is_hls:
+                return endpoint.url
+        return ""
+
     @property
     def switches(self) -> list:
         return list(self._switches)

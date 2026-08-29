@@ -210,6 +210,19 @@ class HistoryConfig:
 
 
 @dataclass
+class SpeedConfig:
+    """The on-demand speed test. It saturates the line, so nothing is automatic.
+
+    Both caps exist because this costs data: whichever is reached first ends
+    the test, so a gigabit line stops at the byte cap rather than pulling down
+    a gigabyte to prove a point.
+    """
+
+    budget_s: int = 10
+    max_mb: int = 80
+
+
+@dataclass
 class UpdateConfig:
     """Checking whether a newer release exists. One request, nothing sent."""
 
@@ -253,6 +266,7 @@ class Config:
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     history: HistoryConfig = field(default_factory=HistoryConfig)
     updates: UpdateConfig = field(default_factory=UpdateConfig)
+    speed: SpeedConfig = field(default_factory=SpeedConfig)
     thresholds: ThresholdConfig = field(default_factory=ThresholdConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
     web: WebConfig = field(default_factory=WebConfig)
@@ -330,6 +344,8 @@ class Config:
         self.history.bucket_s = int(_clamp(self.history.bucket_s, 15, 3600))
         self.history.auto_check_cooldown_s = int(
             _clamp(self.history.auto_check_cooldown_s, 60, 86_400))
+        self.speed.budget_s = int(_clamp(self.speed.budget_s, 3, 60))
+        self.speed.max_mb = int(_clamp(self.speed.max_mb, 5, 2000))
         self.updates.skip_version = str(self.updates.skip_version or "").strip()[:32]
         self.updates.last_checked = float(_clamp(self.updates.last_checked, 0, 4e10))
         self.web.port = int(_clamp(self.web.port, 1024, 65535))
@@ -432,6 +448,7 @@ _NESTED = {
     "recording": RecordingConfig,
     "history": HistoryConfig,
     "updates": UpdateConfig,
+    "speed": SpeedConfig,
     "thresholds": ThresholdConfig,
     "detect": DetectConfig,
     "web": WebConfig,

@@ -60,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
              "'all' for everything kept)",
     )
     parser.add_argument(
+        "--speedtest", action="store_true",
+        help="download flat out for a few seconds and report the speed; this "
+             "saturates the line while it runs",
+    )
+    parser.add_argument(
         "--selftest", nargs="?", const="", metavar="ROOM",
         help="run every probe once against the real world and print what came back; "
              "pass a room id that is currently streaming to cover the Bilibili paths",
@@ -139,6 +144,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.diagnose is not None:
         return _diagnose(config, args.diagnose)
+
+    if args.speedtest:
+        return _speedtest(config)
 
     if args.selftest is not None:
         return _selftest(config, args.selftest)
@@ -333,6 +341,38 @@ def _diagnosis_host(config) -> str:
     # Anything else (a Bilibili room, a video, network-only) is reached through
     # the same line, so the API host is a fair stand-in.
     return config.probe.rtt_host
+
+
+def _speedtest(config) -> int:
+    """Measure the line flat out. No target is known here, so it uses the
+    public endpoint - the GUI prefers the CDN you are actually watching."""
+    from .i18n import tr
+    from .probes.network import HttpClient
+    from .probes.speed import measure_download, public_url, tier_key
+    from .ui.theme import format_mbps
+
+    max_bytes = int(config.speed.max_mb) * 1024 * 1024
+    print(tr("speed.running"), flush=True)
+
+    client = HttpClient(timeout_s=float(config.probe.timeout_ms) / 1000.0)
+    try:
+        result = measure_download(client.session, public_url(max_bytes),
+                                  budget_s=float(config.speed.budget_s),
+                                  max_bytes=max_bytes, source="public")
+    finally:
+        client.close()
+
+    if not result.ok:
+        print(f"{tr('speed.failed')}: {result.error}", file=sys.stderr)
+        return 1
+    print()
+    print(tr("speed.result", value=format_mbps(result.mbps)))
+    print(tr(tier_key(result.mbps)))
+    print(tr("speed.cost", megabytes=f"{result.bytes / 1024 / 1024:.0f}",
+             seconds=f"{result.seconds:.0f}"))
+    if not result.warmed:
+        print(tr("speed.short"))
+    return 0
 
 
 def _selftest(config, room: str) -> int:

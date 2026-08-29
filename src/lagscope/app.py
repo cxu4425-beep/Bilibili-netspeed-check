@@ -37,6 +37,7 @@ from .single_instance import SingleInstance
 from .update import UpdateInfo, check as check_for_update
 from .web import DashboardServer
 from .ui.icons import app_icon
+from .probes.speed import tier_key
 from .ui.theme import format_mbps, format_ms, level_for
 from .ui.overlay import OverlayWindow
 from .ui.history_window import HistoryWindow
@@ -76,6 +77,7 @@ class MonitorApplication(QObject):
     clipboardText = Signal(str)
     diagnosisRequested = Signal()
     quickCheckRequested = Signal()
+    speedTestRequested = Signal()
     updateFound = Signal(object)      # UpdateInfo, from the checker thread
 
     def __init__(self, app: QApplication, config: Config,
@@ -105,6 +107,8 @@ class MonitorApplication(QObject):
         self._last_diagnosis: Optional[tuple] = None
         self._last_auto_check = 0.0
         self._switches: list = []    # CDN edges moved to, newest last
+        self._speed_running = False
+        self._last_speed = None
         self._update_available: Optional[UpdateInfo] = None
         self._update_manual = False
         self._update_announced = False
@@ -151,6 +155,8 @@ class MonitorApplication(QObject):
         self.quickCheckRequested.connect(self._worker.runQuickCheck)
         self._worker.quickCheckReady.connect(self._on_quick_check)
         self._worker.lineSwitched.connect(self._on_line_switch)
+        self.speedTestRequested.connect(self._worker.runSpeedTest)
+        self._worker.speedTestReady.connect(self._on_speed_test)
         self._worker.diagnosisReady.connect(self._on_diagnosis)
         self._worker.extraUpdated.connect(self._on_extra)
 
@@ -234,6 +240,10 @@ class MonitorApplication(QObject):
         report_action = QAction(tr("menu.report"), self._menu)
         report_action.triggered.connect(self.export_report)
         self._menu.addAction(report_action)
+
+        speed_action = QAction(tr("menu.speedtest"), self._menu)
+        speed_action.triggered.connect(self.run_speed_test)
+        self._menu.addAction(speed_action)
 
         mark_action = QAction(tr("menu.mark"), self._menu)
         mark_action.triggered.connect(self.mark_moment)
@@ -454,6 +464,58 @@ class MonitorApplication(QObject):
         self._history_window.raise_()
         self._history_window.activateWindow()
 
+    # --------------------------------------------------------- speed test
+    def run_speed_test(self) -> None:
+        """Ask before starting: this one deliberately hurts while it runs."""
+        if self._speed_running:
+            return
+        answer = QMessageBox.question(
+            None, tr("speed.title"),
+            tr("speed.confirm", seconds=self._config.speed.budget_s,
+               megabytes=self._config.speed.max_mb),
+            QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Ok,
+        )
+        if answer != QMessageBox.Ok:
+            return
+        self._speed_running = True
+        # Marked before it starts: the latency spike it is about to cause is
+        # this app's own doing, and the history should say so rather than
+        # leaving a mysterious red tick for someone to worry about later.
+        if self._config.history.enabled:
+            self._history.mark(tr("speed.marker"))
+        if self._tray is not None:
+            self._tray.showMessage(tr("speed.title"), tr("speed.running"), app_icon(), 4000)
+        self.speedTestRequested.emit()
+
+    @Slot(object)
+    def _on_speed_test(self, result) -> None:
+        self._speed_running = False
+        if result is None:
+            return
+        self._last_speed = result
+        self._flush_history()
+        if self._history_window is not None and self._history_window.isVisible():
+            self._history_window.refresh()
+        QMessageBox.information(None, tr("speed.title"), self._speed_text(result))
+
+    def _speed_text(self, result) -> str:
+        """The number, what it can carry, and what it cost to find out."""
+        if not result.ok:
+            return f"{tr('speed.failed')}\n{result.error or ''}".strip()
+        lines = [
+            f"{tr('speed.result', value=format_mbps(result.mbps))}",
+            "",
+            tr(tier_key(result.mbps)),
+            "",
+            tr("speed.source_stream") if result.source == "stream"
+            else tr("speed.source_public"),
+            tr("speed.cost", megabytes=f"{result.bytes / 1024 / 1024:.0f}",
+               seconds=f"{result.seconds:.0f}"),
+        ]
+        if not result.warmed:
+            lines.append(tr("speed.short"))
+        return "\n".join(lines)
+
     def mark_moment(self) -> None:
         """Record "I changed something", so the effect can be measured later."""
         label, accepted = QInputDialog.getText(
@@ -497,6 +559,7 @@ class MonitorApplication(QObject):
             "auto_findings": self._history.findings(hours),
             "switches": list(reversed(self._switches)),
             "comparisons": self._comparisons(hours),
+            "speed": self._last_speed,
             "target_label": self._room_title or self._watch_label(),
             "good_ms": self._config.thresholds.good_ms,
             "warn_ms": self._config.thresholds.warn_ms,
@@ -532,7 +595,7 @@ class MonitorApplication(QObject):
             path_report=context["path_report"], verdict_key=context["verdict_key"],
             verdict_detail=context["verdict_detail"], target_label=context["target_label"],
             auto_findings=context["auto_findings"], switches=context["switches"],
-            comparisons=context["comparisons"],
+            comparisons=context["comparisons"], speed=context["speed"],
         ))
         if self._tray is not None:
             self._tray.showMessage(tr("report.title"), tr("report.copied"), app_icon(), 4000)

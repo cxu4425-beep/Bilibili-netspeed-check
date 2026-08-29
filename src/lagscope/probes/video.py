@@ -227,6 +227,10 @@ class VideoProbe:
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
         return tcp_rtt_ms(self._stream.host, port, timeout_s)
 
+    def bulk_url(self) -> str:
+        """The media file already chosen for this video - a real payload."""
+        return self._stream.url if self._stream is not None else ""
+
     # ------------------------------------------------------------------ fetch
     def fetch_info(self, video_id: str, page: int) -> VideoInfo:
         payload = self.client.get_json(VIEW_URL, params=_id_params(video_id), headers=VIDEO_HEADERS)
