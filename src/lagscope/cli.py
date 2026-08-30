@@ -70,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
              "pass a room id that is currently streaming to cover the Bilibili paths",
     )
     parser.add_argument(
+        "--why-ping", nargs="?", const="", metavar="HOST",
+        help="time ICMP and a TCP handshake against the same address and explain "
+             "why they differ; defaults to the host currently being measured",
+    )
+    parser.add_argument(
         "--detect-report", action="store_true",
         help="print what each detection source can see on this machine, then exit",
     )
@@ -147,6 +152,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.speedtest:
         return _speedtest(config)
+
+    if args.why_ping is not None:
+        return _why_ping(config, args.why_ping)
 
     if args.selftest is not None:
         return _selftest(config, args.selftest)
@@ -384,6 +392,30 @@ def _selftest(config, room: str) -> int:
     print(format_report(results))
     # A non-zero exit lets this be used in a script, but the report is the point.
     return 1 if worst_status(results) == FAIL else 0
+
+
+def _why_ping(config, host: str) -> int:
+    """Answer "why doesn't this match ping" with both numbers side by side."""
+    from .pingcompare import compare, format_report
+    from .probes.network import host_port_from_url
+
+    port = 443
+    target = (host or "").strip()
+    if target:
+        # Accept a pasted URL as readily as a bare hostname.
+        if "//" in target or target.startswith(("http:", "https:")):
+            target, port = host_port_from_url(target)
+    else:
+        target = config.probe.rtt_host
+        port = config.probe.rtt_port
+    if not target:
+        print("no host to measure; pass one, e.g. --why-ping cn-gotcha09.bilivideo.com")
+        return 2
+
+    print(f"measuring {target} with both tools; this takes a few seconds...\n", flush=True)
+    result = compare(target, port)
+    print(format_report(result))
+    return 0 if result.tcp_samples else 1
 
 
 def _history_hours(text: str):

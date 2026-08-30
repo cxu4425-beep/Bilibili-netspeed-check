@@ -29,6 +29,7 @@ from .config import app_config_dir
 from .history import Bucket
 from .i18n import tr
 from .probes.speed import tier_key
+from .textfmt import pad as text_pad, width as text_width
 from .ui.theme import format_mbps, format_ms
 
 CHART_WIDTH = 960
@@ -80,6 +81,33 @@ def grid_values(top: float, lines: int = 4) -> List[float]:
         value += step
     values.append(top)
     return values
+
+
+def _switch_label(from_host: str, to_host: str) -> str:
+    """``a → b``, with each side named when the hostname says who runs it."""
+    from .probes.cdninfo import describe, summary
+
+    def one(host):
+        if not host:
+            return "--"
+        info = describe(host)
+        return f"{host} ({summary(host)})" if info.operator_key or info.located else host
+
+    return f"{one(from_host)} → {one(to_host)}"
+
+
+def _where_html(host: str) -> str:
+    """What a CDN hostname says about the machine, when it says anything."""
+    from .probes.cdninfo import describe, summary
+
+    info = describe(host)
+    if not (info.operator_key or info.located):
+        return ""
+    text = f'<div class="sub" style="margin-top:4px">{html.escape(summary(host))}</div>'
+    if info.is_peer:
+        text += (f'<div class="sub" style="margin-top:4px;color:#b45309">'
+                 f'{html.escape(tr("cdn.peer.warn"))}</div>')
+    return text
 
 
 def chart_svg(buckets: Sequence[Bucket], bucket_s: float = 60.0,
@@ -234,13 +262,9 @@ def _hour_ticks(first: float, last: float) -> List[float]:
 
 
 # -------------------------------------------------------------------- report
-def _width(text: str) -> int:
-    """Columns a string occupies in a monospaced view (CJK glyphs take two)."""
-    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
-
-
-def _pad(text: str, width: int) -> str:
-    return text + " " * max(0, width - _width(text))
+# Kept as local names; the implementation is shared with the other text views.
+_width = text_width
+_pad = text_pad
 
 
 def _fmt_pct(value: Optional[float]) -> str:
@@ -333,7 +357,8 @@ def switch_rows(switches: Sequence) -> List[tuple]:
         saved = getattr(switch, "saved_ms", None)
         rows.append((
             when,
-            f"{getattr(switch, 'from_host', '') or '--'} → {getattr(switch, 'to_host', '')}",
+            _switch_label(getattr(switch, "from_host", ""),
+                          getattr(switch, "to_host", "")),
             f"-{format_ms(saved)}" if saved else "",
         ))
     return rows
@@ -485,7 +510,8 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
             f'<div class="cell"><div class="k">{esc(tr("label.down"))}</div>'
             f'<div class="v">{esc(format_mbps(speed.mbps))}</div></div>'
             f'<div class="cell"><div class="k">{esc(tr("speed.host"))}</div>'
-            f'<div class="v" style="font-size:14px">{esc(speed.host)}</div></div>'
+            f'<div class="v" style="font-size:14px">{esc(speed.host)}</div>'
+            f'{_where_html(speed.host)}</div>'
             f'</div><p class="sub" style="margin:10px 0 0">{esc(tr(tier_key(speed.mbps)))}</p>'
             "</div>"
         )

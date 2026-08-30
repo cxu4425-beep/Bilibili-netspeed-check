@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
@@ -36,29 +37,89 @@ def host_port_from_url(url: str, default_port: int = 443) -> Tuple[str, int]:
     return host, port
 
 
-def tcp_rtt_ms(host: str, port: int = 443, timeout_s: float = 4.0) -> Optional[float]:
-    """Time a TCP handshake, which is one round trip to the edge server.
+@dataclass(frozen=True)
+class ConnectTiming:
+    """A TCP handshake, with the name lookup billed separately.
 
-    Returns ``None`` when the host is unreachable within ``timeout_s``.
+    ``socket.create_connection`` takes a hostname, so the obvious way to time a
+    handshake quietly folds the DNS lookup into the answer. That is why this
+    app's latency could read tens of milliseconds above ``ping`` for the same
+    server: it was not measuring the same thing. Resolving first, then timing
+    the connection to the address, keeps the two apart.
+    """
+
+    rtt_ms: Optional[float] = None
+    dns_ms: Optional[float] = None
+    address: str = ""           # the IP actually connected to
+    error: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return self.rtt_ms is not None
+
+
+def _is_ip_literal(host: str) -> bool:
+    for family in (socket.AF_INET, socket.AF_INET6):
+        try:
+            socket.inet_pton(family, host)
+            return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def connect_timing(host: str, port: int = 443, timeout_s: float = 4.0) -> ConnectTiming:
+    """Resolve, then time the handshake to the address that came back.
+
+    Reported separately because they fail and drift for different reasons: a
+    slow resolver is not a slow path to the server, and only one of them is
+    something the viewer can do anything about.
     """
     if not host:
-        return None
-    started = time.perf_counter()
-    sock = None
-    try:
-        sock = socket.create_connection((host, int(port)), timeout=timeout_s)
-        elapsed = (time.perf_counter() - started) * 1000.0
-        return elapsed
-    except (OSError, ValueError):
-        return None
-    finally:
-        if sock is not None:
+        return ConnectTiming(error="no-host")
+
+    dns_ms = None
+    if _is_ip_literal(host):
+        infos = [(socket.AF_INET6 if ":" in host else socket.AF_INET,
+                  socket.SOCK_STREAM, 0, "", (host, int(port)))]
+    else:
+        started = time.perf_counter()
+        try:
+            infos = socket.getaddrinfo(host, int(port), type=socket.SOCK_STREAM)
+        except (OSError, ValueError) as exc:
+            return ConnectTiming(dns_ms=(time.perf_counter() - started) * 1000.0,
+                                 error=_short_error(exc))
+        dns_ms = (time.perf_counter() - started) * 1000.0
+
+    last_error = ""
+    for family, socktype, proto, _canonical, address in infos:
+        sock = socket.socket(family, socktype, proto)
+        try:
+            sock.settimeout(timeout_s)
+            started = time.perf_counter()
+            sock.connect(address)
+            rtt_ms = (time.perf_counter() - started) * 1000.0
+            return ConnectTiming(rtt_ms=rtt_ms, dns_ms=dns_ms, address=str(address[0]))
+        except (OSError, ValueError) as exc:
+            last_error = _short_error(exc)
+        finally:
             try:
                 sock.close()
             except OSError:
                 pass
+    return ConnectTiming(dns_ms=dns_ms, error=last_error or "unreachable")
 
 
+def tcp_rtt_ms(host: str, port: int = 443, timeout_s: float = 4.0) -> Optional[float]:
+    """Time a TCP handshake, which is one round trip to the edge server.
+
+    Returns ``None`` when the host is unreachable within ``timeout_s``. The
+    name lookup is excluded - see :func:`connect_timing`, which reports it.
+    """
+    return connect_timing(host, port, timeout_s).rtt_ms
+
+
+# ``ping`` prints the time in the console's own language.
 _PING_TIME_RE = re.compile(
     r"(?:time|時間|时间|tempo|Zeit|temps)\s*[=<]\s*([\d.,]+)\s*m?s", re.IGNORECASE
 )

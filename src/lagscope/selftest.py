@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
 from . import APP_NAME, __version__
+from .probes.cdninfo import describe, summary
 
 OK = "ok"
 WARN = "warn"
@@ -140,12 +141,29 @@ def check_endpoints(result: CheckResult, stream, room: str) -> None:
     for endpoint in endpoints[:6]:
         result.add(f"  {endpoint.protocol:<12} {endpoint.fmt:<5} qn={endpoint.qn:<5} "
                    f"{endpoint.host}")
+    # What those hostnames say about the machines. This is the part a reader
+    # can act on: which CDN they were assigned, and whether any of it is a
+    # peer-assisted node rather than a datacentre.
+    peers = []
+    for host in stream.hosts_available()[:6]:
+        described = describe(host)
+        if described.operator_key or described.located:
+            result.add(f"  {host}  ->  {summary(host)}")
+        if described.is_peer:
+            peers.append(host)
+    if peers:
+        result.status = WARN
+        result.add(f"peer-assisted (PCDN) node(s) offered: {', '.join(peers)}")
+        result.add("  those are home connections reselling upstream, and a common")
+        result.add("  cause of stuttering on a line that otherwise tests fine")
     chosen = stream.choose_endpoint(endpoints)
     if chosen is None:
         result.status = FAIL
         result.add("none of them was chosen, which should be impossible")
         return
     result.add(f"chosen: {chosen.fmt} on {chosen.host}")
+    if describe(chosen.host).operator_key or describe(chosen.host).located:
+        result.add(f"  that edge is: {summary(chosen.host)}")
     if chosen.fmt != "fmp4":
         result.status = WARN
         result.add("not fmp4 - latency will be estimated rather than measured")
