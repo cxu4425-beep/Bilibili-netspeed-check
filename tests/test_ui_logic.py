@@ -145,3 +145,60 @@ def test_no_string_key_is_defined_twice():
     keys = re.findall(r'^    "([a-z0-9_.]+)":', source, re.MULTILINE)
     repeated = [key for key, count in collections.Counter(keys).items() if count > 1]
     assert repeated == [], f"defined more than once: {repeated}"
+
+
+# ------------------------------------------------- the analysis in the window
+def _analysis_context():
+    from lagscope.actions import suggest
+    from lagscope.patterns import EdgeStats, EdgeVerdict
+
+    good = EdgeStats(host="upos-sz-mirrorhw.bilivideo.com", buckets=30,
+                     samples=600, ok=600, avg_ms=62.0, share_pct=40.0)
+    bad = EdgeStats(host="cn-hbyc-ct-01.bilivideo.com", buckets=40,
+                    samples=800, ok=780, avg_ms=170.0, stalls=9, share_pct=60.0)
+    verdict = EdgeVerdict(best=good, worst=bad, difference_ms=108.0,
+                          key="edge.differs")
+    return {
+        "edges": [good, bad],
+        "edge_note": "the edges differ",
+        "pattern_note": "evenings are worse",
+        "actions": suggest(edge_verdict=verdict, verdict_key="verdict.wifi"),
+    }
+
+
+def test_the_window_shows_the_same_analysis_the_report_carries():
+    """It used to live only in the exported file, so opening the window
+    showed the chart and hid the answer."""
+    from lagscope.ui.history_window import analysis_html
+
+    html = analysis_html(_analysis_context())
+    assert "cn-hbyc-ct-01.bilivideo.com" in html
+    assert "the edges differ" in html
+    assert "evenings are worse" in html
+    assert tr("action.title") in html
+
+
+def test_the_window_puts_the_advice_before_the_evidence():
+    """The panel is small and scrolls; the answer must not be below the fold."""
+    from lagscope.ui.history_window import analysis_html
+
+    html = analysis_html(_analysis_context())
+    assert html.index(tr("action.title")) < html.index(tr("edge.title"))
+
+
+def test_an_empty_analysis_renders_nothing_rather_than_empty_headings():
+    from lagscope.ui.history_window import analysis_html
+
+    assert analysis_html({}) == ""
+    assert analysis_html({"edges": [], "actions": []}) == ""
+
+
+def test_hostnames_are_escaped_before_being_put_into_the_markup():
+    from lagscope.patterns import EdgeStats
+    from lagscope.ui.history_window import analysis_html
+
+    nasty = EdgeStats(host="<script>x</script>", buckets=20, samples=1,
+                      ok=1, avg_ms=50.0, share_pct=100.0)
+    html = analysis_html({"edges": [nasty]})
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html

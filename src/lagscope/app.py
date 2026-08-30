@@ -463,6 +463,9 @@ class MonitorApplication(QObject):
             self._history_window.exportRequested.connect(self.export_report)
             self._history_window.copyRequested.connect(self._copy_report_summary)
             self._history_window.markRequested.connect(self.mark_moment)
+            # The window asks for the analysis rather than being handed a
+            # snapshot, so it stays current as the range buttons change.
+            self._history_window.set_analysis_provider(self._analysis)
         else:
             self._history_window.refresh()
         self._history_window.show()
@@ -808,6 +811,15 @@ class MonitorApplication(QObject):
             None, tr("web.group"),
             f"{tr('web.url_label')}\n\n" + "\n".join(urls) + f"\n\n{tr('web.copied')}",
         )
+
+    def _analysis(self, hours) -> dict:
+        """The edge/pattern/action analysis, from wherever it is asked for.
+
+        The window and the exported report go through this same call, so what
+        someone reads on screen cannot drift from what they send to support.
+        """
+        _report, verdict_key, _detail = self._last_diagnosis or (None, "", "")
+        return self._pattern_context(hours, verdict_key)
 
     def _pattern_context(self, hours, verdict_key: str = "") -> dict:
         """Which edges served you, when it was bad, and what to try about it."""

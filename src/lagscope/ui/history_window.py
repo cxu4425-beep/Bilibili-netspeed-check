@@ -18,7 +18,8 @@ from typing import List, Optional, Sequence
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
-    QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
+    QDialog, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout,
+    QWidget,
 )
 
 from ..config import Config
@@ -186,6 +187,7 @@ class HistoryWindow(QDialog):
         super().__init__(parent)
         self._config = config
         self._history = history
+        self._analysis_provider = None
         self._hours: Optional[float] = 24.0
 
         self.setWindowTitle(tr("history.title"))
@@ -217,6 +219,21 @@ class HistoryWindow(QDialog):
         self.worst_label.setWordWrap(True)
         layout.addWidget(self.worst_label)
 
+        # The analysis used to live only in the exported file, which meant
+        # opening this window showed the chart and hid the answer.
+        self.analysis_label = QLabel(self)
+        self.analysis_label.setWordWrap(True)
+        self.analysis_label.setTextFormat(Qt.RichText)
+        self.analysis_label.setVisible(False)
+        analysis_area = QScrollArea(self)
+        analysis_area.setWidget(self.analysis_label)
+        analysis_area.setWidgetResizable(True)
+        analysis_area.setFrameShape(QScrollArea.NoFrame)
+        analysis_area.setMaximumHeight(320)
+        analysis_area.setVisible(False)
+        self._analysis_area = analysis_area
+        layout.addWidget(analysis_area)
+
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         self.mark_button = QPushButton(tr("menu.mark"), self)
@@ -241,6 +258,11 @@ class HistoryWindow(QDialog):
         self.chart.set_config(config)
         self.refresh()
 
+    def set_analysis_provider(self, provider) -> None:
+        """A callable taking hours and returning the same dict the report uses."""
+        self._analysis_provider = provider
+        self.refresh()
+
     def hours(self) -> Optional[float]:
         return self._hours
 
@@ -258,6 +280,23 @@ class HistoryWindow(QDialog):
         self.summary_label.setText(self.summary_text())
         self.worst_label.setText(f"{tr('report.worst')}: "
                                  f"{worst_hour_line(self._history.worst_hour(self._hours))}")
+        self._refresh_analysis()
+
+    def _refresh_analysis(self) -> None:
+        """Which edges, when it was bad, and what to try - the same text the
+        report carries, so the two cannot say different things."""
+        if self._analysis_provider is None:
+            return
+        try:
+            context = self._analysis_provider(self._hours)
+        except Exception:                       # noqa: BLE001 - never block the chart
+            self._analysis_area.setVisible(False)
+            return
+
+        html = analysis_html(context)
+        self.analysis_label.setText(html)
+        self.analysis_label.setVisible(bool(html))
+        self._analysis_area.setVisible(bool(html))
 
     def summary_text(self) -> str:
         summary = self._history.summary(self._hours)
@@ -273,6 +312,59 @@ class HistoryWindow(QDialog):
             f"{tr('report.spikes')} {summary.get('spikes', 0)}",
         ]
         return "   ·   ".join(parts)
+
+
+def analysis_html(context: dict) -> str:
+    """Render the edge table, the pattern line and the action list.
+
+    Kept a plain function so it can be tested without building a window.
+    """
+    from html import escape
+
+    from ..actions import has_local_cause
+    from ..probes.cdninfo import summary as cdn_summary
+
+    parts: List[str] = []
+
+    actions = context.get("actions") or ()
+    if actions:
+        items = "".join(
+            f"<li>{escape(tr(action.key))}<br>"
+            f"<span style='opacity:.7'>{escape(tr('action.because'))}: "
+            f"{escape(tr(action.because_key, detail=action.detail) if action.because_key else '')}"
+            f"</span></li>"
+            for action in actions
+        )
+        parts.append(f"<p><b>{escape(tr('action.title'))}</b></p><ol>{items}</ol>")
+        if not has_local_cause(actions):
+            parts.append(f"<p>{escape(tr('action.not_yours'))}</p>")
+
+    edges = context.get("edges") or ()
+    if edges:
+        rows = "".join(
+            f"<tr><td>{escape(item.host)}<br>"
+            f"<span style='opacity:.7'>{escape(cdn_summary(item.host))}</span></td>"
+            f"<td align='right'>&nbsp;{escape(format_ms(item.avg_ms))}</td>"
+            f"<td align='right'>&nbsp;{item.share_pct:.0f}%</td>"
+            f"<td align='right'>&nbsp;{item.stalls}</td></tr>"
+            for item in edges
+        )
+        parts.append(
+            f"<b>{escape(tr('edge.title'))}</b>"
+            f"<table width='100%' cellspacing='0' cellpadding='3'><tr>"
+            f"<th align='left'>{escape(tr('edge.col_host'))}</th>"
+            f"<th align='right'>{escape(tr('edge.col_avg'))}</th>"
+            f"<th align='right'>{escape(tr('edge.col_share'))}</th>"
+            f"<th align='right'>{escape(tr('edge.col_stalls'))}</th>"
+            f"</tr>{rows}</table>"
+        )
+    if context.get("edge_note"):
+        parts.append(f"<p>{escape(context['edge_note'])}</p>")
+    if context.get("pattern_note"):
+        parts.append(f"<p><b>{escape(tr('pattern.title'))}</b><br>"
+                     f"{escape(context['pattern_note'])}</p>")
+
+    return "".join(parts)
 
 
 def _runs(rows: Sequence[Bucket], bucket_s: float) -> List[List[Bucket]]:
