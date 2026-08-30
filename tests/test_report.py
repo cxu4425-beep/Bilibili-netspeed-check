@@ -218,3 +218,21 @@ def test_the_pasteable_table_lines_up_with_wide_glyphs(tmp_path):
 
     # Every value begins in the same column, whatever its label was made of.
     assert len(columns) == 1
+
+
+def test_the_chart_does_not_depend_on_the_order_buckets_arrive_in():
+    """Recorded history is ordered; a chart that quietly misdraws when it is
+    not would hide the problem rather than show it."""
+    import time
+
+    from lagscope.history import Bucket
+    from lagscope.report import chart_svg
+
+    now = time.time()
+    ordered = [Bucket(start=now - (60 - i) * 60, count=20, ok=20,
+                      avg_ms=60 + (i % 20) * 3, min_ms=50, max_ms=140, p95_ms=120)
+               for i in range(60)]
+    shuffled = ordered[30:] + ordered[:30]
+
+    assert chart_svg(ordered, 60.0, None, None, []) == \
+        chart_svg(shuffled, 60.0, None, None, [])

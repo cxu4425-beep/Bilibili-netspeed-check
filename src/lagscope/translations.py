@@ -483,6 +483,61 @@ JA: dict = {
     ),
     "update.downloading": "更新をダウンロードしています…",
     "update.install_failed": "更新をインストールできませんでした：{reason}\nダウンロードページを開きます。",
+    "edge.title": "割り当てられたエッジ",
+    "edge.col_host": "エッジ",
+    "edge.col_avg": "平均遅延",
+    "edge.col_share": "時間の割合",
+    "edge.col_stalls": "スタッタ",
+    "edge.differs": (
+        "差があります：{worst} は {best} より {diff} ms 遅く、時間の {share}% をその遅い方で過ごしています。「時々カクつく」の正体は帯域ではなく、どのマシンを割り当てられたかであることがほとんどです。"
+    ),
+    "edge.same": "使用したエッジの性能はほぼ同じでした。カクつきの原因はエッジの選択ではありません。",
+    "edge.only_one": "全期間で同じエッジだったため、比較対象がありません。",
+    "edge.not_enough": "エッジを比較するにはまだ記録が足りません（各エッジ 10 分以上必要）。",
+    "edge.none": "エッジ情報なし",
+    "pattern.title": "いつ悪くなるか",
+    "pattern.found": (
+        "時間帯の傾向があります：{when} は普段よりはっきり悪いです（{bad} ms、普段は {overall} ms）。時計に沿う現象は輻輳——ピーク時間や混雑した国際回線——であり、ご自宅の機器では解決できません。"
+    ),
+    "pattern.none": (
+        "時間帯の傾向はなく、どの時間もほぼ同じです。これはピーク時の輻輳という種類の原因を除外し、回線・機器・特定のエッジなど、常に一定な何かを示しています。"
+    ),
+    "pattern.not_enough": "傾向を見るにはまだ記録が足りません（数日必要です）。",
+    "pattern.no_data": "まだ記録がありません",
+    "pattern.covered": "{days} 日分",
+    "pattern.range": "{start}:00〜{end}:59",
+    "action.title": "では何を試すか",
+    "action.because": "根拠",
+    "action.none": "この期間、対処すべき問題は測定されませんでした。",
+    "action.not_yours": (
+        "上記はいずれもご自宅で直せるものではありません。できるのは、画質を一段下げる、ピーク時間を避ける、別の経路を通るプレーヤーや CDN を使う、のいずれかです。"
+    ),
+    "action.peer_node": "プレーヤーを開き直す（または画質を切り替える）で再割り当てを——PCDN ノードが割り当てられています",
+    "action.edge_reassign": "プレーヤーを開き直して再割り当てを受け、設定の「最速 CDN を自動選択」が有効か確認してください",
+    "action.peak_hours": "混雑する時間帯は画質を一段下げるか、その時間を避けてください",
+    "action.wifi": "5GHz に変更するか、有線で接続してください",
+    "action.home": "まず自宅側を確認：ルーター、LAN ケーブル、帯域を使っている他の機器",
+    "action.dns": "別の DNS（1.1.1.1 や 8.8.8.8）に変えて測り直してください",
+    "action.isp": "問題は ISP 区間にあります——このレポートをサポートに送ってください。区間ごとの数値が証拠になります",
+    "action.server": "問題は向こう側にあり、あなたの側ではありません——別の配信を試すか時間を置いてください",
+    "action.loss": "まずパケットロスに対処を：配信は遅延よりロスに弱く、1% で既にカクつきます",
+    "action.target_down": "まったく応答がありません——配信が続いているか、ID が正しいか確認してください",
+    "action.lower_quality": "画質を下げてください：実測のダウンロード速度では高画質を支えられません",
+    "action.flapping": "エッジ間を行き来しており、切り替えのたびにカクつきます——一つに固定した方が安定します",
+    "action.because.peer": "PCDN ノードを検出",
+    "action.because.edge": "エッジ間に明確な差",
+    "action.because.pattern": "時計に沿った変動",
+    "action.because.verdict": "経路診断の結論",
+    "action.because.loss": "パケットロス {detail}",
+    "action.because.speed": "実測 {detail}",
+    "action.because.switches": "切り替え {detail} 回",
+    "menu.selftest": "診断レポートを作成…",
+    "selftest.title": "自己診断",
+    "selftest.running": "各プローブを実際のサーバーに対して実行しています。十数秒かかります…",
+    "selftest.done": "レポートをクリップボードにコピーしました。そのまま貼り付けられます。",
+    "selftest.privacy": (
+        "内容は自宅ネットワーク内のアドレスと測定したサーバーのみで、Wi-Fi 名・グローバル IP・アカウント情報は含まれません。"
+    ),
     "speed.title": "速度テスト",
     "speed.host": "測定先",
     "speed.confirm": "帯域を使い切って {seconds} 秒ダウンロードします（最大 {megabytes} MB）。"
@@ -977,6 +1032,61 @@ KO: dict = {
     ),
     "update.downloading": "업데이트를 내려받는 중…",
     "update.install_failed": "업데이트를 설치하지 못했습니다: {reason}\n다운로드 페이지를 엽니다.",
+    "edge.title": "배정받은 엣지",
+    "edge.col_host": "엣지",
+    "edge.col_avg": "평균 지연",
+    "edge.col_share": "시간 비중",
+    "edge.col_stalls": "끊김",
+    "edge.differs": (
+        "차이가 큽니다: {worst} 는 {best} 보다 {diff} ms 느리고, 전체 시간의 {share}% 를 느린 쪽에서 보냈습니다. '가끔 끊긴다'의 정체는 대역폭이 아니라 어느 장비에 배정되었는가인 경우가 대부분입니다."
+    ),
+    "edge.same": "사용한 엣지들의 성능은 비슷했습니다. 끊김의 원인은 엣지 선택이 아닙니다.",
+    "edge.only_one": "전체 기간 동안 같은 엣지였으므로 비교할 대상이 없습니다.",
+    "edge.not_enough": "엣지를 비교하기에는 기록이 부족합니다(엣지마다 최소 10분 필요).",
+    "edge.none": "엣지 정보 없음",
+    "pattern.title": "언제 나빠지는가",
+    "pattern.found": (
+        "시간대 패턴이 있습니다: {when} 이(가) 평소보다 확연히 나쁩니다({bad} ms, 평소 {overall} ms). 시계를 따라 움직이는 현상은 혼잡이며(피크 시간, 붐비는 국제 회선) 댁내 장비로는 해결할 수 없습니다."
+    ),
+    "pattern.none": (
+        "시간대 패턴이 없고 모든 시간이 비슷합니다. 이는 피크 시간 혼잡 같은 원인을 배제하고, 회선·장비·특정 엣지처럼 항상 일정한 무언가를 가리킵니다."
+    ),
+    "pattern.not_enough": "패턴을 보기에는 기록이 부족합니다(며칠 필요).",
+    "pattern.no_data": "아직 기록이 없습니다",
+    "pattern.covered": "{days}일 분량",
+    "pattern.range": "{start}:00~{end}:59",
+    "action.title": "그럼 무엇을 해볼까",
+    "action.because": "근거",
+    "action.none": "이 기간에 조치할 만한 문제는 측정되지 않았습니다.",
+    "action.not_yours": (
+        "위 항목 중 댁내에서 고칠 수 있는 것은 없습니다. 할 수 있는 일은 화질을 한 단계 낮추거나, 피크 시간을 피하거나, 다른 경로를 쓰는 플레이어나 CDN 을 사용하는 것입니다."
+    ),
+    "action.peer_node": "플레이어를 다시 열거나 화질을 한 번 바꿔 재배정을 받으세요 — PCDN 노드에 배정되어 있습니다",
+    "action.edge_reassign": (
+        "플레이어를 다시 열어 재배정을 받고, 설정에서 '가장 빠른 CDN 자동 선택'이 켜져 있는지 확인하세요"
+    ),
+    "action.peak_hours": "혼잡한 시간대에는 화질을 한 단계 낮추거나 그 시간을 피하세요",
+    "action.wifi": "5GHz 로 바꾸거나 랜선을 연결하세요",
+    "action.home": "먼저 댁내를 확인하세요: 공유기, 랜선, 대역을 쓰는 다른 기기",
+    "action.dns": "다른 DNS(1.1.1.1 또는 8.8.8.8)로 바꾸고 다시 측정하세요",
+    "action.isp": "문제는 통신사 구간에 있습니다 — 이 보고서를 고객센터에 보내세요. 구간별 수치가 증거가 됩니다",
+    "action.server": "문제는 상대편에 있고 이쪽이 아닙니다 — 다른 방송을 보거나 나중에 다시 시도하세요",
+    "action.loss": "패킷 손실을 먼저 해결하세요: 방송은 지연보다 손실에 훨씬 취약하며 1% 만으로도 끊깁니다",
+    "action.target_down": "아무 응답이 없습니다 — 방송이 진행 중인지, ID 가 맞는지 확인하세요",
+    "action.lower_quality": "화질을 낮추세요: 실측 다운로드 속도로는 높은 화질을 감당할 수 없습니다",
+    "action.flapping": "엣지 사이를 오가고 있으며 전환할 때마다 한 번씩 끊깁니다 — 하나로 고정하는 편이 안정적입니다",
+    "action.because.peer": "PCDN 노드 감지",
+    "action.because.edge": "엣지 간 뚜렷한 차이",
+    "action.because.pattern": "시간대를 따르는 변동",
+    "action.because.verdict": "경로 진단 결론",
+    "action.because.loss": "패킷 손실 {detail}",
+    "action.because.speed": "실측 {detail}",
+    "action.because.switches": "전환 {detail}회",
+    "menu.selftest": "진단 보고서 생성…",
+    "selftest.title": "자체 진단",
+    "selftest.running": "각 프로브를 실제 서버에 대해 실행 중입니다. 십여 초 걸립니다…",
+    "selftest.done": "보고서를 클립보드에 복사했습니다. 바로 붙여넣을 수 있습니다.",
+    "selftest.privacy": "내용은 댁내 네트워크 주소와 측정한 서버뿐이며, Wi-Fi 이름·공인 IP·계정 정보는 없습니다.",
     "speed.title": "속도 측정",
     "speed.host": "측정 대상",
     "speed.confirm": "대역폭을 모두 써서 {seconds}초 동안 내려받습니다(최대 {megabytes} MB). "

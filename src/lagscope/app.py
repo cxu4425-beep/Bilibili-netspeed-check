@@ -292,6 +292,10 @@ class MonitorApplication(QObject):
         diag_action.triggered.connect(self._copy_diagnostics)
         self._menu.addAction(diag_action)
 
+        selftest_action = QAction(tr("menu.selftest"), self._menu)
+        selftest_action.triggered.connect(self._run_selftest)
+        self._menu.addAction(selftest_action)
+
         folder_action = QAction(tr("menu.open_config"), self._menu)
         folder_action.triggered.connect(self._open_config_folder)
         self._menu.addAction(folder_action)
@@ -561,6 +565,7 @@ class MonitorApplication(QObject):
             "switches": list(reversed(self._switches)),
             "comparisons": self._comparisons(hours),
             "speed": self._last_speed,
+            **self._pattern_context(hours, verdict_key),
             "target_label": self._room_title or self._watch_label(),
             "good_ms": self._config.thresholds.good_ms,
             "warn_ms": self._config.thresholds.warn_ms,
@@ -597,6 +602,8 @@ class MonitorApplication(QObject):
             verdict_detail=context["verdict_detail"], target_label=context["target_label"],
             auto_findings=context["auto_findings"], switches=context["switches"],
             comparisons=context["comparisons"], speed=context["speed"],
+            edges=context["edges"], edge_note=context["edge_note"],
+            pattern_note=context["pattern_note"], actions=context["actions"],
         ))
         if self._tray is not None:
             self._tray.showMessage(tr("report.title"), tr("report.copied"), app_icon(), 4000)
@@ -801,6 +808,95 @@ class MonitorApplication(QObject):
             None, tr("web.group"),
             f"{tr('web.url_label')}\n\n" + "\n".join(urls) + f"\n\n{tr('web.copied')}",
         )
+
+    def _pattern_context(self, hours, verdict_key: str = "") -> dict:
+        """Which edges served you, when it was bad, and what to try about it."""
+        from .actions import suggest
+        from .patterns import by_edge, by_period, edge_verdict, hour_ranges
+        from .probes.cdninfo import describe
+
+        buckets = self._history.buckets(hours)
+        edges = by_edge(buckets)
+        verdict = edge_verdict(edges)
+
+        note = ""
+        if verdict.key == "edge.differs" and verdict.worst and verdict.best:
+            note = tr("edge.differs", worst=verdict.worst.host, best=verdict.best.host,
+                      diff=f"{verdict.difference_ms:.0f}", share=f"{verdict.worst.share_pct:.0f}")
+        elif verdict.key:
+            note = tr(verdict.key)
+
+        pattern = by_period(buckets)
+        pattern_note = ""
+        if pattern.has_pattern and pattern.worst:
+            when = "、".join(
+                tr("pattern.range", start=f"{start:02d}", end=f"{end:02d}")
+                for start, end in hour_ranges(pattern.worst_hours)
+            )
+            pattern_note = tr("pattern.found", when=when,
+                              bad=f"{pattern.worst.avg_ms:.0f}",
+                              overall=f"{pattern.overall_ms:.0f}")
+        elif pattern.key:
+            pattern_note = tr(pattern.key)
+
+        summary = self._history.summary(hours)
+        return {
+            "edges": edges,
+            "edge_note": note,
+            "pattern_note": pattern_note,
+            "actions": suggest(
+                edge_verdict=verdict,
+                pattern=pattern,
+                verdict_key=verdict_key,
+                peer_hosts=[stats.host for stats in edges
+                            if describe(stats.host).is_peer],
+                loss_pct=summary.get("loss_pct"),
+                speed_mbps=self._last_speed.mbps if self._last_speed else None,
+                switches=len(self._switches or ()),
+            ),
+        }
+
+    def _run_selftest(self) -> None:
+        """The command-line self-test, without the command line.
+
+        Every Bilibili path in this app is tested against fixtures only, so a
+        report from a real machine is the only evidence that any of it still
+        works. Requiring a terminal to produce that was the reason it never
+        got produced.
+        """
+        from .selftest import format_report, run
+
+        progress = QProgressDialog(tr("selftest.running"), "", 0, 0, None)
+        progress.setWindowTitle(tr("selftest.title"))
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.ApplicationModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+
+        room = ""
+        if self._target is not None and self._target.kind == "room":
+            room = str(self._target.ident or "")
+        state = {"text": ""}
+
+        def work():
+            try:
+                state["text"] = format_report(run(self._config, room=room))
+            except Exception as exc:                  # noqa: BLE001 - report it
+                state["text"] = f"self-test failed: {exc}"
+
+        thread = threading.Thread(target=work, daemon=True)
+        thread.start()
+        while thread.is_alive():
+            QApplication.processEvents()
+            thread.join(0.05)
+        progress.close()
+
+        QGuiApplication.clipboard().setText(state["text"])
+        box = QMessageBox(QMessageBox.Information, tr("selftest.title"),
+                          tr("selftest.done"))
+        box.setInformativeText(tr("selftest.privacy"))
+        box.setDetailedText(state["text"])
+        box.exec()
 
     def _copy_diagnostics(self) -> None:
         QGuiApplication.clipboard().setText(self.diagnostics_text())

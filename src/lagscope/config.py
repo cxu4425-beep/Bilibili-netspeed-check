@@ -201,7 +201,7 @@ class HistoryConfig:
     """
 
     enabled: bool = True
-    keep_hours: int = 48
+    keep_hours: int = 168
     bucket_s: int = 60
     # When something breaks, find out why without being asked: a cut-down path
     # check runs in the background and its verdict is filed against that minute.

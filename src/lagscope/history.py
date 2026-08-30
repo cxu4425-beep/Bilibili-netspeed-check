@@ -36,7 +36,7 @@ from .models import LatencySample
 LOG = logging.getLogger(__name__)
 
 DEFAULT_BUCKET_S = 60
-DEFAULT_KEEP_HOURS = 48
+DEFAULT_KEEP_HOURS = 168      # a week, so a weekly pattern can exist at all
 FILE_VERSION = 1
 # Guards against a pathological interval filling memory inside one bucket.
 MAX_VALUES_PER_BUCKET = 4000
@@ -67,6 +67,10 @@ class Bucket:
     # turns "it stalled at 21:14" into "it stalled at 21:14 - weak Wi-Fi".
     verdict: str = ""
     verdict_detail: str = ""
+    # Which edge served this minute. Kept because "why is it sometimes bad"
+    # is usually "which machine was I given", and that answer is unanswerable
+    # after the fact unless it was written down at the time.
+    host: str = ""
 
     @property
     def loss_pct(self) -> float:
@@ -81,7 +85,7 @@ class Bucket:
             _round(self.avg_ms), _round(self.min_ms), _round(self.max_ms),
             _round(self.p95_ms), _round(self.jitter_ms),
             self.stalls, self.spikes, self.kind, self.label,
-            self.verdict, self.verdict_detail,
+            self.verdict, self.verdict_detail, self.host,
         ]
 
     @classmethod
@@ -101,6 +105,8 @@ class Bucket:
                 # Written since 3.6; rows from an older file simply lack them.
                 verdict=str(values[12]) if len(values) > 12 else "",
                 verdict_detail=str(values[13]) if len(values) > 13 else "",
+                # Written since 4.7; older rows simply have no edge recorded.
+                host=str(values[14]) if len(values) > 14 else "",
             )
         except (TypeError, ValueError):
             return None
@@ -114,6 +120,7 @@ class Bucket:
             "stalls": self.stalls, "spikes": self.spikes,
             "kind": self.kind, "label": self.label,
             "verdict": self.verdict, "verdict_detail": self.verdict_detail,
+            "host": self.host,
         }
 
 
@@ -131,6 +138,9 @@ class _OpenBucket:
         self.label = ""
         self.verdict = ""
         self.verdict_detail = ""
+        # A minute can straddle a CDN switch, so the edge that served most of
+        # it wins rather than whichever happened to be last.
+        self.hosts: dict = {}
 
     def add(self, sample: LatencySample) -> None:
         self.count += 1
@@ -143,6 +153,8 @@ class _OpenBucket:
         title = sample.title or sample.host
         if title:
             self.label = title[:80]
+        if sample.host:
+            self.hosts[sample.host] = self.hosts.get(sample.host, 0) + 1
 
     def close(self) -> Bucket:
         values = self.values
@@ -159,6 +171,7 @@ class _OpenBucket:
             stalls=self.stalls, spikes=self.spikes,
             kind=self.kind, label=self.label,
             verdict=self.verdict, verdict_detail=self.verdict_detail,
+            host=max(self.hosts, key=self.hosts.get) if self.hosts else "",
         )
 
 

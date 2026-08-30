@@ -28,6 +28,8 @@ from . import APP_NAME, REPO_URL, __version__
 from .config import app_config_dir
 from .history import Bucket
 from .i18n import tr
+from .actions import has_local_cause
+from .probes.cdninfo import summary as cdn_summary
 from .probes.speed import tier_key
 from .textfmt import pad as text_pad, width as text_width
 from .ui.theme import format_mbps, format_ms
@@ -114,7 +116,11 @@ def chart_svg(buckets: Sequence[Bucket], bucket_s: float = 60.0,
               good_ms: Optional[float] = None, warn_ms: Optional[float] = None,
               markers: Sequence = ()) -> str:
     """The whole history as one inline SVG - no script, no external file."""
-    rows = [row for row in buckets if row.avg_ms is not None]
+    # Sorted rather than assumed sorted: recorded history always is, but a
+    # chart that silently draws nonsense for out-of-order input is a bad way
+    # to find that out.
+    rows = sorted((row for row in buckets if row.avg_ms is not None),
+                  key=lambda row: row.start)
     if not rows:
         return (
             f'<svg viewBox="0 0 {CHART_WIDTH} 80" role="img" aria-label="empty">'
@@ -394,6 +400,8 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
                verdict_detail: str = "", extras: Sequence = (), target_label: str = "",
                auto_findings: Sequence = (), switches: Sequence = (),
                comparisons: Sequence = (), speed=None,
+               edges: Sequence = (), edge_note: str = "", pattern_note: str = "",
+               actions: Sequence = (),
                good_ms: Optional[float] = None, warn_ms: Optional[float] = None) -> str:
     """The whole report as one HTML document with nothing external in it."""
     esc = html.escape
@@ -516,6 +524,42 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
             "</div>"
         )
 
+    if edges:
+        body.append(f"<h2>{esc(tr('edge.title'))}</h2>")
+        rows = "".join(
+            f"<tr><td>{esc(stats.host)}<div class='sub'>{esc(cdn_summary(stats.host))}</div></td>"
+            f"<td>{esc(format_ms(stats.avg_ms))}</td>"
+            f"<td>{stats.share_pct:.0f}%</td>"
+            f"<td>{stats.stalls}</td></tr>"
+            for stats in edges
+        )
+        body.append(
+            "<table><thead><tr>"
+            f"<th>{esc(tr('edge.col_host'))}</th><th>{esc(tr('edge.col_avg'))}</th>"
+            f"<th>{esc(tr('edge.col_share'))}</th><th>{esc(tr('edge.col_stalls'))}</th>"
+            f"</tr></thead><tbody>{rows}</tbody></table>"
+        )
+        if edge_note:
+            body.append(f'<p class="sub">{esc(edge_note)}</p>')
+
+    if pattern_note:
+        body.append(f"<h2>{esc(tr('pattern.title'))}</h2>")
+        body.append(f'<div class="card"><p style="margin:0">{esc(pattern_note)}</p></div>')
+
+    if actions:
+        body.append(f"<h2>{esc(tr('action.title'))}</h2>")
+        items = "".join(
+            f"<li>{esc(tr(action.key))}"
+            f"<div class='sub'>{esc(tr('action.because'))}: "
+            f"{esc(tr(action.because_key, detail=action.detail) if action.because_key else '')}"
+            f"</div></li>"
+            for action in actions
+        )
+        body.append(f'<div class="card"><ol style="margin:0;padding-left:20px">{items}</ol>')
+        if not has_local_cause(actions):
+            body.append(f'<p class="sub" style="margin:10px 0 0">{esc(tr("action.not_yours"))}</p>')
+        body.append("</div>")
+
     changes = comparison_rows(comparisons)
     if changes:
         rows = "".join(
@@ -564,7 +608,9 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
 def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
                verdict_key: str = "", verdict_detail: str = "",
                target_label: str = "", auto_findings: Sequence = (),
-               switches: Sequence = (), comparisons: Sequence = (), speed=None) -> str:
+               switches: Sequence = (), comparisons: Sequence = (), speed=None,
+               edges: Sequence = (), edge_note: str = "", pattern_note: str = "",
+               actions: Sequence = ()) -> str:
     """The same findings as something you can paste into a forum reply."""
     hours = summary.get("hours")
     window = tr("report.hours", n=int(hours)) if hours else tr("report.all")
@@ -603,6 +649,30 @@ def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
         lines.append(f"{tr('speed.title')}: {format_mbps(speed.mbps)}"
                      f"   {tr(tier_key(speed.mbps))}")
         lines.append(f"  {tr('speed.host')}: {speed.host}")
+
+    if edges:
+        lines.append("")
+        lines.append(f"{tr('edge.title')}:")
+        for stats in edges:
+            lines.append(f"  {_pad(stats.host, 34)} {format_ms(stats.avg_ms):>9}"
+                         f"   {stats.share_pct:4.0f}%   {cdn_summary(stats.host)}")
+        if edge_note:
+            lines.append(f"  {edge_note}")
+
+    if pattern_note:
+        lines.append("")
+        lines.append(f"{tr('pattern.title')}: {pattern_note}")
+
+    if actions:
+        lines.append("")
+        lines.append(f"{tr('action.title')}:")
+        for index, action in enumerate(actions, 1):
+            lines.append(f"  {index}. {tr(action.key)}")
+            if action.because_key:
+                lines.append(f"       ({tr('action.because')}: "
+                             f"{tr(action.because_key, detail=action.detail)})")
+        if not has_local_cause(actions):
+            lines.append(f"  {tr('action.not_yours')}")
 
     changes = comparison_rows(comparisons)
     if changes:
