@@ -57,7 +57,11 @@ SetupMutex=LagScope-Setup-Mutex
 ; And if it is still holding files open, close it through Restart Manager
 ; rather than failing. RestartApplications lets /RESTARTAPPLICATIONS bring it
 ; back afterwards, which is what the in-app updater relies on.
-CloseApplications=yes
+; "force" rather than "yes": Restart Manager asks an application to close by
+; sending its top-level window a close message, and this one is a tray app
+; whose window is hidden - so it is never asked, the wait times out, Setup
+; proceeds anyway and DeleteFile fails. force terminates what does not answer.
+CloseApplications=force
 CloseApplicationsFilter=*.exe,*.dll
 RestartApplications=yes
 
@@ -158,6 +162,43 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchAfter}"; \
 Type: dirifempty; Name: "{app}"
 
 [Code]
+// Windows will not replace a running executable, and the two mechanisms above
+// each have a hole:
+//
+//   * AppMutex only sees versions that create the mutex - which means it can
+//     never help someone upgrading *from* a version released before the mutex
+//     existed. That is precisely the person hitting the error, so the fix that
+//     lives inside the application could not fix the case it was written for.
+//   * Restart Manager relies on the application answering a close request,
+//     which a tray app with no visible window may never receive.
+//
+// This one does not care what is running or how old it is.
+procedure StopRunningApp;
+var
+  ResultCode: Integer;
+  Attempt: Integer;
+begin
+  for Attempt := 1 to 2 do
+  begin
+    // Ask first (no /F sends a close request), then insist. A tray app that
+    // exits on its own gets to flush its history file; one that ignores the
+    // request loses at most the current minute.
+    if Attempt = 1 then
+      Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM {#AppExeName}', '',
+           SW_HIDE, ewWaitUntilTerminated, ResultCode)
+    else
+      Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName}', '',
+           SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(800);
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  StopRunningApp;
+end;
+
 // Uninstalling offers to keep the config and the recorded history, rather
 // than silently deleting months of measurements or silently leaving them.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
