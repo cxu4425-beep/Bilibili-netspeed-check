@@ -9,7 +9,7 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English / 日本語 / 한국어
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [測網速](#-測一下這條線到底多快) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [測網速](#-測一下這條線到底多快) · [伺服器在哪](#-你到底連到哪台伺服器) · [跟 ping 不一樣](#-為什麼跟-cmd-的-ping-不一樣) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-demo.gif" width="260" alt="懸浮窗即時變化">
 
@@ -516,6 +516,71 @@ lagscope --selftest 21452505     # 帶一個正在直播的房間號，涵蓋全
 
 ---
 
+## 🌏 你到底連到哪台伺服器
+
+B 站的邊緣節點主機名不是亂碼,它本身就寫了答案:
+
+```
+cn-hbyc-ct-01.bilivideo.com
+│  │    │  └── 節點編號
+│  │    └───── ct = 中國電信（cu 聯通、cm 移動）
+│  └────────── hbyc = 湖北宜昌
+└───────────── cn = 中國大陸
+```
+
+報告和 `--selftest` 會直接翻出來:
+
+| 主機名 | 翻出來是 |
+| --- | --- |
+| `cn-hbyc-ct-01.bilivideo.com` | 宜昌 · 中國電信 |
+| `upos-sz-mirrorhw.bilivideo.com` | 華為雲 CDN |
+| `cn-gotcha09.bilivideo.com` | B 站自建節點 · 中國大陸 |
+| `xy118x123x45x67xy.mcdn.bilivideo.cn` | **PCDN 邊緣節點（別人家的寬頻）** |
+
+**為什麼要做這個**:「為什麼會卡」多半是「你被分到哪台機器」的問題,不是「你頻寬夠不夠」的問題。
+以前你只看得到一串主機名,等於看不到答案。
+
+**認不出來的就說認不出來。** 省市代碼是唯一能靠猜的部分,所以只查一張有把握的對照表,
+查不到就把原始代碼原樣印出來(`湖北 (hbqq) · 中國聯通`)。編一個看起來很像的城市名
+比說「不知道」糟得多,因為會有人照著它去做決定。
+
+**PCDN 會特別警告。** 主機名把 IP 直接編進去的那種(`xy118x123x45x67xy...`),
+不是機房機器,是別人家的寬頻在賣閒置上行。線路測起來正常卻一直卡,被分到這種節點是
+很常見又完全看不見的原因。
+
+---
+
+## 🔍 為什麼跟 CMD 的 ping 不一樣
+
+```bash
+lagscope --why-ping                            # 目前在量的那台
+lagscope --why-ping cn-gotcha09.bilivideo.com
+```
+
+對**同一個解析後的位址**各量五次 ICMP 和 TCP,並排印出來:
+
+```
+主機名: cn-hbyc-ct-01.bilivideo.com
+實際連到: 203.0.113.45:443
+這台是: 宜昌 · 中國電信
+
+  TCP 握手（本程式用的）             最快   62.4 ms   中位數   64.1 ms
+  ICMP ping（CMD 用的）              最快   21.0 ms   中位數   21.3 ms
+  DNS 解析                                 18.7 ms   （已經不算進上面的數字裡）
+
+差距（TCP 減 ICMP）: +41.4 ms
+差很多。這台機器對 ICMP 和 TCP 的處理明顯不同——路由器和 CDN 常把 ICMP 丟到低優先級、
+限速,或乾脆由前面的設備代答。
+```
+
+四個常見原因它會說中哪一個,其中最常見、也最容易被忽略的是:**你 ping 的根本不是同一台機器**
+——ping `www.bilibili.com` 打到的是前門,而推流給你的是某台 CDN 邊緣節點,可能差好幾個省。
+
+**另外修掉一個本程式自己的量測誤差**:以前 `create_connection(主機名)` 會先做 DNS 解析,
+而那段時間一直被算進「伺服器延遲」裡。現在解析和握手分開計時、分開顯示。
+
+---
+
 ## 📱 用手機看（不用裝 App）
 
 <div align="center"><img src="docs/images/phone-dashboard.png" width="300" alt="手機儀表板"></div>
@@ -646,6 +711,7 @@ lagscope --report                     # 匯出體檢報告 HTML，印出檔案�
 lagscope --history                    # 把最近 24 小時的歷史摘要印成文字（all＝全部）
 lagscope --selftest                   # 每個探測對真實世界跑一次，印出結果（可加房間號）
 lagscope --speedtest                  # 測一次下載速度（會佔滿頻寬、用掉流量）
+lagscope --why-ping [主機]             # ICMP 和 TCP 並排量,說明為什麼跟 ping 不一樣
 ```
 
 `--probe-once` 很適合排查問題或寫成腳本定時記錄：
@@ -1052,6 +1118,36 @@ line look mediocre, so that stretch is measured separately and discarded. When a
 ends before the warm-up finishes it says the figure may read low rather than presenting it
 as the line speed.
 
+### Which server you were assigned
+
+Bilibili's edge hostnames state who runs the node, often where it is, and which carrier it
+sits behind - `cn-hbyc-ct-01` is Yichang on China Telecom, `upos-sz-mirrorhw` is Huawei Cloud,
+`cn-gotcha09` is Bilibili's own edge. The report and `--selftest` decode them, because "why
+does it stutter" is usually a question about *which machine you were assigned* rather than
+about bandwidth, and a hostname a viewer cannot read is an answer they cannot act on.
+
+The location is the guessable half, so it is looked up in a table of codes we are confident
+about and otherwise handed back raw - `Hubei (hbqq) · China Unicom`, never an invented city.
+A plausible wrong city is worse than an admitted unknown, because somebody would act on it.
+
+Peer-assisted (PCDN/mCDN) nodes are flagged specifically. A name like
+`xy118x123x45x67xy.mcdn.bilivideo.cn` spells an address out inside itself; those are consumer
+connections reselling spare upstream, not datacentre machines, and being handed one is a
+common and invisible reason for stuttering on a line that tests fine.
+
+### Why this disagrees with ping
+
+`lagscope --why-ping [host]` times ICMP and a TCP handshake against the *same resolved
+address*, five rounds each, prints them side by side with the name lookup on its own line, and
+says which of the four ordinary explanations the numbers support.
+
+The most commonly missed one: `ping bilibili.com` reaches the front door while this measures
+the edge actually serving the stream, and they can be in different provinces.
+
+This also fixed a measurement error of its own. `create_connection(hostname)` resolves, so the
+DNS lookup was quietly billed to the server's latency on every sample - a moving error, given
+how short CDN name TTLs are. Resolution and handshake are now timed and reported separately.
+
 ### Updates and what it connects to
 
 Once a day at most, LagScope asks GitHub what the newest version number is - one public page,
@@ -1174,6 +1270,7 @@ lagscope --report                      # write the health report and print where
 lagscope --history                     # print the last 24 h as text ("all" for everything)
 lagscope --selftest [room]             # run every probe once for real and print the result
 lagscope --speedtest                   # measure download speed once (saturates the line)
+lagscope --why-ping [host]             # ICMP vs TCP side by side, and why they differ
 ```
 
 ### How the number is computed
