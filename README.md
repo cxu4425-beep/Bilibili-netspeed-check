@@ -9,7 +9,7 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English / 日本語 / 한국어
 
-[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [測網速](#-測一下這條線到底多快) · [伺服器在哪](#-你到底連到哪台伺服器) · [跟 ping 不一樣](#-為什麼跟-cmd-的-ping-不一樣) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
+[功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [測網速](#-測一下這條線到底多快) · [伺服器在哪](#-你到底連到哪台伺服器) · [跟 ping 不一樣](#-為什麼跟-cmd-的-ping-不一樣) · [為什麼總是卡](#-為什麼總是會卡) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-demo.gif" width="260" alt="懸浮窗即時變化">
 
@@ -578,6 +578,57 @@ lagscope --why-ping cn-gotcha09.bilivideo.com
 
 **另外修掉一個本程式自己的量測誤差**:以前 `create_connection(主機名)` 會先做 DNS 解析,
 而那段時間一直被算進「伺服器延遲」裡。現在解析和握手分開計時、分開顯示。
+
+---
+
+## 🕘 為什麼「總是」會卡
+
+「總是」是一個關於**模式**的說法。這個程式以前能答「現在如何」和「剛剛那次為什麼」,
+答不了「總是」——因為它沒把足以回答的東西記下來。現在記了。
+
+### 你被分到哪些節點
+
+```
+節點                                    平均延遲   佔多少時間   卡頓
+upos-sz-mirrorhw.bilivideo.com           67 ms       33%        0
+華為雲 CDN
+cn-hbyc-ct-01.bilivideo.com             160 ms       58%      360
+宜昌 · 中國電信
+xy118x123x45x67xy.mcdn.bilivideo.cn     300 ms        8%        0
+PCDN 邊緣節點（別人家的寬頻）
+```
+
+**它指的是「最花你時間的那個」,不是「最慢的那個」。** 上面那個 PCDN 最慢(300 ms),
+但你只在上面待 8%;真正在拖你的是 160 ms 卻佔了 58% 時間的那個。
+指最慢的會把人送去處理比較小的問題。
+
+### 什麼時候比較卡
+
+按「星期幾 × 幾點」分組。**「沒有時段性」也是一個真的答案**——它一口氣排掉「晚尖峰壅塞」
+這一整類原因,把問題指向固定的東西:線路、設備、或某個節點。
+
+歷史保留 **7 天**(約 0.9 MB),因為週的模式不可能在 48 小時裡出現。
+
+### 那我該怎麼辦
+
+報告最後會給一份照順序排的清單,**每一條都印出它的依據**:
+
+```
+1. 重開播放器（或切一次畫質）讓伺服器重新分配節點——你被分到的是 PCDN 節點
+     (依據: 量到 PCDN 節點)
+2. 重開播放器讓伺服器重新分配節點，並確認「自動選最快的 CDN」是開著的
+     (依據: 節點之間差很多)
+3. 尖峰時段降一檔畫質，或錯開那幾個小時
+     (依據: 有時段性)
+```
+
+不會因為「這是普遍的好建議」就給你——**一份每次都叫你重開路由器的清單,只會教會你不要看它**。
+如果整份清單沒有一項是你家能修的,它會直說。
+
+### 產生診斷報告(不用開命令列)
+
+托盤選單的 **「產生診斷報告…」** 會把每個探測對真實伺服器跑一次,結果直接進剪貼簿。
+這個程式所有 B 站相關的程式碼都只對著假資料測過,從真實機器跑出來的報告是唯一的驗證。
 
 ---
 
@@ -1161,6 +1212,27 @@ the edge actually serving the stream, and they can be in different provinces.
 This also fixed a measurement error of its own. `create_connection(hostname)` resolves, so the
 DNS lookup was quietly billed to the server's latency on every sample - a moving error, given
 how short CDN name TTLs are. Resolution and handshake are now timed and reported separately.
+
+### Why it is "always" laggy
+
+"Always" is a claim about a pattern, and the app used to keep nothing that could answer it.
+
+Every minute now records the CDN edge that served it, so the good minutes can be grouped
+against the bad ones - and the comparison names the edge that **costs the most time overall**,
+not the slowest one. An edge that is dreadful for four minutes matters less than a mediocre
+one you sit on for half the evening.
+
+Minutes are also grouped by hour of the week. "No pattern" is a real answer: it rules out
+every clock-shaped cause and points at something constant instead. History is kept for a week
+(about 0.9 MB) because a weekly pattern cannot exist inside two days.
+
+The report then ends with an ordered list of things to try, each naming the observation behind
+it. Nothing is suggested without evidence - a list that always says "restart your router"
+teaches people to ignore the list - and where nothing on it is fixable from your side, it says
+so rather than pretending every problem has a local fix.
+
+**Run a self-test…** in the tray runs every probe against the real thing and copies the result
+to the clipboard, without needing a terminal.
 
 ### Updates and what it connects to
 
