@@ -12,7 +12,8 @@ from typing import Optional
 from PySide6.QtCore import QObject, QThread, QTimer, QUrl, Qt, Signal, Slot
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
-    QApplication, QInputDialog, QMenu, QMessageBox, QSystemTrayIcon,
+    QApplication, QInputDialog, QMenu, QMessageBox, QProgressDialog,
+    QSystemTrayIcon,
 )
 
 from . import APP_NAME, REPO_URL, __version__
@@ -34,7 +35,7 @@ from .report import (
     build_html, build_text, default_report_path, write_report,
 )
 from .single_instance import SingleInstance
-from .update import UpdateInfo, check as check_for_update
+from .update import RELEASES_PAGE, UpdateInfo, check as check_for_update
 from .web import DashboardServer
 from .ui.icons import app_icon
 from .probes.speed import tier_key
@@ -653,14 +654,27 @@ class MonitorApplication(QObject):
             )
 
     def _offer_update(self, found: UpdateInfo) -> None:
-        """The dialog with the three choices - only when it was asked for."""
+        """The dialog - with "install it" first, when that is actually safe."""
+        from .selfupdate import can_self_update
+
+        asset = found.installer
+        installable = can_self_update(asset)
+
         box = QMessageBox(QMessageBox.Information, tr("update.group"),
                           tr("update.available", version=found.version, current=__version__))
+        install_button = None
+        if installable:
+            box.setInformativeText(tr("update.install_hint", megabytes=max(1, asset.size // (1024 * 1024))))
+            install_button = box.addButton(tr("update.install"), QMessageBox.AcceptRole)
         open_button = box.addButton(tr("update.open"), QMessageBox.AcceptRole)
         skip_button = box.addButton(tr("update.skip"), QMessageBox.DestructiveRole)
         box.addButton(tr("update.later"), QMessageBox.RejectRole)
+        if install_button is not None:
+            box.setDefaultButton(install_button)
         box.exec()
-        if box.clickedButton() is open_button:
+        if install_button is not None and box.clickedButton() is install_button:
+            self._install_update(asset)
+        elif box.clickedButton() is open_button:
             QDesktopServices.openUrl(QUrl(found.url))
         elif box.clickedButton() is skip_button:
             self._config.updates.skip_version = found.version
@@ -669,6 +683,64 @@ class MonitorApplication(QObject):
             if self._tray is not None:
                 self._tray.set_menu(self._menu)
             self._schedule_save()
+
+    def _install_update(self, asset) -> None:
+        """Download it, check it, run it, and get out of its way.
+
+        The progress dialog is modal on purpose: this ends with the app
+        quitting, and starting something else in the meantime would only be
+        interrupted a few seconds later.
+        """
+        from .selfupdate import download, launch_installer
+
+        progress = QProgressDialog(tr("update.downloading"), tr("button.cancel"),
+                                   0, 100, None)
+        progress.setWindowTitle(tr("update.group"))
+        progress.setWindowModality(Qt.ApplicationModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setValue(0)
+
+        state = {"result": None, "done": 0, "total": asset.size or 0}
+
+        def work():
+            def report(done, total):
+                state["done"], state["total"] = done, total
+
+            state["result"] = download(asset, on_progress=report,
+                                       cancelled=progress.wasCanceled)
+
+        thread = threading.Thread(target=work, daemon=True)
+        thread.start()
+        while thread.is_alive():
+            if state["total"]:
+                progress.setValue(int(state["done"] * 100 / state["total"]))
+            QApplication.processEvents()
+            thread.join(0.05)
+        progress.close()
+
+        result = state["result"]
+        if result is None or not result.ok:
+            reason = "" if result is None else result.error
+            if reason == "cancelled":
+                return
+            # Anything that failed verification is a reason to send them to the
+            # page, never a reason to run the file anyway.
+            QMessageBox.warning(None, tr("update.group"),
+                                tr("update.install_failed", reason=reason or "unknown"))
+            QDesktopServices.openUrl(QUrl(self._update_available.url
+                                          if self._update_available else RELEASES_PAGE))
+            return
+
+        if not launch_installer(result.path):
+            QMessageBox.warning(None, tr("update.group"),
+                                tr("update.install_failed", reason="launch"))
+            return
+        # Windows cannot replace a running executable, so leaving now is not
+        # politeness - it is what makes the install possible.
+        # aboutToQuit runs _shutdown, which closes the history file and drops
+        # the mutex the installer is about to look for.
+        self._app.quit()
 
     def _check_updates_now(self) -> None:
         """The tray menu asked, so an answer either way is expected."""

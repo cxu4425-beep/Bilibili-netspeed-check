@@ -38,6 +38,16 @@ class UpdateInfo:
     version: str                  # as published, e.g. "3.5"
     url: str = RELEASES_PAGE
     notes: str = ""
+    # What the release published for download, so the app can offer to install
+    # it rather than only linking to it. Empty when the API said nothing.
+    assets: tuple = ()
+
+    @property
+    def installer(self):
+        """The Windows installer asset, when this release has one."""
+        from .selfupdate import pick_installer
+
+        return pick_installer(self.assets)
 
 
 def parse_version(text: str) -> Tuple[int, ...]:
@@ -80,7 +90,7 @@ def fetch_latest(timeout_s: float = 6.0, url: str = RELEASES_API) -> Optional[Up
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            payload = json.loads(response.read(256 * 1024).decode("utf-8", "replace"))
+            payload = json.loads(response.read(1024 * 1024).decode("utf-8", "replace"))
     except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError) as exc:
         LOG.debug("update check failed: %s", exc)
         return None
@@ -89,10 +99,13 @@ def fetch_latest(timeout_s: float = 6.0, url: str = RELEASES_API) -> Optional[Up
     tag = str(payload.get("tag_name") or "").strip()
     if not tag:
         return None
+    from .selfupdate import parse_assets
+
     return UpdateInfo(
         version=tag.lstrip("vV"),
         url=str(payload.get("html_url") or RELEASES_PAGE),
         notes=str(payload.get("name") or ""),
+        assets=tuple(parse_assets(payload)),
     )
 
 

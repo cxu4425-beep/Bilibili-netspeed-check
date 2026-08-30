@@ -128,3 +128,20 @@ def test_tray_tooltip_formatting_uses_named_fields():
               display="3 ms", status="ok")
     assert "Total 1 s" in text and "Network 2 ms" in text
     set_language("zh_CN")
+
+
+def test_no_string_key_is_defined_twice():
+    """A repeated key is silent: the later wins and the earlier disappears.
+
+    That is how ``update.failed`` once ended up meaning two different things,
+    with the translations carrying a placeholder the surviving English text
+    did not have.
+    """
+    import collections
+    import pathlib
+    import re
+
+    source = pathlib.Path("src/lagscope/i18n.py").read_text(encoding="utf-8")
+    keys = re.findall(r'^    "([a-z0-9_.]+)":', source, re.MULTILINE)
+    repeated = [key for key, count in collections.Counter(keys).items() if count > 1]
+    assert repeated == [], f"defined more than once: {repeated}"

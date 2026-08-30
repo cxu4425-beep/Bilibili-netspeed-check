@@ -47,47 +47,74 @@ WizardStyle=modern
 UninstallDisplayName={#AppName} {#AppVersion}
 UninstallDisplayIcon={app}\{#AppExeName}
 LicenseFile=..\LICENSE
+; Windows refuses to replace a running executable, and without these the
+; wizard fails halfway through with "DeleteFile failed; code 5" - an error
+; that tells the person nothing about what to do. AppMutex makes Setup notice
+; the running app *before* it touches any files and ask for it to be closed;
+; the app holds this mutex from startup (see src/lagscope/single_instance.py).
+AppMutex=LagScope-Running-Mutex
+SetupMutex=LagScope-Setup-Mutex
+; And if it is still holding files open, close it through Restart Manager
+; rather than failing. RestartApplications lets /RESTARTAPPLICATIONS bring it
+; back afterwards, which is what the in-app updater relies on.
 CloseApplications=yes
-RestartApplications=no
+CloseApplicationsFilter=*.exe,*.dll
+RestartApplications=yes
 
-; Chinese is an unofficial Inno Setup translation, so it is present in some
-; installs of the compiler and not others - including on CI runners. Requiring
-; it would mean no installer at all on a machine that lacks it, so it is used
-; when available and the wizard falls back to English when it is not. The app
-; itself is unaffected: it picks its own language on first run.
-#define ChineseIsl "Languages\ChineseSimplified.isl"
-#define JapaneseIsl "Languages\Japanese.isl"
-#define KoreanIsl "Languages\Korean.isl"
-#if FileExists(AddBackslash(CompilerPath) + ChineseIsl)
-  #define HaveChinese
-#endif
-#if FileExists(AddBackslash(CompilerPath) + JapaneseIsl)
-  #define HaveJapanese
-#endif
-#if FileExists(AddBackslash(CompilerPath) + KoreanIsl)
-  #define HaveKorean
+; This wizard used to come out in English for everyone, because Chinese only
+; became a bundled Inno Setup translation in 6.5 and the CI runner's compiler
+; is older - so the "use it if the compiler has it" check silently found
+; nothing, every release, and nobody could see why. The files now travel with
+; this repository instead of being looked for, which is the only version of
+; this that cannot quietly degrade.
+;
+; Pass /DNoExtraLanguages to build an English-only installer, which is what CI
+; falls back to if a translation ever fails to compile: shipping an English
+; installer beats shipping none.
+#define LangDir AddBackslash(SourcePath) + "languages\"
+#ifndef NoExtraLanguages
+  #if FileExists(LangDir + "ChineseSimplified.isl")
+    #define HaveChineseS
+  #endif
+  #if FileExists(LangDir + "ChineseTraditional.isl")
+    #define HaveChineseT
+  #endif
+  #if FileExists(LangDir + "Japanese.isl")
+    #define HaveJapanese
+  #endif
+  #if FileExists(LangDir + "Korean.isl")
+    #define HaveKorean
+  #endif
 #endif
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
-#ifdef HaveChinese
-Name: "zh"; MessagesFile: "compiler:{#ChineseIsl}"
+#ifdef HaveChineseT
+Name: "zh_tw"; MessagesFile: "{#LangDir}ChineseTraditional.isl"
+#endif
+#ifdef HaveChineseS
+Name: "zh_cn"; MessagesFile: "{#LangDir}ChineseSimplified.isl"
 #endif
 #ifdef HaveJapanese
-Name: "ja"; MessagesFile: "compiler:{#JapaneseIsl}"
+Name: "ja"; MessagesFile: "{#LangDir}Japanese.isl"
 #endif
 #ifdef HaveKorean
-Name: "ko"; MessagesFile: "compiler:{#KoreanIsl}"
+Name: "ko"; MessagesFile: "{#LangDir}Korean.isl"
 #endif
 
 [CustomMessages]
 en.LaunchAfter=Run {#AppName} now
 en.AutoStart=Start {#AppName} when I sign in
 en.KeepSettings=Keep my settings and latency history
-#ifdef HaveChinese
-zh.LaunchAfter=立即运行 {#AppName}
-zh.AutoStart=登录时自动启动 {#AppName}
-zh.KeepSettings=保留设置和延迟历史记录
+#ifdef HaveChineseT
+zh_tw.LaunchAfter=立即執行 {#AppName}
+zh_tw.AutoStart=登入時自動啟動 {#AppName}
+zh_tw.KeepSettings=保留設定和延遲歷史紀錄
+#endif
+#ifdef HaveChineseS
+zh_cn.LaunchAfter=立即运行 {#AppName}
+zh_cn.AutoStart=登录时自动启动 {#AppName}
+zh_cn.KeepSettings=保留设置和延迟历史记录
 #endif
 #ifdef HaveJapanese
 ja.LaunchAfter={#AppName} を今すぐ実行

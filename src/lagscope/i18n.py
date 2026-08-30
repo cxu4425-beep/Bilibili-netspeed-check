@@ -834,6 +834,18 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "有新版本 {version}（你在用 {current}）", "有新版本 {version}（你在用 {current}）",
         "Version {version} is out (you have {current})",
     ),
+    "update.install": ("直接更新", "直接更新", "Update now"),
+    "update.install_hint": (
+        "会下载官方安装程序（约 {megabytes} MB）、核对校验码，然后自动装好。本程序会先关掉——Windows 不允许覆盖正在执行的程序——装完会自己开回来。",
+        "會下載官方安裝程式（約 {megabytes} MB）、核對校驗碼，然後自動裝好。本程式會先關掉——Windows 不允許覆蓋正在執行的程式——裝完會自己開回來。",
+        "Downloads the official installer (about {megabytes} MB), checks it against the published checksum and runs it. This app closes first - Windows will not replace a running program - and the installer starts it again afterwards.",
+    ),
+    "update.downloading": ("正在下载更新…", "正在下載更新…", "Downloading the update…"),
+    "update.install_failed": (
+        "更新没有装成：{reason}\n改成开下载页给你，手动装一样可以。",
+        "更新沒有裝成：{reason}\n改成開下載頁給你，手動裝一樣可以。",
+        "The update was not installed: {reason}\nOpening the download page instead.",
+    ),
     "update.open": ("去下载", "去下載", "Open the page"),
     "update.skip": ("跳过这个版本", "跳過這個版本", "Skip this version"),
     "update.later": ("以后再说", "以後再說", "Later"),

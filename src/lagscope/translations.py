@@ -477,6 +477,12 @@ JA: dict = {
     "cdn.city.shenyang": "沈阳",
     "cdn.city.xian": "西安",
     "cdn.city.nanchang": "南昌",
+    "update.install": "今すぐ更新",
+    "update.install_hint": (
+        "公式インストーラー（約 {megabytes} MB）をダウンロードし、公開されているチェックサムと照合してから実行します。Windows は実行中のプログラムを置き換えられないため本アプリは一度終了し、インストール後に再起動します。"
+    ),
+    "update.downloading": "更新をダウンロードしています…",
+    "update.install_failed": "更新をインストールできませんでした：{reason}\nダウンロードページを開きます。",
     "speed.title": "速度テスト",
     "speed.host": "測定先",
     "speed.confirm": "帯域を使い切って {seconds} 秒ダウンロードします（最大 {megabytes} MB）。"
@@ -965,6 +971,12 @@ KO: dict = {
     "cdn.city.shenyang": "沈阳",
     "cdn.city.xian": "西安",
     "cdn.city.nanchang": "南昌",
+    "update.install": "지금 업데이트",
+    "update.install_hint": (
+        "공식 설치 프로그램(약 {megabytes} MB)을 내려받아 공개된 체크섬과 대조한 뒤 실행합니다. Windows 는 실행 중인 프로그램을 교체할 수 없으므로 이 앱은 먼저 종료되며, 설치가 끝나면 다시 시작됩니다."
+    ),
+    "update.downloading": "업데이트를 내려받는 중…",
+    "update.install_failed": "업데이트를 설치하지 못했습니다: {reason}\n다운로드 페이지를 엽니다.",
     "speed.title": "속도 측정",
     "speed.host": "측정 대상",
     "speed.confirm": "대역폭을 모두 써서 {seconds}초 동안 내려받습니다(최대 {megabytes} MB). "

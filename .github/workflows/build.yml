@@ -93,8 +93,18 @@ jobs:
           }
           if (-not (Test-Path $iscc)) { $iscc = "iscc" }
           $version = (python -c "import sys; sys.path.insert(0, 'src'); import lagscope; print(lagscope.__version__)")
+
+          # The translations ship in packaging/languages and target a recent
+          # Inno Setup. If this compiler is too old for one of them, fall back
+          # to an English-only installer and say so loudly - shipping an
+          # English installer beats shipping none, but it must not be silent
+          # the way the old "use it if the compiler has it" check was.
           & $iscc "/DAppVersion=$version" packaging\installer.iss
-          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "::warning::installer failed with translations; retrying English-only"
+            & $iscc "/DAppVersion=$version" "/DNoExtraLanguages" packaging\installer.iss
+            if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+          }
           Move-Item dist/LagScope-setup.exe ${{ matrix.installer }}
 
       - uses: actions/upload-artifact@v4
