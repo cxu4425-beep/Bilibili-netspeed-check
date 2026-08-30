@@ -808,7 +808,20 @@ lagscope --why-ping [主機]             # ICMP 和 TCP 並排量,說明為什�
 ## 🔄 更新與隱私
 
 **更新提醒**：預設每天最多一次，向 GitHub 查詢「最新的版本號是多少」——就是讀一個公開頁面。
-**不會上傳任何資訊、不含任何識別碼、不會自動下載或安裝**，發現新版只是跳一個提示問你要不要去下載。
+**不會上傳任何資訊、不含任何識別碼**，也不會自己偷偷裝東西。
+
+**「直接更新」**：發現新版時可以按這個，它會下載官方安裝程式、核對校驗碼、裝好，
+中間本程式會先關掉（Windows 不允許覆蓋正在執行的程式），裝完自己開回來。
+**這是這個程式裡唯一一個「下載檔案然後執行它」的功能，所以規矩訂得很死：**
+
+| 規矩 | 為什麼 |
+| --- | --- |
+| 只收 https，主機必須在固定的 GitHub 清單裡，**重導向之後再檢查一次** | API 就算回了奇怪的東西也帶不到別的地方 |
+| 位元組必須符合 API 公布的 **sha256**，不符直接刪掉 | 這是「下載」和「執行」之間唯一的關卡 |
+| **沒公布校驗碼就不自動裝**，只給連結 | 為省一次點擊去跑沒驗證過的執行檔，不划算 |
+| **只有安裝版會自我更新** | 免安裝版要覆蓋自己正在跑的檔案，做錯了你會連一個能用的程式都不剩 |
+
+按「去下載」就跟以前一樣只開頁面，什麼都不下載。
 可以在初次設定精靈或「設定 → 高級 → 更新」關掉，也可以對某個版本按「跳過這個版本」。
 托盤選單的「檢查更新…」則是手動查一次。
 
@@ -820,6 +833,7 @@ lagscope --why-ping [主機]             # ICMP 和 TCP 並排量,說明為什�
 | B 站公開 API | 只在監測 B 站直播／影片時 | 取播放位址和房間資訊（免登入、不帶 Cookie） |
 | 你的路由器／第一跳／目標 | 按下體檢，或卡頓時自動查 | 分段診斷（系統內建 ping） |
 | GitHub Releases | 每天最多一次，可關 | 查最新版本號 |
+| GitHub 的檔案伺服器 | **只在你按下「直接更新」時** | 下載那一個安裝程式（會核對 sha256） |
 | `speed.cloudflare.com` | **只在你按下測速、而且當下沒在看任何東西時** | 公開測速點；有在看東西時測的是那個 CDN，不會連這裡 |
 
 沒有統計、沒有回報、沒有帳號、沒有 Cookie。
@@ -1151,8 +1165,16 @@ how short CDN name TTLs are. Resolution and handshake are now timed and reported
 ### Updates and what it connects to
 
 Once a day at most, LagScope asks GitHub what the newest version number is - one public page,
-no identifier, nothing uploaded, and nothing downloaded or installed automatically. The setup
-wizard asks before it ever runs, and it can be turned off in Settings.
+no identifier, nothing uploaded. The setup wizard asks before it ever runs, and it can be
+turned off in Settings.
+
+When there is a new version you can let it install itself: it downloads the official
+installer, verifies it against the sha256 the releases API publishes, runs it, and quits so
+Windows can replace the executable. This is the only feature that downloads a file and then
+executes it, so it is https-only from a fixed list of GitHub hosts (re-checked after
+redirects), a digest mismatch deletes the file, an asset with no published digest is offered
+as a link rather than installed, and a portable copy never rewrites itself - it opens the
+download page, as before.
 
 That is the entire list of things it talks to: whatever you are measuring, Bilibili's public
 API (only in Bilibili mode, no login and no cookies), your own router and first hop during a
