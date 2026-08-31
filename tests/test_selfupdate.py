@@ -213,7 +213,11 @@ def test_a_missing_installer_is_not_launched():
     assert selfupdate.launch_installer("") is False
 
 
-def test_the_installer_is_started_with_the_flags_that_bring_the_app_back(tmp_path, monkeypatch):
+def test_the_installer_is_never_asked_to_restart_through_restart_manager(tmp_path, monkeypatch):
+    """Restart Manager relaunches the onefile *child* process, which then
+    fails PyInstaller's parent-executable check and shows a security error
+    instead of the app. The installer's own "run now" step is the way back.
+    """
     path = tmp_path / INSTALLER_ASSET
     path.write_bytes(b"x")
     started = {}
@@ -221,5 +225,17 @@ def test_the_installer_is_started_with_the_flags_that_bring_the_app_back(tmp_pat
                         lambda args, **kw: started.setdefault("args", args))
 
     assert selfupdate.launch_installer(str(path)) is True
-    assert "/RESTARTAPPLICATIONS" in started["args"]
+    assert "/NORESTARTAPPLICATIONS" in started["args"]
+    assert "/RESTARTAPPLICATIONS" not in started["args"]
     assert started["args"][0] == str(path)
+
+
+def test_the_installer_script_does_not_restart_applications_either():
+    """The command-line flag and the script directive have to agree; either
+    one alone would still let Restart Manager relaunch the child process."""
+    import pathlib
+    import re
+
+    script = pathlib.Path("packaging/installer.iss").read_text(encoding="utf-8")
+    directives = re.findall(r"^RestartApplications=(\w+)", script, re.MULTILINE)
+    assert directives == ["no"], directives

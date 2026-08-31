@@ -55,15 +55,24 @@ LicenseFile=..\LICENSE
 AppMutex=LagScope-Running-Mutex
 SetupMutex=LagScope-Setup-Mutex
 ; And if it is still holding files open, close it through Restart Manager
-; rather than failing. RestartApplications lets /RESTARTAPPLICATIONS bring it
-; back afterwards, which is what the in-app updater relies on.
+; rather than failing.
 ; "force" rather than "yes": Restart Manager asks an application to close by
 ; sending its top-level window a close message, and this one is a tray app
 ; whose window is hidden - so it is never asked, the wait times out, Setup
 ; proceeds anyway and DeleteFile fails. force terminates what does not answer.
 CloseApplications=force
 CloseApplicationsFilter=*.exe,*.dll
-RestartApplications=yes
+; Deliberately NOT restarting through Restart Manager. A PyInstaller onefile
+; build is two processes with the same name - a launcher and the application
+; it spawns - and RM closes both, then restarts both. The restarted *child*
+; still carries _PYI_PARENT_PROCESS_LEVEL in its environment, so it believes
+; it is a child process, checks that its parent runs the same executable,
+; finds Restart Manager instead, and refuses to start with "Security
+; validation failure: parent process has different executable!".
+;
+; The [Run] entry below starts the app instead: a fresh entry-point process
+; with a clean environment, which spawns its own child correctly.
+RestartApplications=no
 
 ; This wizard used to come out in English for everyone, because Chinese only
 ; became a bundled Inno Setup translation in 6.5 and the CI runner's compiler

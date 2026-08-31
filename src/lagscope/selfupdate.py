@@ -238,9 +238,11 @@ def launch_installer(path: str, silent: bool = False) -> bool:
     arguments = [path]
     if silent:
         arguments += ["/SILENT", "/NOCANCEL"]
-    # Restart the app once the installer finishes, so the update looks like a
-    # restart rather than the app vanishing.
-    arguments += ["/NORESTART", "/RESTARTAPPLICATIONS"]
+    # /NORESTARTAPPLICATIONS, not /RESTARTAPPLICATIONS: Restart Manager would
+    # relaunch the onefile *child* process, which then fails PyInstaller's
+    # parent-executable check and shows a security error instead of the app.
+    # The installer's own "run now" step brings it back correctly.
+    arguments += ["/NORESTART", "/NORESTARTAPPLICATIONS"]
     try:
         creationflags = 0
         if sys.platform.startswith("win"):
