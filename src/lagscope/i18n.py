@@ -832,6 +832,11 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "裡面只有你家內網位址和被測伺服器，沒有 Wi-Fi 名稱、公網 IP 或帳號。",
         "It contains addresses inside your own network and the servers measured - no Wi-Fi name, no public IP, no account.",
     ),
+    "selftest.ask_room": (
+        "贴上一个正在直播的房间号或直播间网址。\n没有的话可以留空按确定——但和 B 站有关的四项检查就会跳过，而那几项正是最需要在真实环境验证的。",
+        "貼上一個正在直播的房間號或直播間網址。\n沒有的話可以留空按確定——但和 B 站有關的四項檢查就會跳過，而那幾項正是最需要在真實環境驗證的。",
+        "Paste a room id or the URL of a stream that is live right now.\nLeaving it empty is fine, but the four Bilibili checks will skip - and those are the ones that most need testing against the real thing.",
+    ),
     "speed.title": ("网速测试", "網速測試", "Speed test"),
     "speed.host": ("测速对象", "測速對象", "Server measured"),
     "speed.confirm": (

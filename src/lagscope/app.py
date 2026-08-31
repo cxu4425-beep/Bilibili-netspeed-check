@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from . import APP_NAME, REPO_URL, __version__
 from .autostart import get_autostart, is_supported as autostart_supported, set_autostart
-from .config import Config, app_config_dir
+from .config import Config, parse_room_id, app_config_dir
 from .i18n import set_language, tr
 from .events import STALL, EventLog, Notifier
 from .history import History
@@ -888,6 +888,16 @@ class MonitorApplication(QObject):
         room = ""
         if self._target is not None and self._target.kind == "room":
             room = str(self._target.ident or "")
+        if not room:
+            # Without a room, the four checks that matter most - play URLs,
+            # the live measurement, the CDN comparison - all skip, and the
+            # report then tells a GUI user to go and use a command line. Ask
+            # instead; this button exists so that is never the answer.
+            entered, accepted = QInputDialog.getText(
+                None, tr("selftest.title"), tr("selftest.ask_room"))
+            if not accepted:
+                return
+            room = parse_room_id(entered)
         state = {"text": ""}
 
         def work():

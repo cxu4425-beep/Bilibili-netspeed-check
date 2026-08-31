@@ -538,6 +538,9 @@ JA: dict = {
     "selftest.privacy": (
         "内容は自宅ネットワーク内のアドレスと測定したサーバーのみで、Wi-Fi 名・グローバル IP・アカウント情報は含まれません。"
     ),
+    "selftest.ask_room": (
+        "現在配信中の部屋 ID または配信 URL を貼り付けてください。\n空のままでも構いませんが、ビリビリ関連の 4 項目はスキップされます——実環境での検証が最も必要なのはその 4 項目です。"
+    ),
     "speed.title": "速度テスト",
     "speed.host": "測定先",
     "speed.confirm": "帯域を使い切って {seconds} 秒ダウンロードします（最大 {megabytes} MB）。"
@@ -1087,6 +1090,9 @@ KO: dict = {
     "selftest.running": "각 프로브를 실제 서버에 대해 실행 중입니다. 십여 초 걸립니다…",
     "selftest.done": "보고서를 클립보드에 복사했습니다. 바로 붙여넣을 수 있습니다.",
     "selftest.privacy": "내용은 댁내 네트워크 주소와 측정한 서버뿐이며, Wi-Fi 이름·공인 IP·계정 정보는 없습니다.",
+    "selftest.ask_room": (
+        "지금 방송 중인 방 번호나 방송 URL 을 붙여넣으세요.\n비워 두어도 되지만 빌리빌리 관련 4개 항목은 건너뜁니다 — 실제 환경에서 검증이 가장 필요한 항목들입니다."
+    ),
     "speed.title": "속도 측정",
     "speed.host": "측정 대상",
     "speed.confirm": "대역폭을 모두 써서 {seconds}초 동안 내려받습니다(최대 {megabytes} MB). "

@@ -85,6 +85,14 @@ def _process_names() -> dict:
     return names
 
 
+# Windows reports a connection whose owning process it cannot name as pid 0,
+# which psutil renders as "System Idle Process". Those are usually sockets in
+# TIME_WAIT and there are often hundreds of them, so left in they sort to the
+# top of a list whose whole purpose is "pick the program to measure" - naming
+# something that is not a program and cannot be measured.
+UNOWNED_PIDS = (0,)
+
+
 def list_apps(min_connections: int = 1) -> list:
     """Applications that currently hold network connections, busiest first."""
     if psutil is None:
@@ -98,7 +106,7 @@ def list_apps(min_connections: int = 1) -> list:
     names = _process_names()
     grouped: dict = {}
     for entry in connections:
-        if entry.pid is None or not entry.raddr:
+        if entry.pid is None or entry.pid in UNOWNED_PIDS or not entry.raddr:
             continue
         name = names.get(entry.pid) or f"pid {entry.pid}"
         pids, count = grouped.get(name, (set(), 0))
@@ -128,7 +136,7 @@ def peers_for(process_name: str) -> list:
     names = _process_names()
     counted: dict = {}
     for entry in connections:
-        if entry.pid is None or not entry.raddr:
+        if entry.pid is None or entry.pid in UNOWNED_PIDS or not entry.raddr:
             continue
         name = (names.get(entry.pid) or "").lower()
         if wanted not in name and wanted != f"pid {entry.pid}":

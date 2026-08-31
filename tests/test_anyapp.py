@@ -492,3 +492,51 @@ def test_each_side_watch_keeps_a_stable_key():
     second = worker._measure_extra(entry, 0.01)
 
     assert first.key == second.key == "target:a.example:53"
+
+
+# ------------------------------------------------- connections nobody owns
+class _Addr:
+    def __init__(self, ip, port):
+        self.ip, self.port = ip, port
+
+
+class _Conn:
+    """Enough of a psutil connection for these two functions."""
+
+    def __init__(self, pid, ip="1.2.3.4", port=443):
+        import socket as _socket
+
+        self.pid = pid
+        self.raddr = _Addr(ip, port)
+        self.laddr = _Addr("0.0.0.0", 1)
+        self.type = _socket.SOCK_STREAM
+
+
+def test_connections_windows_cannot_attribute_are_left_out(monkeypatch):
+    """Windows reports an unowned socket as pid 0, which psutil names
+    "System Idle Process". Hundreds of those sort to the top of a list whose
+    purpose is picking a program to measure - naming something that is not a
+    program and cannot be measured. Seen on a real machine: 317 of them.
+    """
+    from lagscope.probes import appnet
+
+    monkeypatch.setattr(appnet.psutil, "net_connections",
+                        lambda kind="inet": [_Conn(0) for _ in range(317)]
+                        + [_Conn(1234), _Conn(1234)])
+    monkeypatch.setattr(appnet, "_process_names",
+                        lambda: {0: "System Idle Process", 1234: "chrome.exe"})
+
+    apps = appnet.list_apps()
+    assert [app.name for app in apps] == ["chrome.exe"]
+    assert apps[0].connections == 2
+
+
+def test_an_unowned_socket_is_not_attributed_to_a_named_program(monkeypatch):
+    from lagscope.probes import appnet
+
+    monkeypatch.setattr(appnet.psutil, "net_connections",
+                        lambda kind="inet": [_Conn(0), _Conn(1234)])
+    monkeypatch.setattr(appnet, "_process_names",
+                        lambda: {0: "System Idle Process", 1234: "chrome.exe"})
+
+    assert sum(peer.connections for peer in appnet.peers_for("chrome.exe")) == 1
