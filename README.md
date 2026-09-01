@@ -9,9 +9,9 @@
 
 免費開源 · 免登入 · 免安裝 exe · 支援 Windows / macOS / Linux · 简体 / 繁體 / English / 日本語 / 한국어
 
-**[▸ 介紹網站](https://claude.ai/code/artifact/897dab14-0e14-455c-9992-af9b249149af)** · **[下載最新版](https://github.com/cxu4425-beep/LagScope/releases/latest)**
+**[▸ 介紹網站](https://cxu4425-beep.github.io/LagScope/)** · **[下載最新版](https://github.com/cxu4425-beep/LagScope/releases/latest)**
 
-[介紹網站](https://claude.ai/code/artifact/897dab14-0e14-455c-9992-af9b249149af) · [功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [測網速](#-測一下這條線到底多快) · [伺服器在哪](#-你到底連到哪台伺服器) · [跟 ping 不一樣](#-為什麼跟-cmd-的-ping-不一樣) · [為什麼總是卡](#-為什麼總是會卡) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
+[介紹網站](https://cxu4425-beep.github.io/LagScope/) · [功能](#-功能) · [安裝](#-安裝) · [使用](#-使用) · [網路體檢](#-網路體檢告訴你是誰的錯) · [歷史與報告](#-歷史走勢與一鍵體檢報告) · [前後對照](#-我改的設定有用嗎) · [自我檢測](#-自我檢測---selftest) · [CDN 節點](#-自動選最快的-cdn-節點) · [測網速](#-測一下這條線到底多快) · [伺服器在哪](#-你到底連到哪台伺服器) · [跟 ping 不一樣](#-為什麼跟-cmd-的-ping-不一樣) · [為什麼總是卡](#-為什麼總是會卡) · [手機](#-用手機看不用裝-app) · [自動偵測](#-自動跟隨我正在看的頁面) · [設定](#️-設定說明) · [更新與隱私](#-更新與隱私) · [常見問題](#-常見問題-faq) · [English](#english)
 
 <img src="docs/images/overlay-demo.gif" width="260" alt="懸浮窗即時變化">
 
@@ -1041,7 +1041,7 @@ voice call, a browser, a download — in an always-on-top overlay and/or a statu
 it follows whatever you are watching (live rooms and ordinary videos alike) and
 measures server → client → screen.
 
-**[▸ Project site](https://claude.ai/code/artifact/897dab14-0e14-455c-9992-af9b249149af)** ·
+**[▸ Project site](https://cxu4425-beep.github.io/LagScope/)** ·
 **[Download the latest release](https://github.com/cxu4425-beep/LagScope/releases/latest)**
 
 ### Highlights

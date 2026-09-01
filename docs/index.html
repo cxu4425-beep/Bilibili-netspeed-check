@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LagScope · 卡的時候，它告訴你是誰的錯</title>
+<meta name="description" content="LagScope 是一個桌面延遲監視器：卡的時候，它告訴你是誰的錯。拆開你到伺服器的每一段，指出問題在哪一段，然後告訴你能做什麼。">
+<link rel="canonical" href="https://cxu4425-beep.github.io/LagScope/">
+<link rel="icon" href="icon.png" type="image/png">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="theme-color" content="#0B6E76" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1315" media="(prefers-color-scheme: dark)">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="LagScope">
+<meta property="og:title" content="LagScope · 卡的時候，它告訴你是誰的錯">
+<meta property="og:description" content="LagScope 是一個桌面延遲監視器：卡的時候，它告訴你是誰的錯。拆開你到伺服器的每一段，指出問題在哪一段，然後告訴你能做什麼。">
+<meta property="og:url" content="https://cxu4425-beep.github.io/LagScope/">
+<meta property="og:image" content="https://cxu4425-beep.github.io/LagScope/icon.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="LagScope · 卡的時候，它告訴你是誰的錯">
+<meta name="twitter:description" content="LagScope 是一個桌面延遲監視器：卡的時候，它告訴你是誰的錯。拆開你到伺服器的每一段，指出問題在哪一段，然後告訴你能做什麼。">
+<meta name="twitter:image" content="https://cxu4425-beep.github.io/LagScope/icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>img { max-width: 100%; }</style>
+<style>
+/* ── tokens ─────────────────────────────────────────────────────────────
+   Light is the complete palette; the two dark blocks redefine tokens only.
+   Neutrals carry a deliberate cyan bias so they read as chosen, and the
+   accent is the same teal the app draws its own latency traces in.        */
+:root {
+  --ground:      #EDF1F1;
+  --panel:       #F7F9F9;
+  --panel-sunk:  #E3E9E9;
+  --ink:         #101A1C;
+  --ink-soft:    #3E5257;
+  --ink-faint:   #6B8085;
+  --rule:        #CBD6D7;
+  --rule-strong: #A8B9BB;
+  --signal:      #0B6E76;
+  --signal-lift: #E0EFEF;
+  --ok:          #2F6B45;
+  --warn:        #9A6100;
+  --fail:        #9E2B2B;
+  --shadow:      0 1px 0 rgba(16,26,28,.05);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #0B1315;
+    --panel:       #101B1D;
+    --panel-sunk:  #08100F;
+    --ink:         #DFE9E9;
+    --ink-soft:    #A2B5B7;
+    --ink-faint:   #6F8487;
+    --rule:        #223436;
+    --rule-strong: #33494C;
+    --signal:      #4FB9BE;
+    --signal-lift: #10292B;
+    --ok:          #6BBF8B;
+    --warn:        #D6A24A;
+    --fail:        #E07070;
+    --shadow:      0 1px 0 rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground:      #0B1315;
+  --panel:       #101B1D;
+  --panel-sunk:  #08100F;
+  --ink:         #DFE9E9;
+  --ink-soft:    #A2B5B7;
+  --ink-faint:   #6F8487;
+  --rule:        #223436;
+  --rule-strong: #33494C;
+  --signal:      #4FB9BE;
+  --signal-lift: #10292B;
+  --ok:          #6BBF8B;
+  --warn:        #D6A24A;
+  --fail:        #E07070;
+  --shadow:      0 1px 0 rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+/* ── base ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Public Sans", "PingFang TC", "Microsoft JhengHei",
+               "Noto Sans CJK TC", "Hiragino Sans GB", system-ui, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.68;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: "Archivo", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.017em;
+  text-wrap: balance;
+  margin: 0;
+  line-height: 1.16;
+}
+
+p { margin: 0; }
+
+a { color: var(--signal); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+/* ── shell ────────────────────────────────────────────────────────────── */
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+.prose { max-width: 63ch; }
+
+section { border-top: 1px solid var(--rule); }
+.band { padding: 68px 0; }
+
+/* An eyebrow is a section index, not decoration: it names the question
+   the section answers. */
+.eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: block;
+  margin-bottom: 14px;
+}
+
+.lede  { font-size: 19px; color: var(--ink-soft); }
+.small { font-size: 14.5px; color: var(--ink-soft); }
+
+/* ── hero ─────────────────────────────────────────────────────────────── */
+.hero { padding: 60px 0 74px; }
+
+.brandline {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+.brand {
+  font-family: "Archivo", system-ui, sans-serif;
+  font-weight: 700; font-size: 19px; letter-spacing: -0.02em;
+}
+.brand-mark { color: var(--signal); }
+.logo { border-radius: 6px; display: block; align-self: center; }
+.tagchip {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px; letter-spacing: .08em;
+  color: var(--ink-faint);
+  border: 1px solid var(--rule); border-radius: 2px;
+  padding: 2px 7px;
+}
+
+.hero h1 { font-size: clamp(38px, 6.4vw, 68px); }
+.hero h1 em {
+  font-style: normal;
+  white-space: nowrap;
+  color: var(--signal);
+  /* The one flourish: the thesis word sits on the signal colour, underlined
+     the way the app underlines a measured value. */
+  box-shadow: inset 0 -0.14em 0 var(--signal-lift);
+}
+.hero-sub { margin-top: 22px; font-size: 19.5px; color: var(--ink-soft); max-width: 54ch; }
+
+.hero-grid {
+  display: grid; gap: 40px; align-items: start;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+  margin-top: 46px;
+}
+@media (max-width: 860px) { .hero-grid { grid-template-columns: 1fr; } }
+
+.cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.btn {
+  font-family: "Archivo", system-ui, sans-serif;
+  font-weight: 600; font-size: 15px;
+  padding: 11px 20px; border-radius: 3px;
+  text-decoration: none; display: inline-flex; align-items: center; gap: 9px;
+  border: 1px solid transparent;
+  transition: transform .12s ease, background .12s ease;
+}
+.btn-primary { background: var(--signal); color: var(--panel); }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-ghost { border-color: var(--rule-strong); color: var(--ink); }
+.btn-ghost:hover { background: var(--panel); transform: translateY(-1px); }
+.cta-note { margin-top: 12px; font-size: 13.5px; color: var(--ink-faint); }
+
+/* ── the overlay, reproduced ──────────────────────────────────────────── */
+.readout {
+  background: #0C1618;
+  border: 1px solid #1E3234;
+  border-radius: 5px;
+  padding: 18px 20px 14px;
+  box-shadow: 0 14px 34px rgba(8,20,22,.22);
+  color: #DCE8E9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .readout {
+    box-shadow: 0 0 0 1px rgba(111,211,216,.16), 0 16px 40px rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"] .readout {
+  box-shadow: 0 0 0 1px rgba(111,211,216,.16), 0 16px 40px rgba(0,0,0,.45);
+}
+.readout-top { display: flex; align-items: flex-end; gap: 12px; }
+.readout-value {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 46px; font-weight: 500; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #6FD3D8;
+}
+.readout-unit { font-family: "IBM Plex Mono", monospace; font-size: 15px; color: #7E979A; padding-bottom: 5px; }
+.readout-verdict {
+  margin-left: auto; padding-bottom: 6px;
+  font-size: 12.5px; letter-spacing: .04em; color: #8FCBA6;
+}
+.trace { width: 100%; height: 62px; display: block; margin: 12px 0 10px; }
+.readout-stats {
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12.5px; color: #7E979A;
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid #1B2D2F; padding-top: 9px;
+}
+.readout-stats b { color: #B7CACB; font-weight: 500; }
+.readout-caption { margin-top: 10px; font-size: 13px; color: var(--ink-faint); }
+
+/* ── panels & data ────────────────────────────────────────────────────── */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+}
+.panel-pad { padding: 22px 24px; }
+
+.scroll { overflow-x: auto; }
+
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--rule); }
+thead th {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 400;
+  border-bottom: 1px solid var(--rule-strong);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.num {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.host { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; }
+.host span { display: block; font-family: inherit; font-size: 12px; color: var(--ink-faint); }
+.bad { color: var(--fail); }
+
+/* ── the self-test vernacular ─────────────────────────────────────────── */
+.checks {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13.5px; line-height: 1.95;
+  background: var(--panel-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 18px 20px;
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+}
+.mark-ok   { color: var(--ok); }
+.mark-warn { color: var(--warn); }
+.mark-skip { color: var(--ink-faint); }
+.dim { color: var(--ink-faint); }
+
+/* ── feature list ─────────────────────────────────────────────────────── */
+.answers { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+           border-radius: 4px; overflow: hidden; margin-top: 34px; }
+.answer { background: var(--panel); padding: 22px 24px; display: grid; gap: 8px; }
+.answer h3 { font-size: 17px; letter-spacing: -0.01em; }
+.answer p { font-size: 15px; color: var(--ink-soft); }
+@media (min-width: 760px) { .answers { grid-template-columns: 1fr 1fr; } }
+
+/* ── verified / not verified ──────────────────────────────────────────── */
+.ledger { display: grid; gap: 26px; margin-top: 32px; }
+@media (min-width: 800px) { .ledger { grid-template-columns: 1fr 1fr; gap: 34px; } }
+.ledger h3 {
+  font-size: 15px; display: flex; align-items: center; gap: 9px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--rule-strong);
+}
+.ledger ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 9px; }
+.ledger li { font-size: 14.5px; color: var(--ink-soft); padding-left: 22px; position: relative; }
+.ledger li::before {
+  position: absolute; left: 0; top: 0;
+  font-family: "IBM Plex Mono", monospace; font-size: 13px;
+}
+.ledger .yes li::before { content: "✓"; color: var(--ok); }
+.ledger .no  li::before { content: "·"; color: var(--ink-faint); }
+
+/* ── contact & footer ─────────────────────────────────────────────────── */
+.links { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+         border-radius: 4px; overflow: hidden; margin-top: 30px; }
+@media (min-width: 700px) { .links { grid-template-columns: 1fr 1fr; } }
+.linkcard {
+  background: var(--panel); padding: 22px 24px; text-decoration: none;
+  display: grid; gap: 5px; color: var(--ink); transition: background .12s ease;
+}
+.linkcard:hover { background: var(--signal-lift); }
+.linkcard .k {
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint);
+}
+.linkcard .v { font-family: "IBM Plex Mono", monospace; font-size: 15px; color: var(--signal); word-break: break-all; }
+
+footer { border-top: 1px solid var(--rule); padding: 40px 0 60px; }
+.disclosure {
+  border-left: 3px solid var(--signal);
+  padding: 4px 0 4px 18px;
+  max-width: 66ch;
+}
+.disclosure strong { font-weight: 600; }
+.colophon { margin-top: 26px; font-size: 13px; color: var(--ink-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="wrap hero">
+  <div class="brandline">
+    <img class="logo" src="icon.png" width="30" height="30" alt="">
+    <span class="brand">Lag<span class="brand-mark">Scope</span></span>
+    <span class="tagchip">WINDOWS · macOS · LINUX</span>
+    <span class="tagchip">MIT</span>
+  </div>
+
+  <div class="hero-grid">
+    <div>
+      <h1>卡的時候，<br>它告訴你<em>是誰的錯</em>。</h1>
+      <p class="hero-sub">
+        一個桌面延遲監視器。不只顯示數字——它會拆開「你 → 路由器 → 電信商 → 伺服器」
+        每一段，指出問題在哪一段，然後告訴你能做什麼。
+      </p>
+
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/cxu4425-beep/LagScope/releases/latest">下載最新版</a>
+        <a class="btn btn-ghost" href="https://github.com/cxu4425-beep/LagScope">在 GitHub 上看原始碼</a>
+      </div>
+      <p class="cta-note">
+        Windows 有安裝版和免安裝版。安裝版之後會自己更新，不用再回來抓。
+      </p>
+    </div>
+
+    <div>
+      <div class="readout" role="img"
+           aria-label="LagScope 的懸浮視窗讀數：總延遲 142 毫秒，狀態良好，串流 96 毫秒、顯示 46 毫秒，下載 46.8M、上傳 1.8M。">
+        <div class="readout-top">
+          <span class="readout-value mono" id="ms">142</span>
+          <span class="readout-unit">ms</span>
+          <span class="readout-verdict">● 良好</span>
+        </div>
+        <svg class="trace" id="trace" viewBox="0 0 320 62" preserveAspectRatio="none" aria-hidden="true">
+          <path id="band" fill="#6FD3D8" fill-opacity=".10" d=""></path>
+          <path id="line" fill="none" stroke="#6FD3D8" stroke-width="1.6"
+                stroke-linejoin="round" stroke-linecap="round" d=""></path>
+        </svg>
+        <div class="readout-stats">
+          <span>串流 <b>96 ms</b></span>
+          <span>顯示 <b>46 ms</b></span>
+          <span>↓<b>46.8M</b></span>
+          <span>↑<b>1.8M</b></span>
+          <span>P95 <b>171 ms</b></span>
+        </div>
+      </div>
+      <p class="readout-caption">
+        平常它就是桌面角落這一小塊，可以點穿、可以鎖住位置。托盤圖示直接把數字畫在上面。
+      </p>
+    </div>
+  </div>
+</div>
+
+<section class="band">
+  <div class="wrap">
+    <span class="eyebrow">核心觀念</span>
+    <h2 style="font-size:clamp(26px,3.4vw,36px)">不是你的頻寬，<br>是你被分到哪台機器。</h2>
+    <p class="lede prose" style="margin-top:20px">
+      「測速跑到 300 Mbps，B 站還是卡」是很常見的抱怨，而且測速這件事回答不了它。
+      卡頓來自延遲抖動和丟包，不是頻寬不足——更多時候，來自 CDN 排程器把你丟到哪一個節點。
+      所以 LagScope 每一分鐘都會記下當下服務你的是哪一台，事後就能這樣比：
+    </p>
+
+    <div class="panel scroll" style="margin-top:30px">
+      <table>
+        <thead>
+          <tr><th>節點</th><th>平均延遲</th><th>佔多少時間</th><th>卡頓</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="host">upos-sz-mirrorhw.bilivideo.com<span>華為雲 CDN</span></td>
+            <td class="num">67 ms</td><td class="num">33%</td><td class="num">0</td>
+          </tr>
+          <tr>
+            <td class="host">cn-hbyc-ct-01.bilivideo.com<span>宜昌 · 中國電信</span></td>
+            <td class="num">160 ms</td><td class="num">58%</td><td class="num">360</td>
+          </tr>
+          <tr>
+            <td class="host">xy118x123x45x67xy.mcdn.bilivideo.cn<span class="bad">PCDN 邊緣節點（別人家的寬頻）</span></td>
+            <td class="num">300 ms</td><td class="num">8%</td><td class="num">0</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small prose" style="margin-top:20px">
+      主機名不是亂碼，它自己就寫了答案：<code>cn</code> 是中國大陸、<code>hbyc</code> 是湖北宜昌、
+      <code>ct</code> 是中國電信。LagScope 直接翻出來。認不出來的代碼它會原樣印出，
+      <b>不會編一個看起來很像的城市名</b>——因為會有人照著它去做決定。
+    </p>
+    <p class="small prose" style="margin-top:14px">
+      它指的是「<b>最花你時間的那個</b>」，不是「最慢的那個」。上面那個 PCDN 節點雖然最慢，
+      但你只在上面待 8%；真正在拖你的是 160 ms 卻佔了 58% 時間的那個。
+    </p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <span class="eyebrow">它回答哪些問題</span>
+    <h2 style="font-size:clamp(24px,3vw,32px)">從「現在怎樣」到「總是這樣嗎」</h2>
+
+    <div class="answers">
+      <div class="answer">
+        <h3>現在多慢？</h3>
+        <p>懸浮視窗顯示總延遲，並拆成串流延遲和顯示延遲。B 站直播量的是離直播邊緣多遠；
+           一般影片量起播延遲加頻寬餘量。也能量任何一個會連網的程式，或你自己填的位址。</p>
+      </div>
+      <div class="answer">
+        <h3>是誰的錯？</h3>
+        <p>一鍵拆出你 → 路由器 → 第一跳 → 目標各段的延遲和丟包，直接說該怪哪一段。
+           卡頓時會自動在背景跑一次精簡版，把結論記在那一分鐘上。</p>
+      </div>
+      <div class="answer">
+        <h3>什麼時候壞的？</h3>
+        <p>每分鐘存一行摘要，保留七天，關掉程式也不會丟。走勢圖看得出「昨晚九點特別卡」，
+           還能匯出成一個自包含的 HTML 報告寄給客服。</p>
+      </div>
+      <div class="answer">
+        <h3>總是這樣嗎？</h3>
+        <p>按星期幾 × 幾點分組，找出有沒有時段性。<b>「沒有時段性」也是一個真的答案</b>——
+           它排掉了晚尖峰壅塞這一整類原因，把問題指向固定的東西。</p>
+      </div>
+      <div class="answer">
+        <h3>我改的設定有用嗎？</h3>
+        <p>標記「我剛剛換到 5GHz」，之後報告會用前後<b>一樣長</b>的時間窗口對照。
+           拿一整晚的「之前」比五分鐘的「之後」，什麼改動都會顯得有效——所以它不那樣做。</p>
+      </div>
+      <div class="answer">
+        <h3>那我該怎麼辦？</h3>
+        <p>把診斷結論變成一份照順序排的建議，<b>每一條都印出它的依據</b>。
+           不會因為「這是普遍的好建議」就給你——一份每次都叫你重開路由器的清單，只會教會你不要看它。</p>
+      </div>
+      <div class="answer">
+        <h3>這條線到底多快？</h3>
+        <p>主動測速，而且測的是<b>你正在看的那個 CDN</b>，不是某個測速網站。
+           時間和流量雙上限，測速前會先在歷史上標記，免得把自己造成的尖峰當成故障。</p>
+      </div>
+      <div class="answer">
+        <h3>還有</h3>
+        <p>自動跟隨你在看的頁面、自動切換到最快的 CDN 節點、手機開網頁看即時數字、
+           五種介面語言（简中／繁中／English／日本語／한국어）。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <span class="eyebrow">誠實這件事</span>
+    <h2 style="font-size:clamp(24px,3vw,32px)">它會說「我不知道」</h2>
+    <p class="lede prose" style="margin-top:20px">
+      一個診斷工具最容易犯的錯，不是量不到東西，而是<b>在雜訊裡找到一個假的模式</b>，
+      然後有人照著它花一個週末去修一個不存在的問題。所以資料不夠的時候，它就說資料不夠。
+    </p>
+
+    <pre class="checks" style="margin-top:28px"><span class="mark-ok">[ ok ]</span> Bilibili API reachable
+        <span class="dim">TCP handshake: 51 ms</span>
+        <span class="dim">API answered, code=0</span>
+<span class="mark-ok">[ ok ]</span> path tools (ping / gateway)
+        <span class="dim">default gateway: 192.168.0.1</span>
+        <span class="dim">8.8.8.8: 23 ms avg, 0% loss</span>
+<span class="mark-skip">[skip]</span> CDN edges
+        <span class="dim">needs a room id</span></pre>
+
+    <p class="small prose" style="margin-top:18px">
+      托盤選單的「產生診斷報告」會把每個探測對真實伺服器跑一次，把拿到什麼原封不動印出來，
+      <b>不做任何斷言</b>，結果直接進剪貼簿。輸出裡沒有 Wi-Fi 名稱、沒有公網 IP、沒有帳號。
+    </p>
+
+    <div class="ledger">
+      <div>
+        <h3>已經在真實機器上驗證過</h3>
+        <ul class="yes">
+          <li>安裝流程、自動更新、GUI 診斷報告</li>
+          <li>B 站 API 連線（<span class="mono">code=0</span>）</li>
+          <li>DNS 解析、預設閘道偵測、ICMP ping</li>
+          <li>連線表與程式偵測（認得出官方 PC 客戶端）</li>
+          <li>歷史紀錄與報告產生</li>
+        </ul>
+      </div>
+      <div>
+        <h3>還沒有</h3>
+        <ul class="no">
+          <li>playurl 解析</li>
+          <li>直播延遲量測</li>
+          <li>CDN 節點比較與自動切換</li>
+          <li>主機名解碼（對真實主機名）</li>
+        </ul>
+        <p class="small" style="margin-top:14px">
+          這四項需要一個正在直播的房間號才跑得到。在此之前它們只對著測試資料驗證過——
+          這一點寫在這裡，而不是留給你自己發現。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <span class="eyebrow">隱私</span>
+    <h2 style="font-size:clamp(24px,3vw,32px)">它會連的地方，就這些</h2>
+    <p class="lede prose" style="margin-top:18px">
+      沒有統計、沒有回報、沒有帳號、沒有 Cookie。不讀你的登入狀態，任何人下載就能用。
+    </p>
+
+    <div class="panel scroll" style="margin-top:28px">
+      <table>
+        <thead><tr><th>連到哪裡</th><th>什麼時候</th><th>為什麼</th></tr></thead>
+        <tbody>
+          <tr><td>你正在監測的對象</td><td>每次探測</td><td>就是要量它的延遲</td></tr>
+          <tr><td class="host">api.live.bilibili.com<span>api.bilibili.com</span></td>
+              <td>只在監測 B 站時</td><td>取播放位址（免登入、不帶 Cookie）</td></tr>
+          <tr><td>你的路由器／第一跳</td><td>按下體檢，或卡頓時</td><td>分段診斷（系統內建 ping）</td></tr>
+          <tr><td class="host">api.github.com</td><td>每天最多一次，可關</td><td>查最新版本號</td></tr>
+          <tr><td class="host">speed.cloudflare.com</td><td>只在你按測速、且沒在看東西時</td><td>公開測速點</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small prose" style="margin-top:20px">
+      自動更新是這個程式裡唯一會「下載檔案然後執行它」的功能，所以規矩訂得很死：
+      只收 https、主機必須在固定的 GitHub 清單裡（跟完重導向後再檢查一次）、
+      位元組必須符合 API 公布的 sha256，不符就直接刪掉。<b>沒公布校驗碼就不自動裝，只給你連結。</b>
+    </p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <span class="eyebrow">取得</span>
+    <h2 style="font-size:clamp(24px,3vw,32px)">下載與原始碼</h2>
+
+    <div class="panel panel-pad" style="margin-top:26px">
+      <div style="display:flex;flex-wrap:wrap;gap:26px 44px;font-size:14.5px">
+        <div><div class="eyebrow" style="margin-bottom:6px">Windows</div>
+             安裝版 <span class="mono">LagScope-setup.exe</span><br>
+             <span class="small">免安裝版也有；只有安裝版會自我更新</span></div>
+        <div><div class="eyebrow" style="margin-bottom:6px">macOS</div>
+             <span class="mono">LagScope-macos-arm64.zip</span></div>
+        <div><div class="eyebrow" style="margin-bottom:6px">Linux</div>
+             <span class="mono">LagScope-linux-x64.tar.gz</span></div>
+      </div>
+      <div class="cta-row" style="margin-top:24px">
+        <a class="btn btn-primary" href="https://github.com/cxu4425-beep/LagScope/releases/latest">前往 Releases</a>
+      </div>
+    </div>
+
+    <p class="small prose" style="margin-top:22px">
+      MIT 授權。562 個自動化測試，在 Windows、macOS、Ubuntu 上以 Python 3.9／3.11／3.12 執行。
+      約 15,000 行 Python，介面用 PySide6。
+    </p>
+
+    <div class="links">
+      <a class="linkcard" href="https://github.com/cxu4425-beep/LagScope">
+        <span class="k">原始碼與 Releases</span>
+        <span class="v">github.com/cxu4425-beep/LagScope</span>
+        <span class="small">回報問題、看程式碼、下載每一版</span>
+      </a>
+      <a class="linkcard" href="mailto:cxu4425@gmail.com">
+        <span class="k">聯絡作者</span>
+        <span class="v">cxu4425@gmail.com</span>
+        <span class="small">問題、建議、或貼一份診斷報告給我看</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="disclosure">
+      <p><strong>此應用程式為 AI 生成。</strong></p>
+      <p class="small" style="margin-top:10px">
+        LagScope 的程式碼、測試、說明文件與這個介紹網站，都是由 AI 產生的。
+        它是公開原始碼的，任何人都可以在 GitHub 上檢視、驗證或修改。
+        文中提到「尚未在真實環境驗證」的部分，請以你自己機器上的實測結果為準。
+      </p>
+      <p class="small" style="margin-top:10px">
+        <span class="mono">This application was generated by AI.</span>
+      </p>
+    </div>
+    <p class="colophon">
+      LagScope · MIT License · <a href="https://github.com/cxu4425-beep/LagScope">GitHub</a> ·
+      <a href="mailto:cxu4425@gmail.com">cxu4425@gmail.com</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+/* The hero trace: a latency series with the shape real data has - a quiet
+   baseline, a little jitter, and one spike that recovers. Generated rather
+   than hand-drawn so the band and the line cannot drift apart. */
+(function () {
+  var W = 320, H = 62, N = 64;
+  var seed = 20260831;
+  function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+
+  var vals = [], i;
+  for (i = 0; i < N; i++) {
+    var base = 96 + Math.sin(i / 7) * 9 + (rnd() - 0.5) * 16;
+    if (i > 38 && i < 45) base += 130 * Math.exp(-Math.abs(i - 41) / 1.9);
+    vals.push(base);
+  }
+  var lo = 60, hi = 250;
+  function x(k) { return (k / (N - 1)) * W; }
+  function y(v) { return H - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (H - 6) - 3; }
+
+  var line = "M " + x(0).toFixed(1) + " " + y(vals[0]).toFixed(1);
+  for (i = 1; i < N; i++) line += " L " + x(i).toFixed(1) + " " + y(vals[i]).toFixed(1);
+
+  var el = document.getElementById("line");
+  el.setAttribute("d", line);
+  document.getElementById("band").setAttribute(
+    "d", line + " L " + W + " " + H + " L 0 " + H + " Z");
+
+  /* Draw once on load; a looping animation would only distract. */
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    var len = el.getTotalLength();
+    el.style.strokeDasharray = len;
+    el.style.strokeDashoffset = len;
+    el.getBoundingClientRect();
+    el.style.transition = "stroke-dashoffset 1100ms cubic-bezier(.22,.7,.3,1)";
+    el.style.strokeDashoffset = "0";
+
+    /* The readout settles on its value the way the real one does. */
+    var out = document.getElementById("ms"), steps = [118, 173, 129, 151, 142], k = 0;
+    var tick = setInterval(function () {
+      out.textContent = steps[k++];
+      if (k >= steps.length) clearInterval(tick);
+    }, 150);
+  }
+})();
+</script>
+
+</body>
+</html>
