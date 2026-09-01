@@ -108,9 +108,45 @@ DEMO_EXTRAS = [
                 rtt_ms=2.1, ok=True),
     ExtraResult(key="b", label="DNS 8.8.8.8", kind=KIND_TARGET, ident="8.8.8.8",
                 rtt_ms=28.0, ok=True),
-    ExtraResult(key="c", label="Discord 语音", kind=KIND_APP, ident="Discord.exe",
+    ExtraResult(key="c", label="Discord 語音", kind=KIND_APP, ident="Discord.exe",
                 rtt_ms=180.0, ok=True),
 ]
+
+
+def _analysis(history, hours) -> dict:
+    """The same edge/pattern/action analysis the app builds for this window."""
+    from lagscope.actions import suggest
+    from lagscope.i18n import tr
+    from lagscope.patterns import by_edge, by_period, edge_verdict, hour_ranges
+    from lagscope.probes.cdninfo import describe
+
+    buckets = history.buckets(hours)
+    edges = by_edge(buckets)
+    verdict = edge_verdict(edges)
+    if verdict.key == "edge.differs" and verdict.best and verdict.worst:
+        note = tr("edge.differs", worst=verdict.worst.host, best=verdict.best.host,
+                  diff=f"{verdict.difference_ms:.0f}",
+                  share=f"{verdict.worst.share_pct:.0f}")
+    else:
+        note = tr(verdict.key)
+
+    pattern = by_period(buckets)
+    if pattern.has_pattern and pattern.worst:
+        when = "、".join(tr("pattern.range", start=f"{a:02d}", end=f"{b:02d}")
+                         for a, b in hour_ranges(pattern.worst_hours))
+        pattern_note = tr("pattern.found", when=when,
+                          bad=f"{pattern.worst.avg_ms:.0f}",
+                          overall=f"{pattern.overall_ms:.0f}")
+    else:
+        pattern_note = tr(pattern.key)
+
+    return {
+        "edges": edges, "edge_note": note, "pattern_note": pattern_note,
+        "actions": suggest(edge_verdict=verdict, pattern=pattern,
+                           verdict_key="verdict.isp",
+                           peer_hosts=[e.host for e in edges
+                                       if describe(e.host).is_peer]),
+    }
 
 
 def demo_history() -> History:
@@ -123,11 +159,14 @@ def demo_history() -> History:
         if 150 < minute < 170:                  # the machine was asleep
             continue
         base = 120 + 30 * math.sin(minute / 40)
+        host = "upos-sz-mirrorhw.bilivideo.com"
         if 300 < minute < 330:                  # the evening that went wrong
             base = 420 + random.random() * 260
+        if minute > 240:                        # and it went wrong on one edge
+            host = "cn-hbyc-ct-01.bilivideo.com"
         for step in range(3):
-            history.add(LatencySample(ts=ts + step * 20, ok=True, title="房间 21452505",
-                                      total_ms=base + random.random() * 40))
+            history.add(LatencySample(ts=ts + step * 20, ok=True, title="直播間 21452505",
+                                      host=host, total_ms=base + random.random() * 40))
         if 305 < minute < 315 and minute % 3 == 0:
             history.note_event("stall")
         if 300 < minute < 330 and minute % 7 == 0:
@@ -135,7 +174,7 @@ def demo_history() -> History:
     return history
 
 
-def shoot_overlay(name: str, config: Config, sample, stats, label="房间 21452505",
+def shoot_overlay(name: str, config: Config, sample, stats, label="直播間 21452505",
                   extras=()) -> None:
     window = OverlayWindow(config, DisplayProbe())
     window.show()
@@ -149,6 +188,9 @@ def shoot_overlay(name: str, config: Config, sample, stats, label="房间 214525
 
 def main() -> int:
     app = QApplication.instance() or QApplication([])
+    # Set before anything is drawn: this used to be called at the end, where
+    # it changed nothing, and every screenshot came out in the wrong language.
+    set_language("zh_TW")
     OUT.mkdir(parents=True, exist_ok=True)
     sample, stats = demo_stats()
 
@@ -167,20 +209,22 @@ def main() -> int:
 
     video_sample, video_series = video_stats()
     shoot_overlay("overlay-video.png", Config(), video_sample, video_series,
-                  label="视频 【4K】测试影片标题 P2")
+                  label="影片 【4K】測試影片標題 P2")
 
     app_sample, app_series = app_stats()
     app_config = Config()
     app_config.thresholds.good_ms = 60
     app_config.thresholds.warn_ms = 150
     shoot_overlay("overlay-app.png", app_config, app_sample, app_series,
-                  label="应用 ValorantGame.exe", extras=DEMO_EXTRAS)
+                  label="應用程式 ValorantGame.exe", extras=DEMO_EXTRAS)
 
     history_config = Config()
     history_config.thresholds.good_ms = 200
     history_config.thresholds.warn_ms = 500
-    window = HistoryWindow(history_config, demo_history())
-    window.resize(900, 470)
+    history = demo_history()
+    window = HistoryWindow(history_config, history)
+    window.set_analysis_provider(lambda hours: _analysis(history, hours))
+    window.resize(900, 660)
     window.show()
     QApplication.processEvents()
     window.grab().save(str(OUT / "history.png"), "PNG")
@@ -210,7 +254,6 @@ def main() -> int:
     strip.save(str(OUT / "tray-icons.png"), "PNG")
 
     print(f"screenshots written to {OUT}")
-    set_language("zh_CN")
     return 0
 
 
