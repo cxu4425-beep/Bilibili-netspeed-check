@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="tw.lagscope.viewer"
-    android:versionCode="1"
-    android:versionName="1.0">
+    android:versionCode="2"
+    android:versionName="1.1">
 
     <!-- The only permission it asks for. It talks to one machine on your own
          network and to nothing else. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Only so the app can offer its own update. It installs one file: the
+         APK it just downloaded from the project's releases and checked
+         against the sha256 those releases publish. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" />
 
@@ -30,5 +34,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Hands the verified APK to the package installer as a content://
+             URI, which Android has required since 7. Not exported: only the
+             installer, granted read access per-intent, ever reads from it. -->
+        <provider
+            android:name=".ApkProvider"
+            android:authorities="tw.lagscope.viewer.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

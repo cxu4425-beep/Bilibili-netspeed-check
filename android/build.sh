@@ -32,34 +32,43 @@ done
 [ -f "$PLATFORM" ] || { echo "missing android.jar: $PLATFORM" >&2; exit 1; }
 [ -f tools/dx.jar ] || { echo "missing tools/dx.jar" >&2; exit 1; }
 
-rm -rf "$OUT"; mkdir -p "$OUT/gen" "$OUT/classes"
+rm -rf "$OUT"; mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/test"
 
-echo "[1/6] aapt: resources + R.java"
+echo "[1/7] tests (plain JVM)"
+# Run first: shipping an APK whose logic was never checked is exactly the
+# thing that is hard to notice, since none of it can be run on this machine.
+javac -nowarn -encoding UTF-8 -d "$OUT/test" \
+  src/tw/lagscope/viewer/Pairing.java src/tw/lagscope/viewer/Updater.java \
+  test/PairingTest.java test/UpdaterTest.java
+java -cp "$OUT/test" PairingTest | tail -1
+java -cp "$OUT/test" UpdaterTest | tail -1
+
+echo "[2/7] aapt: resources + R.java"
 aapt package -f -m \
   -J "$OUT/gen" -M AndroidManifest.xml -S res -I "$PLATFORM" \
   -F "$OUT/resources.ap_"
 
-echo "[2/6] javac"
+echo "[3/7] javac"
 # Android's dex format predates newer class-file versions; 8 is what dx reads.
 javac -source 8 -target 8 -nowarn -encoding UTF-8 \
   -bootclasspath "$PLATFORM" -classpath "$PLATFORM" \
   -d "$OUT/classes" \
   $(find src "$OUT/gen" -name '*.java') 2>&1 | grep -v "bootstrap class path" || true
 
-echo "[3/6] dx: classes -> dex"
+echo "[4/7] dx: classes -> dex"
 java -cp tools/dx.jar com.android.dx.command.Main --dex \
   --output="$OUT/classes.dex" "$OUT/classes"
 
-echo "[4/6] package"
+echo "[5/7] package"
 cp "$OUT/resources.ap_" "$APK_UNSIGNED"
 ( cd "$OUT" && aapt add -k "$(basename "$APK_UNSIGNED")" classes.dex >/dev/null )
 
-echo "[5/6] zipalign"
+echo "[6/7] zipalign"
 # Alignment must happen before signing: v2 signatures cover the whole archive,
 # so aligning afterwards would invalidate them.
 zipalign -f 4 "$APK_UNSIGNED" "$APK_ALIGNED"
 
-echo "[6/6] sign"
+echo "[7/7] sign"
 if [ ! -f "$KEYSTORE" ]; then
   # Self-signed, for sideloading. Keep this file: Android will refuse an
   # update signed by a different key, so a lost keystore means every user

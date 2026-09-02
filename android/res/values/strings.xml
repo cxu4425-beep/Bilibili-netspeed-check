@@ -17,4 +17,16 @@
     <string name="menu_reload">重新載入</string>
     <string name="menu_repair">換一台電腦</string>
     <string name="toast_forgotten">已經忘記剛才那台電腦</string>
+
+    <string name="menu_update">檢查更新</string>
+    <string name="update_checking">正在查有沒有新版…</string>
+    <string name="update_none">已經是最新版了</string>
+    <string name="update_title">有新版 %1$s</string>
+    <string name="update_body">下載約 %1$d KB，核對校驗碼之後才會安裝。</string>
+    <string name="update_now">更新</string>
+    <string name="update_later">稍後</string>
+    <string name="update_downloading">正在下載…</string>
+    <string name="update_failed">更新沒有裝成：%1$s\n改成開下載頁給你。</string>
+    <string name="update_permission">Android 需要你允許這個 App 安裝應用程式，才能自己更新。要現在去開嗎？</string>
+    <string name="update_settings">去設定</string>
 </resources>
