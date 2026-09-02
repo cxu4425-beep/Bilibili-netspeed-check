@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LagScope</string>
+
+    <string name="pair_title">連到你的電腦</string>
+    <string name="pair_intro">這個 App 是看你電腦上 LagScope 的畫面。手機看不到別的程式的連線（Android 10 起就不允許了），所以量測還是電腦在做，手機負責顯示。\n\n資料直接從你的電腦傳到手機，不經過任何伺服器。</string>
+    <string name="pair_address">電腦的網址或 IP</string>
+    <string name="pair_address_hint">192.168.0.10  或整段網址</string>
+    <string name="pair_code">存取碼</string>
+    <string name="pair_code_hint">電腦上顯示的數字</string>
+    <string name="pair_connect">連線</string>
+    <string name="pair_where">在電腦上點托盤圖示 →「手機網址…」，把上面顯示的網址整段貼進來就好，存取碼可以留空。</string>
+    <string name="pair_need_address">請先填電腦的網址或 IP</string>
+
+    <string name="err_unreachable">連不到你的電腦。確認兩件事：電腦上的 LagScope 還開著，而且手機和電腦在同一個 Wi-Fi（用行動網路連不到家裡的電腦）。</string>
+
+    <string name="menu_reload">重新載入</string>
+    <string name="menu_repair">換一台電腦</string>
+    <string name="toast_forgotten">已經忘記剛才那台電腦</string>
+</resources>
