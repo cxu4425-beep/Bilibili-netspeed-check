@@ -69,9 +69,24 @@ java -cp build/test PairingTest
 
 ## 關於簽章金鑰
 
-`build.sh` 第一次跑會產生 `build/debug.keystore` 並自我簽章（sideload 用）。
+`build.sh` 第一次跑會產生 `keystore/lagscope.jks` 並自我簽章（sideload 用）。
 
-**這個檔案要留著。** Android 不接受換了金鑰的更新——弄丟的話，每個使用者都得先解除安裝才能裝新版。它已經在 `.gitignore` 裡，不要提交到公開 repo：任何人拿到它就能簽一個假的「更新」。
+**這個檔案要留著，它就是這個 App 的身分。** Android 不接受換了金鑰的更新——弄丟的話，每個使用者都得先解除安裝才能裝新版。已經在 `.gitignore` 裡，不要提交到公開 repo：任何人拿到它就能簽一個假的「更新」，而使用者的手機會接受。
+
+> 早期版本把它放在 `build/` 裡，而 `build.sh` 每次開頭都 `rm -rf build`——所以**每次建置都在偷偷換一把新金鑰**。做出來的 APK 在乾淨的手機上裝得起來，卻沒辦法更新任何已經裝過的人。這種 bug 只會在別人的手機上現形，在這裡看不到。現在它放在 `keystore/`，不會被清掉。
+
+### 讓 GitHub Actions 也用同一把
+
+Release 的 APK 必須跟你手動編的是同一把金鑰簽的，否則自動更新會裝不上去。
+
+1. 把 `keystore/lagscope.jks` 轉成 base64：
+   `base64 -w0 keystore/lagscope.jks`（macOS 用 `base64 -i`）
+2. 在 repo 的 **Settings → Secrets and variables → Actions** 新增：
+   - `ANDROID_KEYSTORE_BASE64` — 上一步的內容
+   - `ANDROID_KEYSTORE_PASSWORD` — 金鑰密碼
+3. 之後每次發布都會自動附上 `LagScope-viewer.apk`
+
+**沒有設這兩個 secret 的話，CI 會印一個警告然後跳過 APK，不會讓建置失敗。** 這是刻意的：寧可沒有 APK，也不要發一個用臨時金鑰簽、誰都更新不了的 APK。
 
 ## 沒有 iOS
 

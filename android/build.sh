@@ -23,7 +23,12 @@ OUT=build
 APK_UNSIGNED="$OUT/lagscope-unsigned.apk"
 APK_ALIGNED="$OUT/lagscope-aligned.apk"
 APK="$OUT/LagScope-viewer.apk"
-KEYSTORE=${KEYSTORE:-$OUT/debug.keystore}
+# NOT inside $OUT: that directory is wiped at the start of every build, so a
+# keystore kept there was silently regenerated each time and every APK was
+# signed with a different key. Android refuses an update whose signature
+# changed, so those builds could not upgrade each other - the failure only
+# shows up on a phone, which is where it cannot be seen from here.
+KEYSTORE=${KEYSTORE:-keystore/lagscope.jks}
 STOREPASS=${STOREPASS:-lagscope}
 
 for tool in aapt zipalign apksigner javac keytool; do
@@ -69,10 +74,11 @@ echo "[6/7] zipalign"
 zipalign -f 4 "$APK_UNSIGNED" "$APK_ALIGNED"
 
 echo "[7/7] sign"
+mkdir -p "$(dirname "$KEYSTORE")"
 if [ ! -f "$KEYSTORE" ]; then
-  # Self-signed, for sideloading. Keep this file: Android will refuse an
-  # update signed by a different key, so a lost keystore means every user
-  # has to uninstall before they can upgrade.
+  # Self-signed, for sideloading. Keep this file - it is the app's identity.
+  # Android refuses an update signed by a different key, so losing it means
+  # every user has to uninstall before they can upgrade.
   keytool -genkeypair -v -keystore "$KEYSTORE" -storepass "$STOREPASS" \
     -keypass "$STOREPASS" -alias lagscope -keyalg RSA -keysize 2048 \
     -validity 10000 -dname "CN=LagScope, OU=LagScope, O=LagScope, C=TW" \

@@ -32,3 +32,4 @@ logs/
 # Android build output and signing key (never commit a keystore)
 android/build/
 *.keystore
+android/keystore/
