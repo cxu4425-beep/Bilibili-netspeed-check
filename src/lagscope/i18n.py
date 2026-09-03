@@ -800,6 +800,65 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "Not enough recorded yet to compare edges (each needs at least ten minutes).",
     ),
     "edge.none": ("没有节点资讯", "沒有節點資訊", "No edge recorded"),
+
+    # -- which wireless network carried it -------------------------------
+    "link.title": ("你用了哪些无线网路", "你用了哪些無線網路", "Which wireless links you used"),
+    "link.col_host": ("无线网路", "無線網路", "Link"),
+    "link.col_signal": ("讯号", "訊號", "Signal"),
+    "link.col_roams": ("换 AP", "換 AP", "Roams"),
+    "link.differs": (
+        "差别很大：在 {worst} 上比在 {best} 上慢了 {diff} ms，而你有 {share}% 的时间在慢的那个上面。这个跟节点不一样——这个你自己就能换。",
+        "差別很大：在 {worst} 上比在 {best} 上慢了 {diff} ms，而你有 {share}% 的時間在慢的那個上面。這個跟節點不一樣——這個你自己就能換。",
+        "It matters: {worst} runs {diff} ms slower than {best}, and you spent {share}% of the time on the slower one. Unlike the CDN edge, this one is yours to change.",
+    ),
+    "link.same": (
+        "你用过的几个无线网路表现差不多，所以卡顿不是选到哪个网路造成的。",
+        "你用過的幾個無線網路表現差不多，所以卡頓不是選到哪個網路造成的。",
+        "The wireless links you used performed about the same, so which one you were on is not what makes it stutter.",
+    ),
+    "link.only_one": (
+        "整段时间都在同一个无线网路上，没有别的可以比。如果你的路由器同时有 2.4 GHz 和 5 GHz，可以两个都用一阵子再回来看。",
+        "整段時間都在同一個無線網路上，沒有別的可以比。如果你的路由器同時有 2.4 GHz 和 5 GHz，可以兩個都用一陣子再回來看。",
+        "You were on one wireless link the whole time, so there is nothing to compare it with. If your router offers both 2.4 GHz and 5 GHz, use each for a while and come back.",
+    ),
+    "link.not_enough": (
+        "记录还不够久，看不出无线网路之间的差别（每个至少要 10 分钟）。",
+        "紀錄還不夠久，看不出無線網路之間的差別（每個至少要 10 分鐘）。",
+        "Not enough recorded yet to compare wireless links (each needs at least ten minutes).",
+    ),
+    "link.none": ("没有无线资讯（可能是有线连接）", "沒有無線資訊（可能是有線連接）", "No wireless recorded (probably a wired connection)"),
+    "link.wired": ("这台机器是有线连接。", "這台機器是有線連接。", "This machine is on a wired connection."),
+
+    "action.switch_band": (
+        "换到比较快的那个无线网路（通常是 5 GHz 那个）",
+        "換到比較快的那個無線網路（通常是 5 GHz 那個）",
+        "Move to the faster wireless network (usually the 5 GHz one)",
+    ),
+    "action.because.link": (
+        "两个无线网路之间差很多，而且你能自己换",
+        "兩個無線網路之間差很多，而且你能自己換",
+        "the wireless links differ measurably, and that one is yours to change",
+    ),
+    "action.roaming": (
+        "路由器／延伸器在把你转来转去。把装置固定在讯号最好的那台，或关掉延伸器试试",
+        "路由器／延伸器在把你轉來轉去。把裝置固定在訊號最好的那台，或關掉延伸器試試",
+        "Your router or repeater keeps handing you between access points. Pin the device to the strongest one, or try turning the repeater off",
+    ),
+    "action.because.roams": (
+        "这段时间换了好几次 AP，每次换手都会断一到三秒",
+        "這段時間換了好幾次 AP，每次換手都會斷一到三秒",
+        "the access point changed several times, and each handover costs one to three seconds",
+    ),
+    "action.bt_interference": (
+        "你的 Wi-Fi 在 2.4 GHz，蓝牙也在 2.4 GHz——换到 5 GHz 可以让它们不要抢",
+        "你的 Wi-Fi 在 2.4 GHz，藍牙也在 2.4 GHz——換到 5 GHz 可以讓它們不要搶",
+        "Your Wi-Fi is on 2.4 GHz and so is Bluetooth - moving to 5 GHz stops them competing",
+    ),
+    "action.because.bt_band": (
+        "这不是量到的，是频段本身的事实：2.4 GHz Wi-Fi 和蓝牙共用同一段无线电",
+        "這不是量到的，是頻段本身的事實：2.4 GHz Wi-Fi 和藍牙共用同一段無線電",
+        "not measured - a fact about the band itself: 2.4 GHz Wi-Fi and Bluetooth share the same radio spectrum",
+    ),
     "pattern.title": ("什么时候比较卡", "什麼時候比較卡", "When it is bad"),
     "pattern.found": (
         "有时段性：{when} 明显比平常差（{bad} ms，平常 {overall} ms）。会跟着时钟走的通常是壅塞——晚高峰、跨境线路挤，这一段不是你家设备能解决的。",

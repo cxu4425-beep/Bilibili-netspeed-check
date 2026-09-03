@@ -71,6 +71,15 @@ class Bucket:
     # is usually "which machine was I given", and that answer is unanswerable
     # after the fact unless it was written down at the time.
     host: str = ""
+    # Which wireless link carried this minute, and how well. Recorded for the
+    # same reason as the edge above: "why is it sometimes bad" is often "which
+    # radio was I on", and that cannot be recovered after the fact.
+    link: str = ""
+    signal_pct: Optional[int] = None
+    # How many times the access point changed inside this minute. With a mesh
+    # the SSID never changes, so a roam is invisible without this - and a roam
+    # mid-stream is a stall with no other explanation.
+    roams: int = 0
 
     @property
     def loss_pct(self) -> float:
@@ -86,6 +95,7 @@ class Bucket:
             _round(self.p95_ms), _round(self.jitter_ms),
             self.stalls, self.spikes, self.kind, self.label,
             self.verdict, self.verdict_detail, self.host,
+            self.link, "" if self.signal_pct is None else self.signal_pct, self.roams,
         ]
 
     @classmethod
@@ -107,6 +117,9 @@ class Bucket:
                 verdict_detail=str(values[13]) if len(values) > 13 else "",
                 # Written since 4.7; older rows simply have no edge recorded.
                 host=str(values[14]) if len(values) > 14 else "",
+                link=str(values[15]) if len(values) > 15 else "",
+                signal_pct=_optional_int(values[16]) if len(values) > 16 else None,
+                roams=int(values[17] or 0) if len(values) > 17 else 0,
             )
         except (TypeError, ValueError):
             return None
@@ -121,6 +134,9 @@ class Bucket:
             "kind": self.kind, "label": self.label,
             "verdict": self.verdict, "verdict_detail": self.verdict_detail,
             "host": self.host,
+            "link": self.link,
+            "signal_pct": self.signal_pct,
+            "roams": self.roams,
         }
 
 
@@ -141,6 +157,10 @@ class _OpenBucket:
         # A minute can straddle a CDN switch, so the edge that served most of
         # it wins rather than whichever happened to be last.
         self.hosts: dict = {}
+        self.links: dict = {}
+        self.signals: list = []
+        self.last_bssid = ""
+        self.roams = 0
 
     def add(self, sample: LatencySample) -> None:
         self.count += 1
@@ -155,6 +175,17 @@ class _OpenBucket:
             self.label = title[:80]
         if sample.host:
             self.hosts[sample.host] = self.hosts.get(sample.host, 0) + 1
+        if sample.link:
+            self.links[sample.link] = self.links.get(sample.link, 0) + 1
+        if sample.signal_pct is not None:
+            self.signals.append(int(sample.signal_pct))
+        if sample.bssid:
+            # Only a change between two known APs counts. Arriving at the first
+            # one is not a roam, and neither is the radio briefly saying
+            # nothing while it reassociates.
+            if self.last_bssid and sample.bssid != self.last_bssid:
+                self.roams += 1
+            self.last_bssid = sample.bssid
 
     def close(self) -> Bucket:
         values = self.values
@@ -172,6 +203,10 @@ class _OpenBucket:
             kind=self.kind, label=self.label,
             verdict=self.verdict, verdict_detail=self.verdict_detail,
             host=max(self.hosts, key=self.hosts.get) if self.hosts else "",
+            link=max(self.links, key=self.links.get) if self.links else "",
+            signal_pct=(int(round(sum(self.signals) / len(self.signals)))
+                        if self.signals else None),
+            roams=self.roams,
         )
 
 
@@ -513,6 +548,15 @@ def _difference(after: Optional[float], before: Optional[float]) -> Optional[flo
 
 def _round(value: Optional[float]) -> Optional[float]:
     return None if value is None else round(float(value), 1)
+
+
+def _optional_int(value) -> Optional[int]:
+    """A signal percentage, or nothing when the row predates it being kept."""
+    try:
+        text = str(value).strip()
+        return int(float(text)) if text else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _opt_float(value) -> Optional[float]:

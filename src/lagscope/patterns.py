@@ -50,6 +50,9 @@ class EdgeStats:
     p95_ms: Optional[float] = None
     stalls: int = 0
     share_pct: float = 0.0          # of the time covered by the comparison
+    # Only meaningful when grouping by wireless link; None for a CDN edge.
+    signal_pct: Optional[float] = None
+    roams: int = 0
 
     @property
     def loss_pct(self) -> float:
@@ -64,19 +67,22 @@ class EdgeStats:
     def as_dict(self) -> dict:
         return {"host": self.host, "buckets": self.buckets, "avg_ms": self.avg_ms,
                 "p95_ms": self.p95_ms, "loss_pct": round(self.loss_pct, 1),
-                "stalls": self.stalls, "share_pct": round(self.share_pct, 1)}
+                "stalls": self.stalls, "share_pct": round(self.share_pct, 1),
+                "signal_pct": (None if self.signal_pct is None
+                               else round(self.signal_pct)),
+                "roams": self.roams}
 
 
-def by_edge(buckets: Sequence) -> List[EdgeStats]:
-    """Group recorded minutes by the edge that served them, worst last.
+def _group_by(buckets: Sequence, field: str) -> List[EdgeStats]:
+    """Group recorded minutes by one recorded name, best first.
 
-    Only minutes that recorded an edge take part; history written before that
-    was kept simply has nothing to say here and is left out rather than
-    lumped into an "unknown" bucket that would dilute the real ones.
+    Only minutes that recorded that name take part; history written before it
+    was kept has nothing to say here and is left out rather than lumped into
+    an "unknown" group that would dilute the real ones.
     """
     grouped: dict = {}
     for bucket in buckets or ():
-        host = getattr(bucket, "host", "") or ""
+        host = getattr(bucket, field, "") or ""
         if not host or bucket.avg_ms is None:
             continue
         grouped.setdefault(host, []).append(bucket)
@@ -87,6 +93,8 @@ def by_edge(buckets: Sequence) -> List[EdgeStats]:
         averages = [row.avg_ms for row in rows if row.avg_ms is not None]
         p95s = [row.p95_ms for row in rows if row.p95_ms is not None]
         samples = sum(row.count for row in rows)
+        signals = [row.signal_pct for row in rows
+                   if getattr(row, "signal_pct", None) is not None]
         out.append(EdgeStats(
             host=host,
             buckets=len(rows),
@@ -96,9 +104,26 @@ def by_edge(buckets: Sequence) -> List[EdgeStats]:
             p95_ms=(sum(p95s) / len(p95s)) if p95s else None,
             stalls=sum(row.stalls for row in rows),
             share_pct=(len(rows) * 100.0 / total) if total else 0.0,
+            signal_pct=(sum(signals) / len(signals)) if signals else None,
+            roams=sum(getattr(row, "roams", 0) for row in rows),
         ))
     out.sort(key=lambda stats: (stats.avg_ms is None, stats.avg_ms or 0.0))
     return out
+
+
+def by_edge(buckets: Sequence) -> List[EdgeStats]:
+    """Which CDN edge served each minute."""
+    return _group_by(buckets, "host")
+
+
+def by_link(buckets: Sequence) -> List[EdgeStats]:
+    """Which wireless link carried each minute.
+
+    The same shape of question as by_edge, and worth asking for the same
+    reason: people move between a 2.4 GHz and a 5 GHz network with the same
+    name without ever choosing to, and the two behave nothing alike.
+    """
+    return _group_by(buckets, "link")
 
 
 @dataclass
@@ -112,16 +137,21 @@ class EdgeVerdict:
 
     @property
     def matters(self) -> bool:
-        return self.key == "edge.differs"
+        return self.key.endswith(".differs")
 
 
-def edge_verdict(stats: Sequence) -> EdgeVerdict:
-    """Say whether which edge you were given made a difference worth acting on."""
+def edge_verdict(stats: Sequence, prefix: str = "edge") -> EdgeVerdict:
+    """Say whether which one you were on made a difference worth acting on.
+
+    ``prefix`` picks the wording: "edge" for a CDN node handed to you, "link"
+    for a wireless network you chose. The arithmetic is identical - what
+    differs is only whether the reader can do anything about it.
+    """
     usable = [item for item in stats or () if item.comparable and item.avg_ms is not None]
     if not usable:
-        return EdgeVerdict(key="edge.not_enough")
+        return EdgeVerdict(key=f"{prefix}.not_enough")
     if len(usable) == 1:
-        return EdgeVerdict(best=usable[0], key="edge.only_one")
+        return EdgeVerdict(best=usable[0], key=f"{prefix}.only_one")
 
     best = usable[0]
     # Not the slowest edge - the one costing the most *overall*. An edge that
@@ -135,9 +165,9 @@ def edge_verdict(stats: Sequence) -> EdgeVerdict:
     difference = (worst.avg_ms or 0.0) - (best.avg_ms or 0.0)
     if worst is best or difference < EDGE_DIFFERENCE_MS:
         return EdgeVerdict(best=best, worst=worst, difference_ms=difference,
-                           key="edge.same")
+                           key=f"{prefix}.same")
     return EdgeVerdict(best=best, worst=worst, difference_ms=difference,
-                       key="edge.differs")
+                       key=f"{prefix}.differs")
 
 
 @dataclass

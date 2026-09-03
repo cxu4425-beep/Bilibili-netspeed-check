@@ -135,6 +135,11 @@ class LatencySample:
     up_mbps: Optional[float] = None
     down_mbps: Optional[float] = None
     connections: int = 0          # how many sockets the watched app holds open
+    # Which wireless link carried this sample, e.g. "Home (2.4 GHz)". Empty on
+    # a wired machine, which is a fact about the machine rather than a gap.
+    link: str = ""
+    bssid: str = ""               # the access point, for spotting a roam
+    signal_pct: Optional[int] = None
     error: Optional[str] = None
 
     def to_dict(self) -> dict:

@@ -25,11 +25,16 @@ from .models import (
 from .probes.appnet import AppNetProbe
 from .probes.netspeed import NetSpeedProbe
 from .probes.network import HttpClient, icmp_ping_ms, tcp_rtt_ms
+from .probes.path import WifiInfo, wifi_info
 from .probes.stream import RoomInfo, StreamProbe
 from .probes.video import VideoProbe
 from .targets import resolve_target
 
 LOG = logging.getLogger(__name__)
+
+# The radio does not change second to second, and asking for it costs a
+# subprocess, so it is read on its own slower clock.
+WIFI_REFRESH_S = 30.0
 
 CLOCK_SYNC_INTERVAL_S = 60.0
 LINE_COMPARE_INTERVAL_S = 120.0
@@ -75,6 +80,10 @@ class MonitorWorker(QObject):
         self._extra_app = AppNetProbe()   # separate state: different target
         self._netspeed = NetSpeedProbe()
         self._extra_index = 0
+        # Reading the Wi-Fi state shells out; it also barely changes between
+        # rounds, so it is cached and refreshed on WIFI_REFRESH_S.
+        self._wifi: Optional[WifiInfo] = None
+        self._wifi_at = 0.0
         self._detector: Optional[AutoDetector] = None
         self._timer: Optional[QTimer] = None
 
@@ -341,7 +350,8 @@ class MonitorWorker(QObject):
             self._schedule_next(False)
             return
         try:
-            sample = self._with_audio(self._with_netspeed(self._run_round()))
+            sample = self._with_link(
+                self._with_audio(self._with_netspeed(self._run_round())))
         except Exception as exc:  # never let the loop die on a bad round
             LOG.exception("probe round failed")
             sample = LatencySample(ok=False, error=str(exc)[:200])
@@ -478,6 +488,34 @@ class MonitorWorker(QObject):
         if not speed.ok:
             return sample
         return replace(sample, up_mbps=speed.up_mbps, down_mbps=speed.down_mbps)
+
+    def _current_wifi(self) -> Optional[WifiInfo]:
+        """The wireless link, re-read every WIFI_REFRESH_S at most."""
+        now = time.monotonic()
+        if self._wifi_at and now - self._wifi_at < WIFI_REFRESH_S:
+            return self._wifi
+        self._wifi_at = now
+        try:
+            self._wifi = wifi_info()
+        except Exception:
+            # A machine with no wireless at all is the normal case here, not a
+            # failure worth a traceback in the log every half minute.
+            LOG.debug("wifi state unavailable", exc_info=True)
+            self._wifi = None
+        return self._wifi
+
+    def _with_link(self, sample: LatencySample) -> LatencySample:
+        """Note which radio carried this sample, so history can group by it.
+
+        Recorded on every sample rather than once, because the answer changes:
+        signal drops, and a mesh hands you to a different access point without
+        telling anyone. Both are things people feel and cannot see.
+        """
+        info = self._current_wifi()
+        if info is None:
+            return sample
+        return replace(sample, link=info.link_key, bssid=info.bssid,
+                       signal_pct=info.signal_pct)
 
     def _with_audio(self, sample: LatencySample) -> LatencySample:
         """Add the measured Bluetooth delay, if there is one, to every sample.

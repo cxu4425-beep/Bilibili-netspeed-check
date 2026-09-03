@@ -73,6 +73,58 @@ class PingStats:
         return self.received > 0
 
 
+BAND_24 = "2.4"
+BAND_5 = "5"
+BAND_6 = "6"
+
+
+def band_from_mhz(mhz: Optional[float]) -> str:
+    """Band from a centre frequency, which is never ambiguous."""
+    if not mhz:
+        return ""
+    value = float(mhz)
+    if 2400 <= value <= 2500:
+        return BAND_24
+    if 5150 <= value <= 5895:
+        return BAND_5
+    if 5925 <= value <= 7125:
+        return BAND_6
+    return ""
+
+
+def band_from_channel(channel: str) -> str:
+    """Band from a channel number, which sometimes is ambiguous.
+
+    2.4 GHz uses 1-14 and 5 GHz uses 32-177, so those are safe. Wi-Fi 6E
+    restarts its own numbering at 1, so a bare "5" could be either band - and
+    a wrong band here would send someone to change a setting that was already
+    right. Every adapter that can reach 6 GHz reports the band outright, so
+    the ambiguous case is normally resolved before this is consulted; when it
+    is not, this says nothing rather than guessing.
+    """
+    match = re.search(r"\d+", (channel or "").strip())
+    if not match:
+        return ""
+    number = int(match.group())
+    if 1 <= number <= 14:
+        return BAND_24
+    if 32 <= number <= 177:
+        return BAND_5
+    return ""
+
+
+def normalise_band(text: str) -> str:
+    """Read a band the adapter stated for itself, e.g. "5 GHz"."""
+    lowered = (text or "").lower()
+    if "2.4" in lowered or "2,4" in lowered:
+        return BAND_24
+    if "6" in lowered and "ghz" in lowered:
+        return BAND_6
+    if "5" in lowered:
+        return BAND_5
+    return ""
+
+
 @dataclass(frozen=True)
 class WifiInfo:
     ssid: str = ""
@@ -80,10 +132,38 @@ class WifiInfo:
     radio: str = ""               # e.g. 802.11ac
     channel: str = ""
     rx_mbps: Optional[float] = None
+    # The access point actually serving you. With a mesh or a repeater the
+    # SSID stays the same across all of them, so this is the only way to see
+    # a roam - and a roam mid-stream is a stall with no other explanation.
+    bssid: str = ""
+    freq_mhz: Optional[float] = None
+    # "2.4", "5", "6", or "" when it could not be established honestly.
+    band: str = ""
 
     @property
     def weak(self) -> bool:
         return self.signal_pct is not None and self.signal_pct < WIFI_WEAK_PCT
+
+    @property
+    def crowded_band(self) -> bool:
+        """2.4 GHz: longer range, but shared with everything else in the house."""
+        return self.resolved_band() == BAND_24
+
+    def resolved_band(self) -> str:
+        """Whatever can be established, preferring the least ambiguous source."""
+        return self.band or band_from_mhz(self.freq_mhz) or band_from_channel(self.channel)
+
+    @property
+    def link_key(self) -> str:
+        """A stable name for "which wireless link was I on", for grouping.
+
+        The SSID alone is not enough: many routers give both bands the same
+        name, and those two are very different links to be sitting on.
+        """
+        if not self.ssid:
+            return ""
+        band = self.resolved_band()
+        return f"{self.ssid} ({band} GHz)" if band else self.ssid
 
 
 @dataclass
@@ -305,6 +385,12 @@ def first_external_hop(target: str, timeout_s: float = 1.0) -> Optional[tuple]:
 
 
 # --------------------------------------------------------------------- Wi-Fi
+def _mac(text: str) -> str:
+    """A MAC address in one lowercase form, or nothing at all."""
+    match = re.search(r"(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}", text or "")
+    return match.group().lower().replace("-", ":") if match else ""
+
+
 def parse_wifi(output: str, platform: str = "") -> Optional[WifiInfo]:
     """Read the current Wi-Fi quality out of the platform's tool."""
     platform = platform or sys.platform
@@ -332,12 +418,18 @@ def parse_wifi(output: str, platform: str = "") -> Optional[WifiInfo]:
         # "BSSID" also contains "ssid"; a MAC address is not a network name.
         if re.fullmatch(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}", ssid.lower()):
             ssid = ""
+        channel = field_value("channel", "信道", "頻道")
+        # Windows 11 states the band outright. Prefer it: 6 GHz reuses the low
+        # channel numbers, so inferring from the channel can be wrong there.
+        band = normalise_band(field_value("band", "频带", "頻帶"))
         return WifiInfo(
             ssid=ssid,
             signal_pct=int(percent.group(1)) if percent else None,
             radio=field_value("radio type", "无线电类型", "無線電類型"),
-            channel=field_value("channel", "信道", "頻道"),
+            channel=channel,
             rx_mbps=float(rate_value.group(1).replace(",", ".")) if rate_value else None,
+            bssid=_mac(field_value("bssid")),
+            band=band or band_from_channel(channel),
         )
 
     if platform == "darwin":
@@ -351,21 +443,33 @@ def parse_wifi(output: str, platform: str = "") -> Optional[WifiInfo]:
                 signal = max(0, min(100, int(round((int(rssi) + 100) * 2))))
             except ValueError:
                 signal = None
+        channel = field_value("channel")
         return WifiInfo(ssid=ssid, signal_pct=signal, radio=field_value("phy mode"),
-                        channel=field_value("channel"),
-                        rx_mbps=float(rate) if rate.replace(".", "").isdigit() else None)
+                        channel=channel,
+                        rx_mbps=float(rate) if rate.replace(".", "").isdigit() else None,
+                        bssid=_mac(field_value("bssid")),
+                        band=band_from_channel(channel))
 
     # Linux: iw dev <if> link
     ssid_match = re.search(r"SSID:\s*(.+)", text)
     signal_match = re.search(r"signal:\s*(-?\d+)\s*dBm", text)
     rate_match = re.search(r"rx bitrate:\s*([\d.]+)", text)
+    # "Connected to a4:2b:8c:11:22:33 (on wlan0)" - the AP, not the interface.
+    bssid_match = re.search(r"Connected to\s+((?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})", text)
+    freq_match = re.search(r"freq:\s*(\d+)", text)
     signal = None
     if signal_match:
         signal = max(0, min(100, int(round((int(signal_match.group(1)) + 100) * 2))))
+    freq = float(freq_match.group(1)) if freq_match else None
     return WifiInfo(
         ssid=ssid_match.group(1).strip() if ssid_match else "",
         signal_pct=signal,
         rx_mbps=float(rate_match.group(1)) if rate_match else None,
+        bssid=_mac(bssid_match.group(1)) if bssid_match else "",
+        freq_mhz=freq,
+        # A frequency settles the band outright, with no channel-numbering
+        # ambiguity to work around.
+        band=band_from_mhz(freq),
     )
 
 

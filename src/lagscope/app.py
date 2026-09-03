@@ -824,7 +824,7 @@ class MonitorApplication(QObject):
     def _pattern_context(self, hours, verdict_key: str = "") -> dict:
         """Which edges served you, when it was bad, and what to try about it."""
         from .actions import suggest
-        from .patterns import by_edge, by_period, edge_verdict, hour_ranges
+        from .patterns import by_edge, by_link, by_period, edge_verdict, hour_ranges
         from .probes.cdninfo import describe
 
         buckets = self._history.buckets(hours)
@@ -837,6 +837,24 @@ class MonitorApplication(QObject):
                       diff=f"{verdict.difference_ms:.0f}", share=f"{verdict.worst.share_pct:.0f}")
         elif verdict.key:
             note = tr(verdict.key)
+
+        # The same comparison for the wireless network. Separate from the edge
+        # one because the conclusions differ in kind: which CDN node you were
+        # handed is not yours to choose, and which Wi-Fi you are on is.
+        links = by_link(buckets)
+        link_verdict = edge_verdict(links, prefix="link")
+        link_note = ""
+        if link_verdict.key == "link.differs" and link_verdict.worst and link_verdict.best:
+            link_note = tr("link.differs",
+                           worst=link_verdict.worst.host, best=link_verdict.best.host,
+                           diff=f"{link_verdict.difference_ms:.0f}",
+                           share=f"{link_verdict.worst.share_pct:.0f}")
+        elif not links:
+            # No wireless recorded at all is a fact about the machine, not a
+            # gap in the data - so say which it is rather than "not enough".
+            link_note = tr("link.none")
+        elif link_verdict.key:
+            link_note = tr(link_verdict.key)
 
         pattern = by_period(buckets)
         pattern_note = ""
@@ -852,9 +870,12 @@ class MonitorApplication(QObject):
             pattern_note = tr(pattern.key)
 
         summary = self._history.summary(hours)
+        current = self._monitor_wifi()
         return {
             "edges": edges,
             "edge_note": note,
+            "links": links,
+            "link_note": link_note,
             "pattern_note": pattern_note,
             "actions": suggest(
                 edge_verdict=verdict,
@@ -865,8 +886,27 @@ class MonitorApplication(QObject):
                 loss_pct=summary.get("loss_pct"),
                 speed_mbps=self._last_speed.mbps if self._last_speed else None,
                 switches=len(self._switches or ()),
+                link_verdict=link_verdict,
+                roams=sum(getattr(b, "roams", 0) for b in buckets),
+                band=current,
+                bluetooth_ms=self._config.audio.offset_ms,
             ),
         }
+
+    def _monitor_wifi(self) -> str:
+        """The band in use right now, for advice that is about right now.
+
+        Read off the most recent minute rather than by asking the adapter
+        again: the history already has it, and a second subprocess to learn
+        something already written down would be waste.
+        """
+        for bucket in reversed(self._history.buckets(1) or ()):
+            link = getattr(bucket, "link", "") or ""
+            if "2.4" in link:
+                return "2.4"
+            if link:
+                return "5" if "5 GHz" in link else ""
+        return ""
 
     def _run_selftest(self) -> None:
         """The command-line self-test, without the command line.

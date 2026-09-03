@@ -33,6 +33,10 @@ PRIORITY_LIKELY = 60
 PRIORITY_CONTEXT = 40           # worth knowing, not necessarily worth doing
 PRIORITY_WEAK = 20
 
+# Below this, an access-point change or two over a whole session is a laptop
+# being carried around, not a problem to report.
+ROAM_NOTICEABLE = 3
+
 
 @dataclass(frozen=True)
 class Action:
@@ -51,7 +55,8 @@ class Action:
 def suggest(*, edge_verdict=None, pattern=None, verdict_key: str = "",
             peer_hosts: Sequence = (), loss_pct: Optional[float] = None,
             speed_mbps: Optional[float] = None,
-            switches: int = 0) -> List[Action]:
+            switches: int = 0, link_verdict=None, roams: int = 0,
+            band: str = "", bluetooth_ms: float = 0.0) -> List[Action]:
     """Build the ordered list from what was actually measured.
 
     Everything is optional: the caller passes what it has, and an absent
@@ -75,6 +80,32 @@ def suggest(*, edge_verdict=None, pattern=None, verdict_key: str = "",
             detail=f"{worst.host} (+{edge_verdict.difference_ms:.0f} ms, "
                    f"{worst.share_pct:.0f}%)" if worst else "",
         ))
+
+    # --- one wireless network measurably worse than another you also used
+    if link_verdict is not None and getattr(link_verdict, "matters", False):
+        worst = getattr(link_verdict, "worst", None)
+        best = getattr(link_verdict, "best", None)
+        out.append(Action(
+            key="action.switch_band", because_key="action.because.link",
+            priority=PRIORITY_STRONG,
+            detail=(f"{worst.host} \u2192 {best.host} "
+                    f"(+{link_verdict.difference_ms:.0f} ms)") if worst and best else "",
+        ))
+
+    # --- the access point changing under you is a stall with no other cause
+    if roams >= ROAM_NOTICEABLE:
+        out.append(Action(key="action.roaming", because_key="action.because.roams",
+                          priority=PRIORITY_LIKELY, detail=str(roams)))
+
+    # --- 2.4 GHz Wi-Fi and Bluetooth are the same radio band
+    if band == "2.4" and bluetooth_ms > 0:
+        # Not a measurement: nothing here observed the two interfering. It is a
+        # fact about the band plus a fact about what is plugged in, and it is
+        # worth saying because the fix - move to 5 GHz - is one click and
+        # people never connect the two things themselves.
+        out.append(Action(key="action.bt_interference",
+                          because_key="action.because.bt_band",
+                          priority=PRIORITY_CONTEXT))
 
     # --- a clock-shaped problem is congestion, and congestion is not local
     if pattern is not None and getattr(pattern, "has_pattern", False):
@@ -125,5 +156,6 @@ def has_local_cause(actions: Sequence) -> bool:
     list that already tells someone to move their router.
     """
     local = {"action.wifi", "action.home", "action.dns", "action.lower_quality",
-             "action.peer_node", "action.edge_reassign"}
+             "action.peer_node", "action.edge_reassign", "action.switch_band",
+             "action.roaming", "action.bt_interference"}
     return any(getattr(action, "key", "") in local for action in actions or ())
