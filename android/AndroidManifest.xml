@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="tw.lagscope.viewer"
-    android:versionCode="3"
-    android:versionName="1.2">
+    android:versionCode="4"
+    android:versionName="1.3">
 
     <!-- The only permission it asks for. It talks to one machine on your own
          network and to nothing else. -->
@@ -11,6 +11,11 @@
          APK it just downloaded from the project's releases and checked
          against the sha256 those releases publish. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Whether traffic is going over Wi-Fi or mobile data, so "cannot reach
+         your PC" can name the actual cause. A normal permission: granted at
+         install, prompts nobody. The Wi-Fi's name is deliberately NOT read -
+         that needs location permission, which is far too much to ask for it. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34" />
 

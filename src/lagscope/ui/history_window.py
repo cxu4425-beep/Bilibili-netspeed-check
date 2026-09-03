@@ -360,6 +360,32 @@ def analysis_html(context: dict) -> str:
         )
     if context.get("edge_note"):
         parts.append(f"<p>{escape(context['edge_note'])}</p>")
+
+    # The same table for the wireless link. Separate from the edge one because
+    # the reader can act on this one and not on that one.
+    links = context.get("links") or ()
+    if links:
+        rows = "".join(
+            f"<tr><td>{escape(item.host)}</td>"
+            f"<td align='right'>&nbsp;{escape(format_ms(item.avg_ms))}</td>"
+            f"<td align='right'>&nbsp;"
+            f"{'--' if item.signal_pct is None else f'{item.signal_pct:.0f}%'}</td>"
+            f"<td align='right'>&nbsp;{item.share_pct:.0f}%</td>"
+            f"<td align='right'>&nbsp;{item.roams}</td></tr>"
+            for item in links
+        )
+        parts.append(
+            f"<b>{escape(tr('link.title'))}</b>"
+            f"<table width='100%' cellspacing='0' cellpadding='3'><tr>"
+            f"<th align='left'>{escape(tr('link.col_host'))}</th>"
+            f"<th align='right'>{escape(tr('edge.col_avg'))}</th>"
+            f"<th align='right'>{escape(tr('link.col_signal'))}</th>"
+            f"<th align='right'>{escape(tr('edge.col_share'))}</th>"
+            f"<th align='right'>{escape(tr('link.col_roams'))}</th>"
+            f"</tr>{rows}</table>"
+        )
+    if context.get("link_note"):
+        parts.append(f"<p>{escape(context['link_note'])}</p>")
     if context.get("pattern_note"):
         parts.append(f"<p><b>{escape(tr('pattern.title'))}</b><br>"
                      f"{escape(context['pattern_note'])}</p>")

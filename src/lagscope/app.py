@@ -606,6 +606,7 @@ class MonitorApplication(QObject):
             auto_findings=context["auto_findings"], switches=context["switches"],
             comparisons=context["comparisons"], speed=context["speed"],
             edges=context["edges"], edge_note=context["edge_note"],
+            links=context["links"], link_note=context["link_note"],
             pattern_note=context["pattern_note"], actions=context["actions"],
         ))
         if self._tray is not None:

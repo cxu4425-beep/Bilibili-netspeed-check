@@ -8,6 +8,9 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -160,7 +163,7 @@ public class MainActivity extends Activity {
                 // on the home network, and that is the usual cause - so say so
                 // rather than showing the browser's blank error page.
                 if (request != null && request.isForMainFrame()) {
-                    showSetup(getString(R.string.err_unreachable));
+                    showSetup(unreachableMessage());
                 }
             }
         });
@@ -169,6 +172,59 @@ public class MainActivity extends Activity {
         // A monitor that sleeps after thirty seconds is not much of a monitor.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         web.loadUrl(url);
+    }
+
+    /**
+     * Why the PC could not be reached, named as precisely as the facts allow.
+     *
+     * The old message told everyone to check the same two things. The usual
+     * cause is the phone having wandered onto mobile data, and when the
+     * dashboard lives on a private address that is not a guess - a carrier
+     * network cannot route to 192.168.x at all.
+     */
+    private String unreachableMessage() {
+        String reason = NetworkAdvice.explain(currentTransport(),
+                                              prefs().getString(KEY_URL, ""));
+        if (NetworkAdvice.REASON_NO_NETWORK.equals(reason)) {
+            return getString(R.string.err_no_network);
+        }
+        if (NetworkAdvice.REASON_MOBILE_PRIVATE.equals(reason)) {
+            return getString(R.string.err_mobile_private);
+        }
+        if (NetworkAdvice.REASON_MOBILE.equals(reason)) {
+            return getString(R.string.err_mobile);
+        }
+        return getString(R.string.err_unreachable);
+    }
+
+    /**
+     * Which kind of network is carrying traffic right now.
+     *
+     * Only ACCESS_NETWORK_STATE, which is granted at install and prompts
+     * nobody. The Wi-Fi's *name* is deliberately not read: that has needed
+     * location permission since Android 8, and location switched on since
+     * Android 10, which is far too much to ask for a network name.
+     */
+    private int currentTransport() {
+        try {
+            ConnectivityManager manager =
+                    (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (manager == null) { return NetworkAdvice.TRANSPORT_OTHER; }
+            Network active = manager.getActiveNetwork();
+            if (active == null) { return NetworkAdvice.TRANSPORT_NONE; }
+            NetworkCapabilities caps = manager.getNetworkCapabilities(active);
+            if (caps == null) { return NetworkAdvice.TRANSPORT_NONE; }
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                return NetworkAdvice.TRANSPORT_WIFI;
+            }
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                return NetworkAdvice.TRANSPORT_MOBILE;
+            }
+            return NetworkAdvice.TRANSPORT_OTHER;
+        } catch (Exception e) {
+            // Never let a diagnosis crash the thing it is diagnosing.
+            return NetworkAdvice.TRANSPORT_OTHER;
+        }
     }
 
     @Override

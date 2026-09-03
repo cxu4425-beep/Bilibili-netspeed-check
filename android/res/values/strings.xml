@@ -30,6 +30,10 @@
     <string name="update_permission">Android 需要你允許這個 App 安裝應用程式，才能自己更新。要現在去開嗎？</string>
     <string name="update_settings">去設定</string>
 
+    <string name="err_no_network">手機現在沒有連上任何網路。</string>
+    <string name="err_mobile_private">你的手機正在用行動網路，而電腦的位址是家用網路內部的位址（192.168 / 10.x 開頭）——行動網路連不到那裡。請把手機接回跟電腦同一個 Wi-Fi。</string>
+    <string name="err_mobile">你的手機正在用行動網路。要看電腦上的畫面，手機得跟電腦在同一個 Wi-Fi。</string>
+
     <string name="menu_audio">藍牙延遲校正</string>
     <string name="audio_title">藍牙延遲校正</string>
     <string name="audio_intro">藍牙耳機會讓聲音比畫面晚到，通常晚 100 到 250 毫秒。Android 不會告訴你這個數字（決定它的編解碼器藏在只有系統程式拿得到的權限後面），所以這裡用你的耳朵量。</string>

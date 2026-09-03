@@ -401,6 +401,7 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
                auto_findings: Sequence = (), switches: Sequence = (),
                comparisons: Sequence = (), speed=None,
                edges: Sequence = (), edge_note: str = "", pattern_note: str = "",
+               links: Sequence = (), link_note: str = "",
                actions: Sequence = (),
                good_ms: Optional[float] = None, warn_ms: Optional[float] = None) -> str:
     """The whole report as one HTML document with nothing external in it."""
@@ -542,6 +543,26 @@ def build_html(*, buckets: Sequence[Bucket], summary: dict, bucket_s: float = 60
         if edge_note:
             body.append(f'<p class="sub">{esc(edge_note)}</p>')
 
+    if links:
+        body.append(f"<h2>{esc(tr('link.title'))}</h2>")
+        rows = "".join(
+            f"<tr><td>{esc(stats.host)}</td>"
+            f"<td>{esc(format_ms(stats.avg_ms))}</td>"
+            f"<td>{'--' if stats.signal_pct is None else f'{stats.signal_pct:.0f}%'}</td>"
+            f"<td>{stats.share_pct:.0f}%</td>"
+            f"<td>{stats.roams}</td></tr>"
+            for stats in links
+        )
+        body.append(
+            "<table><thead><tr>"
+            f"<th>{esc(tr('link.col_host'))}</th><th>{esc(tr('edge.col_avg'))}</th>"
+            f"<th>{esc(tr('link.col_signal'))}</th><th>{esc(tr('edge.col_share'))}</th>"
+            f"<th>{esc(tr('link.col_roams'))}</th>"
+            f"</tr></thead><tbody>{rows}</tbody></table>"
+        )
+    if link_note:
+        body.append(f'<p class="sub">{esc(link_note)}</p>')
+
     if pattern_note:
         body.append(f"<h2>{esc(tr('pattern.title'))}</h2>")
         body.append(f'<div class="card"><p style="margin:0">{esc(pattern_note)}</p></div>')
@@ -610,6 +631,7 @@ def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
                target_label: str = "", auto_findings: Sequence = (),
                switches: Sequence = (), comparisons: Sequence = (), speed=None,
                edges: Sequence = (), edge_note: str = "", pattern_note: str = "",
+               links: Sequence = (), link_note: str = "",
                actions: Sequence = ()) -> str:
     """The same findings as something you can paste into a forum reply."""
     hours = summary.get("hours")
@@ -658,6 +680,17 @@ def build_text(*, summary: dict, worst: Optional[dict] = None, path_report=None,
                          f"   {stats.share_pct:4.0f}%   {cdn_summary(stats.host)}")
         if edge_note:
             lines.append(f"  {edge_note}")
+
+    if links:
+        lines.append("")
+        lines.append(f"{tr('link.title')}:")
+        for stats in links:
+            signal = "--" if stats.signal_pct is None else f"{stats.signal_pct:.0f}%"
+            lines.append(f"  {_pad(stats.host, 34)} {format_ms(stats.avg_ms):>9}"
+                         f"   {stats.share_pct:4.0f}%   {signal:>5}"
+                         f"   {tr('link.col_roams')} {stats.roams}")
+    if link_note:
+        lines.append(f"  {link_note}")
 
     if pattern_note:
         lines.append("")
