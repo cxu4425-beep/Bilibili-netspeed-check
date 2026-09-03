@@ -29,4 +29,18 @@
     <string name="update_failed">更新沒有裝成：%1$s\n改成開下載頁給你。</string>
     <string name="update_permission">Android 需要你允許這個 App 安裝應用程式，才能自己更新。要現在去開嗎？</string>
     <string name="update_settings">去設定</string>
+
+    <string name="menu_audio">藍牙延遲校正</string>
+    <string name="audio_title">藍牙延遲校正</string>
+    <string name="audio_intro">藍牙耳機會讓聲音比畫面晚到，通常晚 100 到 250 毫秒。Android 不會告訴你這個數字（決定它的編解碼器藏在只有系統程式拿得到的權限後面），所以這裡用你的耳朵量。</string>
+    <string name="audio_steps">1. 戴上要量的那副耳機，把音量調到平常聽的大小。\n2. 按「開始」，會聽到規律的「噠」聲，畫面也會規律地閃。\n3. 拖滑桿，直到你聽到的和看到的同時發生。\n4. 按「儲存」。</string>
+    <string name="audio_watch_here">看這裡</string>
+    <string name="audio_start">開始</string>
+    <string name="audio_stop">停止</string>
+    <string name="audio_readout">聲音比畫面晚 %1$d 毫秒</string>
+    <string name="audio_save">儲存</string>
+    <string name="audio_saved">已存成 %1$d 毫秒</string>
+    <string name="audio_unavailable">這支手機現在沒辦法發出聲音，無法校正。</string>
+    <string name="audio_accuracy">人耳大約能分辨 20 到 40 毫秒的不同步，所以這個數字的精度就在那個範圍。它量的是「聲音比畫面晚多少」，包含手機自己的音訊管線，不是耳機內部的絕對延遲。</string>
+    <string name="audio_this_phone">這個結果只屬於這支手機和這副耳機。電腦有自己的音訊路徑，要量電腦請在電腦上的 LagScope 裡校正。</string>
 </resources>

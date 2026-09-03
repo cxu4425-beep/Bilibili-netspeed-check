@@ -77,3 +77,25 @@ def test_save_is_atomic_and_leaves_no_temp_files():
     leftovers = [p.name for p in app_config_dir().iterdir() if p.suffix == ".tmp"]
     assert leftovers == []
     assert json.loads(config_path().read_text(encoding="utf-8"))["version"] == 1
+
+
+def test_every_nested_section_is_registered():
+    """A section missing from _NESTED silently loads back as a plain dict.
+
+    Nothing raises: attribute access fails much later, somewhere unrelated, and
+    only once that section is actually read. Adding a section and forgetting
+    the table is a one-line mistake with no local symptom, so it is checked
+    here rather than left to be found in the field.
+    """
+    import dataclasses
+
+    from lagscope.config import Config, _NESTED
+
+    for info in dataclasses.fields(Config):
+        default = info.default_factory if info.default_factory is not dataclasses.MISSING else None
+        if default is None:
+            continue
+        value = default()
+        if dataclasses.is_dataclass(value):
+            assert info.name in _NESTED, f"config section {info.name!r} is not in _NESTED"
+            assert _NESTED[info.name] is type(value)

@@ -21,6 +21,7 @@ HEADER = [
     "network_ms",
     "stream_ms",
     "display_ms",
+    "audio_ms",
     "ok",
     "estimated",
     "method",
@@ -43,6 +44,11 @@ class CsvRecorder:
         if self._handle is not None:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        if self._header_is_stale():
+            # Appending new columns under an old header silently produces a
+            # file where the names and the values no longer line up, and
+            # nothing about it looks wrong until someone tries to read it.
+            self._rotate_now()
         new_file = not self.path.exists() or self.path.stat().st_size == 0
         self._handle = open(self.path, "a", newline="", encoding="utf-8")
         self._writer = csv.writer(self._handle)
@@ -62,6 +68,7 @@ class CsvRecorder:
                     _fmt(sample.network_ms),
                     _fmt(sample.stream_ms),
                     _fmt(sample.display_ms),
+                    _fmt(sample.audio_ms),
                     int(sample.ok),
                     int(sample.estimated),
                     sample.method,
@@ -78,9 +85,19 @@ class CsvRecorder:
     def _backup_path(self, index: int) -> Path:
         return self.path.with_name(f"{self.path.name}.{index}")
 
-    def _rotate_if_needed(self) -> None:
-        if self._handle is None or self._handle.tell() < self.max_bytes:
-            return
+    def _header_is_stale(self) -> bool:
+        """True when an existing file was written with a different column set."""
+        try:
+            if not self.path.exists() or self.path.stat().st_size == 0:
+                return False
+            with open(self.path, "r", newline="", encoding="utf-8") as handle:
+                first = next(csv.reader(handle), None)
+        except (OSError, UnicodeDecodeError, csv.Error):
+            return False
+        return first is not None and first != HEADER
+
+    def _rotate_now(self) -> None:
+        """Move the current file aside so a fresh one starts with the new header."""
         self.close()
         try:
             if self.backups == 0:
@@ -95,6 +112,11 @@ class CsvRecorder:
             os.replace(self.path, self._backup_path(1))
         except OSError as exc:
             LOG.warning("CSV rotation failed: %s", exc)
+
+    def _rotate_if_needed(self) -> None:
+        if self._handle is None or self._handle.tell() < self.max_bytes:
+            return
+        self._rotate_now()
 
     def close(self) -> None:
         if self._handle is not None:

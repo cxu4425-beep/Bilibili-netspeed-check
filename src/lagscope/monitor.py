@@ -341,7 +341,7 @@ class MonitorWorker(QObject):
             self._schedule_next(False)
             return
         try:
-            sample = self._with_netspeed(self._run_round())
+            sample = self._with_audio(self._with_netspeed(self._run_round()))
         except Exception as exc:  # never let the loop die on a bad round
             LOG.exception("probe round failed")
             sample = LatencySample(ok=False, error=str(exc)[:200])
@@ -478,6 +478,32 @@ class MonitorWorker(QObject):
         if not speed.ok:
             return sample
         return replace(sample, up_mbps=speed.up_mbps, down_mbps=speed.down_mbps)
+
+    def _with_audio(self, sample: LatencySample) -> LatencySample:
+        """Add the measured Bluetooth delay, if there is one, to every sample.
+
+        Done here rather than inside each sample builder because the offset is
+        a constant that applies to all of them equally: it is a property of the
+        headphones, not of what is being watched. The four builders already
+        thread ``display_component`` through by hand, and adding a second
+        parameter to all of them would be four chances to forget one.
+
+        The number is only added to the total, never invented into it: a round
+        that could not produce a total stays without one. "About 170 ms" is not
+        a useful answer to "is the stream up?".
+        """
+        with self._lock:
+            audio = self._config.audio
+            offset = audio.offset_ms if audio.include_in_total else 0.0
+            measured = audio.offset_ms
+
+        if measured <= 0.0:
+            return sample
+        if not offset or sample.total_ms is None:
+            # Still worth reporting what was measured, even when the person has
+            # chosen to keep it out of the headline number.
+            return replace(sample, audio_ms=measured)
+        return replace(sample, audio_ms=measured, total_ms=sample.total_ms + offset)
 
     def _foreground_app(self) -> str:
         """Process name of the window in front, for "follow whatever I use"."""

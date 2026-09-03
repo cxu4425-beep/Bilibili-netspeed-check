@@ -118,6 +118,9 @@ class LatencySample:
     network_ms: Optional[float] = None
     stream_ms: Optional[float] = None
     display_ms: Optional[float] = None
+    # Screen-to-ears, measured by ear once and reused. Only meaningful for
+    # someone listening on Bluetooth; 0/None for anyone on a wired output.
+    audio_ms: Optional[float] = None
     total_ms: Optional[float] = None
     ok: bool = True
     estimated: bool = True

@@ -102,6 +102,12 @@ class OverlayWindow(QWidget):
         if not overlay.compact:
             if overlay.show_breakdown:
                 height += 54
+                # The headset row only exists once it has been calibrated, and
+                # the box has to grow with it or the last line is clipped.
+                # Driven from the config rather than the current sample so the
+                # reserved height cannot disagree with what gets painted.
+                if self._config.audio.measured:
+                    height += 17
             if overlay.show_sparkline:
                 height += 34
             if overlay.show_stats:
@@ -357,11 +363,16 @@ class OverlayWindow(QWidget):
         return tr("app.short_generic")
 
     def _breakdown_rows(self) -> list:
-        """The three detail lines, which say different things per target kind."""
+        """The detail lines, which say different things per target kind."""
         sample = self._sample
         kind = sample.kind if sample else KIND_LIVE
         network = format_ms(sample.network_ms if sample else None)
         display = format_ms(sample.display_ms if sample else None)
+        # Screen to ears. Absent for everyone on a wired output rather than
+        # shown as a permanent "--", which would be a row that never says
+        # anything to most people.
+        tail = ([(tr("label.audio"), format_ms(self._config.audio.offset_ms))]
+                if self._config.audio.measured else [])
 
         if kind == KIND_APP:
             peers = str(sample.connections) if (sample and sample.connections) else "--"
@@ -369,18 +380,18 @@ class OverlayWindow(QWidget):
                 (tr("label.latency"), network),
                 (tr("label.connections"), peers),
                 (tr("label.display"), display),
-            ]
+            ] + tail
         if kind == KIND_TARGET:
             return [
                 (tr("label.latency"), network),
                 (tr("label.display"), display),
-            ]
+            ] + tail
         second = tr("label.startup") if kind == KIND_VIDEO else tr("label.stream")
         return [
             (tr("label.network"), network),
             (second, format_ms(sample.stream_ms if sample else None)),
             (tr("label.display"), display),
-        ]
+        ] + tail
 
     def _paint_breakdown(self, painter: QPainter, palette: Palette, scale: float,
                          pad: float, y: float) -> float:

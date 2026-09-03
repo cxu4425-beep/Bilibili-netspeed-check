@@ -1042,6 +1042,9 @@ class MonitorApplication(QObject):
                 (tr("label.display"), format_ms(sample.display_ms if sample else None)),
             ]
 
+        if self._config.audio.measured:
+            rows.append((tr("label.audio"), format_ms(self._config.audio.offset_ms)))
+
         events = self._events.summary()
         stats = [
             (tr("label.avg"), format_ms(self._stats.avg())),

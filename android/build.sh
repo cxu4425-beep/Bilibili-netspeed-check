@@ -44,9 +44,11 @@ echo "[1/7] tests (plain JVM)"
 # thing that is hard to notice, since none of it can be run on this machine.
 javac -nowarn -encoding UTF-8 -d "$OUT/test" \
   src/tw/lagscope/viewer/Pairing.java src/tw/lagscope/viewer/Updater.java \
-  test/PairingTest.java test/UpdaterTest.java
+  src/tw/lagscope/viewer/SyncLoop.java \
+  test/PairingTest.java test/UpdaterTest.java test/SyncLoopTest.java
 java -cp "$OUT/test" PairingTest | tail -1
 java -cp "$OUT/test" UpdaterTest | tail -1
+java -cp "$OUT/test" SyncLoopTest | tail -1
 
 echo "[2/7] aapt: resources + R.java"
 aapt package -f -m \

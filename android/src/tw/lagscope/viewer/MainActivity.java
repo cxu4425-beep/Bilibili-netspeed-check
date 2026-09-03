@@ -403,7 +403,8 @@ public class MainActivity extends Activity {
     public boolean onCreateOptionsMenu(Menu menu) {
         menu.add(0, 1, 0, R.string.menu_reload);
         menu.add(0, 2, 0, R.string.menu_update);
-        menu.add(0, 3, 0, R.string.menu_repair);
+        menu.add(0, 3, 0, R.string.menu_audio);
+        menu.add(0, 4, 0, R.string.menu_repair);
         return true;
     }
 
@@ -418,6 +419,9 @@ public class MainActivity extends Activity {
                 checkForUpdate(true);
                 return true;
             case 3:
+                startActivity(new Intent(this, AudioSyncActivity.class));
+                return true;
+            case 4:
                 prefs().edit().remove(KEY_URL).apply();
                 if (web != null) { web.destroy(); web = null; }
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

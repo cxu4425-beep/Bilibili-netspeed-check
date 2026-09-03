@@ -392,6 +392,81 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "advanced.frames_in_flight": ("合成器排队帧数", "合成器排隊影格數", "Frames in flight"),
     "advanced.manual_offset": ("显示器输入延迟补偿 (毫秒)", "顯示器輸入延遲補償 (毫秒)", "Panel input lag offset (ms)"),
     "advanced.include_display": ("总延迟包含显示延迟", "總延遲包含顯示延遲", "Include display latency in total"),
+    "advanced.audio_offset": ("蓝牙耳机延迟 (毫秒)", "藍牙耳機延遲 (毫秒)", "Bluetooth headset delay (ms)"),
+    "advanced.include_audio": ("总延迟包含耳机延迟", "總延遲包含耳機延遲", "Include headset delay in total"),
+    "advanced.calibrate_audio": ("校正…", "校正…", "Calibrate..."),
+    "advanced.audio_never": ("尚未校正", "尚未校正", "not calibrated yet"),
+
+    # -- the calibration dialog -------------------------------------------
+    "audio.title": ("蓝牙耳机延迟校正", "藍牙耳機延遲校正", "Bluetooth delay calibration"),
+    "audio.intro": (
+        "蓝牙耳机会让声音比画面晚到，通常晚 100 到 250 毫秒。没有任何操作系统会告诉你这个数字，"
+        "所以这里用你的耳朵量：先响一声，再闪一下，你调到两者同时发生为止。",
+        "藍牙耳機會讓聲音比畫面晚到，通常晚 100 到 250 毫秒。沒有任何作業系統會告訴你這個數字，"
+        "所以這裡用你的耳朵量：先響一聲，再閃一下，你調到兩者同時發生為止。",
+        "Bluetooth headphones make sound arrive later than the picture, usually by 100-250 ms. "
+        "No operating system will tell you that number, so this measures it with your ear: a click "
+        "plays, then the panel flashes, and you shift one until the two land together.",
+    ),
+    "audio.steps": (
+        "1. 戴上要量的那副耳机，把音量调到平常听的大小。\n"
+        "2. 按「开始」，会听到规律的「哒」声，画面也会规律地闪。\n"
+        "3. 拖滑杆，直到你听到的和看到的同时发生。\n"
+        "4. 按「保存」。",
+        "1. 戴上要量的那副耳機，把音量調到平常聽的大小。\n"
+        "2. 按「開始」，會聽到規律的「噠」聲，畫面也會規律地閃。\n"
+        "3. 拖滑桿，直到你聽到的和看到的同時發生。\n"
+        "4. 按「儲存」。",
+        "1. Put on the headphones you want to measure, at the volume you normally use.\n"
+        "2. Press Start: you will hear a steady click and see a steady flash.\n"
+        "3. Drag the slider until the click and the flash happen at the same moment.\n"
+        "4. Press Save.",
+    ),
+    "audio.watch_here": ("看这里", "看這裡", "Watch here"),
+    "audio.start": ("开始", "開始", "Start"),
+    "audio.stop": ("停止", "停止", "Stop"),
+    "audio.offset_label": ("声音比画面晚", "聲音比畫面晚", "Sound arrives later by"),
+    "audio.readout": ("{ms} 毫秒", "{ms} 毫秒", "{ms} ms"),
+    "audio.hint_zero": (
+        "现在闪光和声音是同时送出的。如果你用蓝牙耳机，应该会先看到闪、后听到声。",
+        "現在閃光和聲音是同時送出的。如果你用藍牙耳機，應該會先看到閃、後聽到聲。",
+        "Right now the flash and the click are sent together. On Bluetooth you should see the "
+        "flash first and hear the click after it.",
+    ),
+    "audio.hint_adjusting": (
+        "调大 = 闪光更晚。调到「闪」和「哒」重合为止。",
+        "調大 = 閃光更晚。調到「閃」和「噠」重合為止。",
+        "Larger = the flash comes later. Stop when the flash and the click coincide.",
+    ),
+    "audio.device_note": ("这是哪副耳机", "這是哪副耳機", "Which headphones"),
+    "audio.device_hint": ("例如：WH-1000XM4", "例如：WH-1000XM4", "e.g. WH-1000XM4"),
+    "audio.save": ("保存", "儲存", "Save"),
+    "audio.clear": ("清除校正", "清除校正", "Clear"),
+    "audio.close": ("取消", "取消", "Cancel"),
+    "audio.unavailable": (
+        "这台机器上找不到可以放音的程序，无法校正。",
+        "這台機器上找不到可以放音的程式，無法校正。",
+        "No way to play a sound was found on this machine, so calibration cannot run.",
+    ),
+    "audio.spawn_caveat": (
+        "注意：在这个系统上，每次响声都要另外启动一个播放程序，那段启动时间（数十毫秒）会被算进结果里，"
+        "所以量出来的数字会偏大。Windows 上没有这个问题。",
+        "注意：在這個系統上，每次響聲都要另外啟動一個播放程式，那段啟動時間（數十毫秒）會被算進結果裡，"
+        "所以量出來的數字會偏大。Windows 上沒有這個問題。",
+        "Note: on this system each click launches a separate player process, and that startup time "
+        "(tens of milliseconds) is counted into the result, so the number will read high. "
+        "This does not happen on Windows.",
+    ),
+    "audio.accuracy": (
+        "人耳大约能分辨 20 到 40 毫秒的不同步，所以这个数字的精度就在那个范围。它量的是"
+        "「声音比画面晚多少」，不是耳机内部的绝对延迟。",
+        "人耳大約能分辨 20 到 40 毫秒的不同步，所以這個數字的精度就在那個範圍。它量的是"
+        "「聲音比畫面晚多少」，不是耳機內部的絕對延遲。",
+        "People can tell picture and sound apart at around 20-40 ms, so that is the precision of "
+        "this number. It measures how much later the sound arrives than the picture, not the "
+        "headset's absolute internal delay.",
+    ),
+    "label.audio": ("耳机", "耳機", "Headset"),
     "advanced.csv": ("记录到 CSV 文件", "記錄到 CSV 檔案", "Log samples to CSV"),
     "advanced.csv_hint": (
         "文件位于配置目录的 logs 子目录，自动轮转。",

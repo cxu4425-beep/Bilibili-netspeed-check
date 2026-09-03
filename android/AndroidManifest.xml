@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="tw.lagscope.viewer"
-    android:versionCode="2"
-    android:versionName="1.1">
+    android:versionCode="3"
+    android:versionName="1.2">
 
     <!-- The only permission it asks for. It talks to one machine on your own
          network and to nothing else. -->
@@ -34,6 +34,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The Bluetooth calibration. No permission of its own: playing a
+             tone needs none, and nothing is recorded - the comparison is made
+             by the person, not by the phone. -->
+        <activity
+            android:name=".AudioSyncActivity"
+            android:label="@string/audio_title"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false" />
 
         <!-- Hands the verified APK to the package installer as a content://
              URI, which Android has required since 7. Not exported: only the

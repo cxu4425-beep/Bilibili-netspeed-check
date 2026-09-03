@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import time
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
@@ -545,6 +546,27 @@ class SettingsDialog(QDialog):
         self.include_display_check = QCheckBox(tr("advanced.include_display"), page)
         form.addRow("", self.include_display_check)
 
+        # Screen to ears. A spin box alone would be asking someone to type in a
+        # number they have no way of knowing, so the calibrate button - which
+        # measures it - sits on the same row and is the intended route in.
+        audio_row = QHBoxLayout()
+        self.audio_offset_spin = QDoubleSpinBox(page)
+        self.audio_offset_spin.setRange(0.0, 500.0)
+        self.audio_offset_spin.setSingleStep(1.0)
+        self.audio_offset_spin.setSuffix(" ms")
+        audio_row.addWidget(self.audio_offset_spin, 1)
+        self.calibrate_audio_button = QPushButton(tr("advanced.calibrate_audio"), page)
+        self.calibrate_audio_button.clicked.connect(self._calibrate_audio)
+        audio_row.addWidget(self.calibrate_audio_button)
+        form.addRow(tr("advanced.audio_offset"), audio_row)
+
+        self.audio_note_label = QLabel("", page)
+        self.audio_note_label.setStyleSheet("color: palette(mid);")
+        form.addRow("", self.audio_note_label)
+
+        self.include_audio_check = QCheckBox(tr("advanced.include_audio"), page)
+        form.addRow("", self.include_audio_check)
+
         self.good_spin = QDoubleSpinBox(page)
         self.good_spin.setRange(10.0, 600_000.0)
         self.good_spin.setSingleStep(100.0)
@@ -698,6 +720,9 @@ class SettingsDialog(QDialog):
         self.frames_spin.setValue(self._config.display.frames_in_flight)
         self.manual_offset_spin.setValue(self._config.display.manual_offset_ms)
         self.include_display_check.setChecked(self._config.display.include_in_total)
+        self.audio_offset_spin.setValue(self._config.audio.offset_ms)
+        self.include_audio_check.setChecked(self._config.audio.include_in_total)
+        self._refresh_audio_note()
         self.good_spin.setValue(self._config.thresholds.good_ms)
         self.warn_spin.setValue(self._config.thresholds.warn_ms)
         self.csv_check.setChecked(self._config.recording.csv_enabled)
@@ -713,6 +738,38 @@ class SettingsDialog(QDialog):
         self._sync_anchor_state()
         self._sync_detect_state()
         self._sync_web_state()
+
+    def _refresh_audio_note(self) -> None:
+        """Say which headphones the stored number was measured with, and when.
+
+        A calibration is only valid for the headset it was taken on, and people
+        own more than one pair. Without this the spin box is an anonymous
+        number that nobody can decide whether to trust.
+        """
+        audio = self._config.audio
+        if audio.offset_ms <= 0:
+            self.audio_note_label.setText(tr("advanced.audio_never"))
+            return
+        parts = []
+        if audio.device_note:
+            parts.append(audio.device_note)
+        if audio.measured_at > 0:
+            parts.append(time.strftime("%Y-%m-%d", time.localtime(audio.measured_at)))
+        self.audio_note_label.setText(" \u00b7 ".join(parts))
+
+    def _calibrate_audio(self) -> None:
+        from .audiosync import AudioSyncDialog
+
+        dialog = AudioSyncDialog(self._config, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        if not dialog.apply_to(self._config):
+            return
+        # Push what was measured back into the widgets, so Save writes it and
+        # Cancel discards it like every other field on this page.
+        self.audio_offset_spin.setValue(self._config.audio.offset_ms)
+        self.include_audio_check.setChecked(self._config.audio.include_in_total)
+        self._refresh_audio_note()
 
     def _reload_screens(self, selected: str) -> None:
         from PySide6.QtWidgets import QApplication
@@ -847,6 +904,10 @@ class SettingsDialog(QDialog):
         config.display.frames_in_flight = self.frames_spin.value()
         config.display.manual_offset_ms = self.manual_offset_spin.value()
         config.display.include_in_total = self.include_display_check.isChecked()
+        config.audio.offset_ms = self.audio_offset_spin.value()
+        config.audio.include_in_total = self.include_audio_check.isChecked()
+        config.audio.device_note = self._config.audio.device_note
+        config.audio.measured_at = self._config.audio.measured_at
         config.thresholds.good_ms = self.good_spin.value()
         config.thresholds.warn_ms = max(self.warn_spin.value(), self.good_spin.value())
         config.recording.csv_enabled = self.csv_check.isChecked()

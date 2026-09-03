@@ -156,6 +156,34 @@ class DisplayConfig:
 
 
 @dataclass
+class AudioConfig:
+    """The last hop: screen to ears.
+
+    Everything else the app measures ends at the picture. Anyone listening on
+    Bluetooth has one more delay after that, usually a bigger one than the
+    display adds, and no operating system will report it - so this is a number
+    the person measures once, by ear, with the calibration dialog.
+
+    It is stored rather than guessed from the codec on purpose. A table saying
+    "SBC is about 200 ms" would produce a plausible number for the wrong
+    headset, and a plausible wrong number is worse here than no number.
+    """
+
+    # How much later the sound arrives than the picture, in ms. 0 = not measured.
+    offset_ms: float = 0.0
+    include_in_total: bool = True
+    # What it was measured with, so a later reader knows which headset it is for.
+    device_note: str = ""
+    # When it was measured (unix seconds); a calibration for headphones you no
+    # longer own should be recognisable as stale.
+    measured_at: float = 0.0
+
+    @property
+    def measured(self) -> bool:
+        return self.offset_ms > 0.0
+
+
+@dataclass
 class RecordingConfig:
     csv_enabled: bool = False
     csv_max_bytes: int = 8 * 1024 * 1024
@@ -263,6 +291,7 @@ class Config:
     tray: TrayConfig = field(default_factory=TrayConfig)
     probe: ProbeConfig = field(default_factory=ProbeConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
+    audio: AudioConfig = field(default_factory=AudioConfig)
     recording: RecordingConfig = field(default_factory=RecordingConfig)
     history: HistoryConfig = field(default_factory=HistoryConfig)
     updates: UpdateConfig = field(default_factory=UpdateConfig)
@@ -323,6 +352,10 @@ class Config:
         self.sample_window = int(_clamp(self.sample_window, 20, 5000))
         self.display.frames_in_flight = _clamp(self.display.frames_in_flight, 0.0, 6.0)
         self.display.manual_offset_ms = _clamp(self.display.manual_offset_ms, 0.0, 500.0)
+        # 500 ms is past anything a real headset does; beyond that the
+        # number is a mistake rather than a measurement.
+        self.audio.offset_ms = _clamp(self.audio.offset_ms, 0.0, 500.0)
+        self.audio.device_note = str(self.audio.device_note or "")[:80]
         self.thresholds.good_ms = _clamp(self.thresholds.good_ms, 10.0, 600_000.0)
         self.thresholds.warn_ms = _clamp(self.thresholds.warn_ms, self.thresholds.good_ms, 600_000.0)
         if self.overlay.anchor_mode not in ("free", "screen", "window"):
@@ -445,6 +478,7 @@ _NESTED = {
     "tray": TrayConfig,
     "probe": ProbeConfig,
     "display": DisplayConfig,
+    "audio": AudioConfig,
     "recording": RecordingConfig,
     "history": HistoryConfig,
     "updates": UpdateConfig,

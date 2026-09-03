@@ -235,6 +235,47 @@ JA: dict = {
     "advanced.frames_in_flight": "コンポジターの先行フレーム数",
     "advanced.manual_offset": "モニターの入力遅延の補正（ミリ秒）",
     "advanced.include_display": "合計に表示遅延を含める",
+    "advanced.audio_offset": "Bluetooth ヘッドホンの遅延 (ミリ秒)",
+    "advanced.include_audio": "合計にヘッドホンの遅延を含める",
+    "advanced.calibrate_audio": "測定…",
+    "advanced.audio_never": "未測定",
+
+    "audio.title": "Bluetooth 遅延の測定",
+    "audio.intro": (
+        "Bluetooth ヘッドホンでは音が映像より遅れて届きます。ふつうは 100〜250 ミリ秒です。"
+        "この値を教えてくれる OS はないので、ここでは耳で測ります。まずカチッと鳴り、"
+        "少し遅れて画面が光ります。その二つが同時になるまで調整してください。"
+    ),
+    "audio.steps": (
+        "1. 測りたいヘッドホンを、いつもの音量で装着します。\n"
+        "2. 「開始」を押すと、一定の間隔で音が鳴り、画面が光ります。\n"
+        "3. 聞こえる音と光が同時になるまでスライダーを動かします。\n"
+        "4. 「保存」を押します。"
+    ),
+    "audio.watch_here": "ここを見る",
+    "audio.start": "開始",
+    "audio.stop": "停止",
+    "audio.offset_label": "音が映像より遅れる時間",
+    "audio.readout": "{ms} ミリ秒",
+    "audio.hint_zero": (
+        "いまは光と音を同時に出しています。Bluetooth なら、光が先に見えて音が後から聞こえるはずです。"
+    ),
+    "audio.hint_adjusting": "大きくすると光が遅くなります。光と音が重なったところで止めてください。",
+    "audio.device_note": "どのヘッドホンか",
+    "audio.device_hint": "例: WH-1000XM4",
+    "audio.save": "保存",
+    "audio.clear": "消去",
+    "audio.close": "キャンセル",
+    "audio.unavailable": "この端末では音を鳴らす方法が見つからないため、測定できません。",
+    "audio.spawn_caveat": (
+        "注意: このシステムでは音を鳴らすたびに別のプログラムを起動するため、その起動時間"
+        "（数十ミリ秒）も結果に含まれ、値は大きめに出ます。Windows ではこの問題はありません。"
+    ),
+    "audio.accuracy": (
+        "人が映像と音のずれに気づくのは 20〜40 ミリ秒あたりなので、この値の精度もその程度です。"
+        "測っているのは「音が映像よりどれだけ遅れるか」であり、ヘッドホン内部の絶対的な遅延ではありません。"
+    ),
+    "label.audio": "ヘッドホン",
     "advanced.csv": "サンプルを CSV に記録",
     "advanced.csv_hint": "設定フォルダー内の logs に保存され、自動でローテーションします。",
     "advanced.good": "緑のしきい値（ミリ秒）",
@@ -790,6 +831,49 @@ KO: dict = {
     "advanced.frames_in_flight": "컴포지터 대기 프레임 수",
     "advanced.manual_offset": "모니터 입력 지연 보정 (밀리초)",
     "advanced.include_display": "총 지연에 화면 지연 포함",
+    "advanced.audio_offset": "블루투스 헤드폰 지연 (밀리초)",
+    "advanced.include_audio": "총 지연에 헤드폰 지연 포함",
+    "advanced.calibrate_audio": "측정…",
+    "advanced.audio_never": "아직 측정하지 않음",
+
+    "audio.title": "블루투스 지연 측정",
+    "audio.intro": (
+        "블루투스 헤드폰은 소리가 화면보다 늦게 도착합니다. 보통 100~250밀리초입니다. "
+        "이 값을 알려 주는 운영체제는 없으므로 여기서는 귀로 측정합니다. 먼저 딸깍 소리가 나고 "
+        "조금 뒤에 화면이 번쩍입니다. 둘이 동시에 일어날 때까지 맞추세요."
+    ),
+    "audio.steps": (
+        "1. 측정할 헤드폰을 평소 음량으로 착용합니다.\n"
+        "2. 「시작」을 누르면 일정한 간격으로 소리가 나고 화면이 번쩍입니다.\n"
+        "3. 소리와 번쩍임이 동시에 느껴질 때까지 슬라이더를 움직입니다.\n"
+        "4. 「저장」을 누릅니다."
+    ),
+    "audio.watch_here": "여기를 보세요",
+    "audio.start": "시작",
+    "audio.stop": "정지",
+    "audio.offset_label": "소리가 화면보다 늦는 시간",
+    "audio.readout": "{ms}밀리초",
+    "audio.hint_zero": (
+        "지금은 번쩍임과 소리를 동시에 내보내고 있습니다. 블루투스라면 번쩍임이 먼저 보이고 "
+        "소리가 나중에 들려야 합니다."
+    ),
+    "audio.hint_adjusting": "값을 키우면 번쩍임이 늦어집니다. 번쩍임과 소리가 겹치는 곳에서 멈추세요.",
+    "audio.device_note": "어떤 헤드폰인가요",
+    "audio.device_hint": "예: WH-1000XM4",
+    "audio.save": "저장",
+    "audio.clear": "지우기",
+    "audio.close": "취소",
+    "audio.unavailable": "이 기기에서는 소리를 낼 방법을 찾지 못해 측정할 수 없습니다.",
+    "audio.spawn_caveat": (
+        "참고: 이 시스템에서는 소리를 낼 때마다 별도의 재생 프로그램을 실행하므로 그 시작 시간"
+        "(수십 밀리초)이 결과에 포함되어 값이 크게 나옵니다. Windows에서는 이런 문제가 없습니다."
+    ),
+    "audio.accuracy": (
+        "사람이 화면과 소리의 어긋남을 알아채는 것은 20~40밀리초 정도이므로 이 값의 정밀도도 "
+        "그 범위입니다. 측정하는 것은 「소리가 화면보다 얼마나 늦는가」이며, 헤드폰 내부의 "
+        "절대 지연이 아닙니다."
+    ),
+    "label.audio": "헤드폰",
     "advanced.csv": "샘플을 CSV로 기록",
     "advanced.csv_hint": "설정 폴더 안 logs에 저장되며 자동으로 순환됩니다.",
     "advanced.good": "초록 임계값 (밀리초)",
