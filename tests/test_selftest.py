@@ -1,5 +1,7 @@
 """The self-test: it has to report a broken machine, not fall over on one."""
 
+from pathlib import Path
+
 from lagscope import selftest
 from lagscope.selftest import (
     FAIL, OK, SKIP, WARN, CheckResult, _check, check_dns, check_environment,
@@ -83,3 +85,116 @@ def test_the_bilibili_checks_report_the_reason_they_could_not_run():
 
     assert result.status == FAIL
     assert any("403" in line for line in result.lines)
+
+
+class _Endpoint:
+    def __init__(self, host, fmt="fmp4", protocol="http_hls", qn=10000):
+        self.host, self.fmt, self.protocol, self.qn = host, fmt, protocol, qn
+
+
+class _StreamWithEmptyCache:
+    """A probe as the self-test actually finds it.
+
+    fetch_endpoints() returns a list without storing it; only the monitoring
+    path fills the cache that hosts_available() reads. The self-test calls the
+    former, so the latter is empty - which is exactly the state that produced
+    "0 distinct edge(s)" against six real hostnames on a live room.
+    """
+
+    def __init__(self, endpoints):
+        self._endpoints = endpoints
+
+    def fetch_endpoints(self, room):
+        return self._endpoints
+
+    def hosts_available(self):
+        return []                     # the cache the monitor would have filled
+
+    def choose_endpoint(self, endpoints):
+        return endpoints[0] if endpoints else None
+
+
+def test_distinct_hosts_counts_what_is_in_front_of_it():
+    endpoints = [_Endpoint("a.example"), _Endpoint("b.example"), _Endpoint("a.example"),
+                 _Endpoint("")]
+    assert selftest.distinct_hosts(endpoints) == ["a.example", "b.example"]
+    assert selftest.distinct_hosts([]) == []
+    assert selftest.distinct_hosts(None) == []
+
+
+def test_the_edge_count_does_not_depend_on_a_cache_this_check_never_filled():
+    stream = _StreamWithEmptyCache([
+        _Endpoint("d1--ov-gotcha207.bilivideo.com"),
+        _Endpoint("d1--ov-gotcha207b.bilivideo.com"),
+        _Endpoint("d1--ov-gotcha07.bilivideo.com", fmt="flv"),
+    ])
+    result = _check("play URLs", lambda r: selftest.check_endpoints(r, stream, "32101172"))
+    assert any("3 endpoint(s), 3 distinct edge(s)" in line for line in result.lines)
+
+
+def test_a_pcdn_node_is_reported_even_though_the_cache_is_empty():
+    """The real cost of the bug: peers[] was built from the empty cache, so
+    this warning could never fire however many PCDN nodes were offered."""
+    stream = _StreamWithEmptyCache([
+        _Endpoint("d1--ov-gotcha207.bilivideo.com"),
+        _Endpoint("xy123x45x67x89xy.mcdn.bilivideo.cn"),
+    ])
+    result = _check("play URLs", lambda r: selftest.check_endpoints(r, stream, "32101172"))
+    assert result.status == WARN
+    assert any("PCDN" in line or "peer-assisted" in line for line in result.lines)
+
+
+def test_the_account_name_is_taken_out_of_paths(monkeypatch):
+    """The output ends by promising it carries no account details, and is
+    meant to be pasted into a forum thread. C:\\Users\\<name> is an account
+    name, so the promise was not true until this."""
+    monkeypatch.setattr(selftest.sys, "platform", "win32")
+    monkeypatch.setattr(selftest.Path, "home",
+                        classmethod(lambda cls: Path(r"C:\Users\cxu44")))
+    out = selftest.redact_home(r"C:\Users\cxu44\AppData\Roaming\LagScope")
+    assert "cxu44" not in out
+    assert out == r"%USERPROFILE%\AppData\Roaming\LagScope"
+
+
+def test_a_redirected_profile_is_redacted_too(monkeypatch):
+    """A roaming or redirected profile does not match Path.home(), but the
+    shape of the path still gives the name away."""
+    monkeypatch.setattr(selftest.sys, "platform", "win32")
+    monkeypatch.setattr(selftest.Path, "home",
+                        classmethod(lambda cls: Path(r"D:\Profiles\someone")))
+    assert "cxu44" not in selftest.redact_home(r"C:\Users\cxu44\AppData\Roaming")
+
+
+def test_posix_homes_are_redacted(monkeypatch):
+    monkeypatch.setattr(selftest.sys, "platform", "linux")
+    monkeypatch.setattr(selftest.Path, "home", classmethod(lambda cls: Path("/home/ann")))
+    assert selftest.redact_home("/home/ann/.config/lagscope") == "~/.config/lagscope"
+    monkeypatch.setattr(selftest.Path, "home", classmethod(lambda cls: Path("/root")))
+    assert selftest.redact_home("/Users/bob/Library") == "~/Library"
+
+
+def test_a_path_with_no_account_name_in_it_is_left_alone(monkeypatch):
+    monkeypatch.setattr(selftest.Path, "home", classmethod(lambda cls: Path("/home/ann")))
+    assert selftest.redact_home("/opt/lagscope") == "/opt/lagscope"
+
+
+def test_the_config_folder_line_itself_is_redacted(monkeypatch, tmp_path):
+    """The end-to-end version, and the one that would have caught the slip.
+
+    redact_home() being correct is not enough - the bug was that the line
+    printed the folder without calling it. This drives the real check and
+    reads what it emitted.
+    """
+    import lagscope.config as config_module
+
+    home = tmp_path / "Users" / "cxu44"
+    folder = home / "AppData" / "Roaming" / "LagScope"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(config_module, "app_config_dir", lambda: folder)
+    monkeypatch.setattr(selftest.Path, "home", classmethod(lambda cls: home))
+
+    result = _check("config folder and report", selftest.check_writable)
+
+    assert result.status == OK
+    assert any("config folder:" in line for line in result.lines)
+    assert not any("cxu44" in line for line in result.lines), result.lines

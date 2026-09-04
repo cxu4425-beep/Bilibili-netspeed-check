@@ -19,10 +19,12 @@ being measured, and the room id is one the user chose.
 from __future__ import annotations
 
 import platform
+import re
 import socket
 import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, List, Optional
 
 from . import APP_NAME, __version__
@@ -126,6 +128,53 @@ def check_room(result: CheckResult, stream, room: str) -> None:
         result.add("try again with a room that is actually streaming")
 
 
+# C:\Users\<name>, /home/<name>, /Users/<name> - the account name sits in the
+# same place in all three.
+_HOME_PATTERN = re.compile(
+    r"^(?P<prefix>[A-Za-z]:[\\/]Users[\\/]|/home/|/Users/)(?P<user>[^\\/]+)")
+
+
+def redact_home(path) -> str:
+    """A path with the account name taken out of it.
+
+    The report ends its own output by promising it carries no account details,
+    and then printed C:\\Users\\<name>\\AppData\\... two lines above. The
+    output exists to be pasted into a forum thread or sent to a helpdesk, so
+    the promise has to be true rather than nearly true.
+    """
+    text = str(path)
+    try:
+        home = str(Path.home())
+    except Exception:
+        home = ""
+    placeholder = "%USERPROFILE%" if sys.platform.startswith("win") else "~"
+    if home and text.lower().startswith(home.lower()):
+        return placeholder + text[len(home):]
+    # A redirected or roaming profile will not match Path.home(); the shape of
+    # the path still gives the account name away, so take it out anyway.
+    match = _HOME_PATTERN.match(text)
+    if match:
+        return placeholder + text[match.end():]
+    return text
+
+
+def distinct_hosts(endpoints) -> list:
+    """The distinct edges in a list of endpoints, first seen first.
+
+    Derived from the endpoints in hand rather than asked of the probe. The
+    probe has a method for this, but it reads a cache that only the monitoring
+    path fills - and this check fetches directly, so that cache is empty here.
+    Reading it reported "0 distinct edges" beside six visibly distinct
+    hostnames, and, far worse, silently skipped the PCDN detection below.
+    """
+    seen = []
+    for endpoint in endpoints or ():
+        host = getattr(endpoint, "host", "")
+        if host and host not in seen:
+            seen.append(host)
+    return seen
+
+
 def check_endpoints(result: CheckResult, stream, room: str) -> None:
     """playurl: the response shape this project has never seen for real."""
     if not room:
@@ -137,7 +186,8 @@ def check_endpoints(result: CheckResult, stream, room: str) -> None:
         result.status = FAIL
         result.add("no playable endpoints came back")
         return
-    result.add(f"{len(endpoints)} endpoint(s), {len(stream.hosts_available())} distinct edge(s)")
+    hosts = distinct_hosts(endpoints)
+    result.add(f"{len(endpoints)} endpoint(s), {len(hosts)} distinct edge(s)")
     for endpoint in endpoints[:6]:
         result.add(f"  {endpoint.protocol:<12} {endpoint.fmt:<5} qn={endpoint.qn:<5} "
                    f"{endpoint.host}")
@@ -145,7 +195,7 @@ def check_endpoints(result: CheckResult, stream, room: str) -> None:
     # can act on: which CDN they were assigned, and whether any of it is a
     # peer-assisted node rather than a datacentre.
     peers = []
-    for host in stream.hosts_available()[:6]:
+    for host in hosts[:6]:
         described = describe(host)
         if described.operator_key or described.located:
             result.add(f"  {host}  ->  {summary(host)}")
@@ -166,7 +216,11 @@ def check_endpoints(result: CheckResult, stream, room: str) -> None:
         result.add(f"  that edge is: {summary(chosen.host)}")
     if chosen.fmt != "fmp4":
         result.status = WARN
-        result.add("not fmp4 - latency will be estimated rather than measured")
+        # Not a promise that fmp4 gets a measurement: a real overseas edge has
+        # served fmp4 with no PROGRAM-DATE-TIME in it, which estimates anyway.
+        # fmp4 is the only format that *can* be measured exactly, not the one
+        # that always is.
+        result.add("not fmp4 - exact measurement is not possible for this format")
 
 
 def check_measure(result: CheckResult, stream, room: str) -> None:
@@ -264,7 +318,7 @@ def check_writable(result: CheckResult) -> None:
     from .report import build_html, default_report_path
 
     folder = app_config_dir()
-    result.add(f"config folder: {folder}")
+    result.add(f"config folder: {redact_home(folder)}")
 
     probe_file = folder / ".selftest"
     probe_file.write_text("ok", encoding="utf-8")
@@ -276,7 +330,8 @@ def check_writable(result: CheckResult) -> None:
     result.add(f"history: {summary['buckets']} minute(s) recorded, "
                f"{summary['samples']} sample(s)")
     build_html(buckets=history.buckets(24.0), summary=summary)
-    result.add(f"report renders; it would be written to {default_report_path().parent}")
+    result.add("report renders; it would be written to "
+               f"{redact_home(default_report_path().parent)}")
 
 
 # ------------------------------------------------------------------ runner
