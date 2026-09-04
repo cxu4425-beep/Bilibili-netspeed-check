@@ -368,3 +368,19 @@ def test_machine_speed_can_be_turned_off():
     sample = worker._with_netspeed(worker._run_round())
 
     assert sample.down_mbps is None
+
+
+def test_watching_an_application_can_say_how_far_away_the_server_is():
+    """The round trip in app mode is measured against that very peer, so it
+    carries a distance. Without the flag the overlay showed a bare address and
+    no location at all - which is the case where an address says least."""
+    from dataclasses import replace as _replace
+
+    from lagscope.models import KIND_APP, LatencySample
+
+    sample = LatencySample(kind=KIND_APP, network_ms=58.0, rtt_to_edge=True,
+                           host="[2607:6bc0::10]:443", ok=True)
+    assert sample.rtt_to_edge is True
+    # and the round trip is the one to that host, not to some fallback
+    assert sample.network_ms == 58.0
+    assert _replace(sample, rtt_to_edge=False).rtt_to_edge is False

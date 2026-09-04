@@ -114,8 +114,21 @@ def test_no_ceiling_when_it_would_be_meaningless():
     assert "km" not in locate_line(CLOUD, 260.0, True)
 
 
-def test_an_unreadable_host_still_produces_the_ceiling_alone():
+def test_an_unreadable_host_keeps_its_address_beside_the_ceiling():
+    """Watching an application, the address *is* the answer to "which server".
+    Replacing it with a distance alone would remove the only part the reader
+    can look up."""
     line = locate_line("something.unknown.example", 4.0, True)
     assert "408 km" in line
-    # and does not repeat the bare hostname next to it
-    assert line.count("something.unknown.example") == 0
+    assert "something.unknown.example" in line
+
+
+def test_an_ipv6_peer_reads_as_one_thing_and_the_distance_as_another():
+    """The report showed "2607:6bc0::10:443", which a reader took for a MAC
+    address - IPv6 is written in colons too, so the port was indistinguishable
+    from a final group."""
+    from lagscope.probes.appnet import Peer
+
+    line = locate_line(str(Peer("2607:6bc0::10", 443)), 58.0, True)
+    assert "[2607:6bc0::10]:443" in line
+    assert "5,922 km" in line

@@ -51,6 +51,12 @@ class Peer:
                     or address.is_multicast or address.is_reserved)
 
     def __str__(self) -> str:
+        # IPv6 is written in colons too, so "2607:6bc0::10:443" cannot be told
+        # apart from an address whose last group happens to be 443. Brackets
+        # are the standard way out (RFC 3986) and the only reason anyone can
+        # see where the address stops and the port starts.
+        if ":" in self.ip:
+            return f"[{self.ip}]:{self.port}"
         return f"{self.ip}:{self.port}"
 
 

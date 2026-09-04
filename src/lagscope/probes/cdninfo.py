@@ -268,4 +268,8 @@ def locate_line(host: str, rtt_ms=None, rtt_to_edge: bool = False) -> str:
     if not informative(km):
         return where
     ceiling = tr("server.at_most_km", km=f"{km:,.0f}")
-    return f"{where} \u00b7 {ceiling}" if where and where != host else ceiling
+    # Keep whatever the first source produced, even when that is just the
+    # address. Watching an application, the address *is* the answer to "which
+    # server" - dropping it to show a distance alone would remove the only
+    # part the reader can look up.
+    return f"{where} \u00b7 {ceiling}" if where else ceiling

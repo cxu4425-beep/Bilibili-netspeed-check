@@ -572,6 +572,8 @@ class MonitorWorker(QObject):
         self._emit_status(STATUS_OK, "")
         return LatencySample(
             network_ms=measurement.rtt_ms,
+            # Timed against this very peer, so it can carry a distance.
+            rtt_to_edge=True,
             display_ms=display_ms,
             total_ms=measurement.rtt_ms + (display_component or 0.0),
             ok=True,
@@ -601,6 +603,8 @@ class MonitorWorker(QObject):
         self._emit_status(STATUS_OK, "")
         return LatencySample(
             network_ms=rtt_ms,
+            # Timed against the address named below, so it can carry a distance.
+            rtt_to_edge=True,
             display_ms=display_ms,
             total_ms=rtt_ms + (display_component or 0.0),
             ok=True,

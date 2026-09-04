@@ -540,3 +540,14 @@ def test_an_unowned_socket_is_not_attributed_to_a_named_program(monkeypatch):
                         lambda: {0: "System Idle Process", 1234: "chrome.exe"})
 
     assert sum(peer.connections for peer in appnet.peers_for("chrome.exe")) == 1
+
+
+def test_an_ipv6_peer_brackets_its_address():
+    """"2607:6bc0::10:443" cannot be told apart from an address whose last
+    group is 443 - one reader took it for a MAC address. RFC 3986 brackets."""
+    assert str(Peer("2607:6bc0::10", 443)) == "[2607:6bc0::10]:443"
+    assert str(Peer("::1", 80)) == "[::1]:80"
+
+
+def test_an_ipv4_peer_is_left_exactly_as_it_was():
+    assert str(Peer("93.184.216.34", 443)) == "93.184.216.34:443"
