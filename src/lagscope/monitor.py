@@ -390,7 +390,10 @@ class MonitorWorker(QObject):
             measurement = self._stream.measure(target.ident)
             self.roomInfoChanged.emit(self._stream.room_info)
             self._compare_lines_if_due(timeout_s)
+        rtt_to_edge = rtt_ms is not None
         if rtt_ms is None:
+            # A different machine in a different place: usable as a health
+            # number, useless for asking how far away the edge is.
             rtt_ms = tcp_rtt_ms(config.probe.rtt_host, config.probe.rtt_port, timeout_s)
 
         if measurement.stream_ms is None:
@@ -398,6 +401,7 @@ class MonitorWorker(QObject):
             self._emit_status(status, measurement.error or "")
             return LatencySample(
                 network_ms=rtt_ms,
+                rtt_to_edge=rtt_to_edge,
                 display_ms=display_ms,
                 total_ms=None,
                 ok=False,
@@ -415,6 +419,7 @@ class MonitorWorker(QObject):
         self._emit_status(STATUS_OK, "")
         return LatencySample(
             network_ms=rtt_ms,
+            rtt_to_edge=rtt_to_edge,
             stream_ms=measurement.stream_ms,
             display_ms=display_ms,
             total_ms=total,

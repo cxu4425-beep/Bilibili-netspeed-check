@@ -356,6 +356,7 @@ STRINGS: dict[str, tuple[str, str, str]] = {
     "overlay.theme.light": ("浅色", "淺色", "Light"),
     "overlay.theme.pink": ("粉色", "粉色", "Pink"),
     "overlay.compact": ("紧凑模式 (只显示总延迟)", "緊湊模式 (只顯示總延遲)", "Compact (total only)"),
+    "overlay.show_server": ("显示伺服器位置", "顯示伺服器位置", "Show server location"),
     "overlay.show_breakdown": ("显示分项延迟", "顯示分項延遲", "Show breakdown"),
     "overlay.show_sparkline": ("显示折线图", "顯示折線圖", "Show sparkline"),
     "overlay.show_stats": ("显示统计行", "顯示統計行", "Show statistics row"),
@@ -467,6 +468,30 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "headset's absolute internal delay.",
     ),
     "label.audio": ("耳机", "耳機", "Headset"),
+    "label.server": ("伺服器", "伺服器", "Server"),
+    "server.at_most_km": ("至多 {km} km", "至多 {km} km", "within {km} km"),
+    "server.title": ("目前连到哪里", "目前連到哪裡", "Where you are connected"),
+    "server.unknown": ("看不出来", "看不出來", "cannot tell"),
+    "server.how": (
+        "位置有两个来源。主机名称说得出的时候是准的，但租用公有云的节点和 PCDN 都不会说。"
+        "往返时间则对每一台伺服器都有效，不过它只给上限——光速是固定的，"
+        "所以回应花了多久，就限制了它最远能在多远。",
+        "位置有兩個來源。主機名稱說得出的時候是準的，但租用公有雲的節點和 PCDN 都不會說。"
+        "往返時間則對每一台伺服器都有效，不過它只給上限——光速是固定的，"
+        "所以回應花了多久，就限制了它最遠能在多遠。",
+        "Location comes from two places. The hostname is exact when it says anything, but a "
+        "cloud-rented node and a PCDN peer both say nothing. The round trip works for every "
+        "server, but only sets a ceiling - light has a fixed speed, so how long the reply took "
+        "limits how far away it can be.",
+    ),
+    "server.ceiling_note": (
+        "「至多 N km」是上限，不是估计值。它假设一条笔直的光纤、设备完全不花时间——"
+        "两者都不可能——所以真实距离一定更近。",
+        "「至多 N km」是上限，不是估計值。它假設一條筆直的光纖、設備完全不花時間——"
+        "兩者都不可能——所以真實距離一定更近。",
+        "A ceiling, not an estimate. It assumes a dead-straight fibre and equipment that takes "
+        "no time at all - neither is ever true - so the real distance is always shorter.",
+    ),
     "advanced.csv": ("记录到 CSV 文件", "記錄到 CSV 檔案", "Log samples to CSV"),
     "advanced.csv_hint": (
         "文件位于配置目录的 logs 子目录，自动轮转。",

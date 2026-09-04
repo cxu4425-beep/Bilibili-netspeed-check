@@ -140,6 +140,11 @@ class LatencySample:
     link: str = ""
     bssid: str = ""               # the access point, for spotting a roam
     signal_pct: Optional[int] = None
+    # Whether network_ms was measured against the serving edge itself. When
+    # the edge could not be timed the monitor falls back to the API host,
+    # which is a different machine in a different place - so anything that
+    # reasons about *where the server is* from the round trip has to know.
+    rtt_to_edge: bool = False
     error: Optional[str] = None
 
     def to_dict(self) -> dict:

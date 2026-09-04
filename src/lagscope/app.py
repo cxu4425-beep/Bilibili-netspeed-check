@@ -1085,6 +1085,11 @@ class MonitorApplication(QObject):
 
         if self._config.audio.measured:
             rows.append((tr("label.audio"), format_ms(self._config.audio.offset_ms)))
+        if sample is not None and sample.host:
+            from .probes.cdninfo import locate_line
+
+            rows.append((tr("label.server"),
+                         locate_line(sample.host, sample.network_ms, sample.rtt_to_edge)))
 
         events = self._events.summary()
         stats = [

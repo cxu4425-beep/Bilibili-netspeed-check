@@ -243,3 +243,29 @@ def summary(host: str) -> str:
     if info.carrier_key:
         parts.append(tr(info.carrier_key))
     return " · ".join(parts) if parts else host
+
+
+def locate_line(host: str, rtt_ms=None, rtt_to_edge: bool = False) -> str:
+    """Where the server is, as far as anything here can honestly say.
+
+    Two independent sources, and they cover for each other. The hostname is
+    exact when it says anything at all, and says nothing for a cloud-rented
+    node or a PCDN peer. The round trip works for every server without
+    exception, but only sets a ceiling.
+
+    The ceiling is only offered when it was measured against the serving edge
+    itself - the monitor falls back to timing the API host when the edge will
+    not answer, and that is a different machine somewhere else - and only when
+    it is narrow enough to mean anything. "Within 20 000 km" is not a location.
+    """
+    from ..i18n import tr
+    from .distance import informative, max_distance_km
+
+    where = summary(host)
+    if not rtt_to_edge:
+        return where
+    km = max_distance_km(rtt_ms)
+    if not informative(km):
+        return where
+    ceiling = tr("server.at_most_km", km=f"{km:,.0f}")
+    return f"{where} \u00b7 {ceiling}" if where and where != host else ceiling

@@ -119,6 +119,9 @@ class OverlayConfig:
     locked: bool = False
     compact: bool = False
     show_breakdown: bool = True
+    # Where the serving CDN edge is: what the hostname says, plus how far
+    # away the round trip proves it cannot be past.
+    show_server: bool = True
     show_sparkline: bool = True
     show_stats: bool = True
     theme: str = "dark"            # dark | light | pink

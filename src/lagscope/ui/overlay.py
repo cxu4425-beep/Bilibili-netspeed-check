@@ -21,6 +21,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 from ..config import Config
 from ..i18n import tr
 from ..models import KIND_APP, KIND_LIVE, KIND_TARGET, KIND_VIDEO, LatencySample, RollingStats
+from ..probes.cdninfo import locate_line
 from ..probes.display import DisplayProbe
 from .anchor import (
     WindowFinder, WindowRect, clamp_to_rect, compute_anchor_position, create_window_finder,
@@ -100,6 +101,8 @@ class OverlayWindow(QWidget):
         width = 132 if overlay.compact else 226
         height = 56 if overlay.compact else 78
         if not overlay.compact:
+            if overlay.show_server:
+                height += 15
             if overlay.show_breakdown:
                 height += 54
                 # The headset row only exists once it has been calibrated, and
@@ -339,6 +342,8 @@ class OverlayWindow(QWidget):
                          Qt.AlignRight | Qt.AlignVCenter, self._subtitle())
         y += 34 * scale
 
+        if self._config.overlay.show_server:
+            y = self._paint_server(painter, palette, scale, pad, y)
         if self._config.overlay.show_breakdown:
             y = self._paint_breakdown(painter, palette, scale, pad, y)
         if self._config.overlay.show_sparkline:
@@ -392,6 +397,37 @@ class OverlayWindow(QWidget):
             (second, format_ms(sample.stream_ms if sample else None)),
             (tr("label.display"), display),
         ] + tail
+
+    def _paint_server(self, painter: QPainter, palette: Palette, scale: float,
+                      pad: float, y: float) -> float:
+        """One line naming where the stream is coming from.
+
+        Two sources, because neither covers everything: the hostname is exact
+        when it says anything, and a cloud-rented node or a PCDN peer says
+        nothing; the round trip sets a ceiling for every server alive. The
+        ceiling only appears when it was measured against the edge itself and
+        when it is narrow enough to be worth reading.
+        """
+        sample = self._sample
+        row_height = 15 * scale
+        painter.setFont(self._font(7.5 * scale))
+        painter.setPen(QPen(QColor(palette.muted)))
+        painter.drawText(QRectF(pad, y, self.width() - pad * 2, row_height),
+                         Qt.AlignLeft | Qt.AlignVCenter, tr("label.server"))
+
+        text = ""
+        if sample is not None and sample.host:
+            text = locate_line(sample.host, sample.network_ms, sample.rtt_to_edge)
+        if not text:
+            text = tr("server.unknown")
+        metrics = QFontMetrics(painter.font())
+        label_width = metrics.horizontalAdvance(tr("label.server"))
+        available = int(self.width() - pad * 2 - label_width - 10 * scale)
+        painter.setPen(QPen(QColor(palette.foreground)))
+        painter.drawText(QRectF(pad, y, self.width() - pad * 2, row_height),
+                         Qt.AlignRight | Qt.AlignVCenter,
+                         metrics.elidedText(text, Qt.ElideMiddle, max(40, available)))
+        return y + row_height
 
     def _paint_breakdown(self, painter: QPainter, palette: Palette, scale: float,
                          pad: float, y: float) -> float:
