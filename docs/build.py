@@ -17,6 +17,60 @@ new = '''  <div class="brandline">
 assert old in shared
 shared = shared.replace(old, new, 1)
 
+# The clip of the app actually running. Injected here rather than into the
+# artifact source: an artifact is one self-contained file served under a CSP
+# that blocks external media, so a <video src="..."> would be a broken box
+# there. On the site it is a plain relative file and just works.
+CLIP = '''
+    <figure class="clip">
+      <video poster="demo-poster.jpg" width="1240" height="912"
+             autoplay muted loop playsinline preload="metadata"
+             aria-label="LagScope 的懸浮視窗疊在一場 B 站直播上，延遲數字每兩秒跳動一次，
+                         在 39 到 148 毫秒之間變化，下面同時顯示伺服器位址、連線數和顯示延遲。">
+        <source src="demo.webm" type="video/webm">
+        <source src="demo.mp4" type="video/mp4">
+      </video>
+      <figcaption>
+        <b>真的在跑</b>：懸浮窗疊在一場 B 站直播上，監視官方客戶端本身。
+        數字每兩秒更新一次——中間那次跳到 148 ms 不是剪接，就是當下真的卡了一下。
+        <span class="clip-note">畫面裡的彈幕和觀眾名稱已經模糊處理，聲音已移除。</span>
+      </figcaption>
+    </figure>
+'''
+CLIP_CSS = '''
+.clip { margin: 0 0 30px; }
+.clip video {
+  display: block; width: 100%; height: auto; border-radius: 16px;
+  border: 1px solid var(--line); background: #0A1113;
+}
+.clip figcaption { margin-top: 14px; font-size: 14.5px; color: var(--ink-soft); }
+.clip figcaption b { color: var(--ink); font-weight: 600; }
+.clip-note { display: block; margin-top: 6px; font-size: 13px; opacity: .78; }
+@media (prefers-reduced-motion: reduce) { .clip video { animation: none; } }
+'''
+anchor = '    <div class="shots">'
+assert anchor in shared
+shared = shared.replace(anchor, CLIP + anchor, 1)
+shared = shared.replace("<style>", "<style>" + CLIP_CSS, 1)
+
+# Someone who has asked their system not to animate things should not be
+# handed a looping video; give them the poster and a play button instead.
+# Appended rather than spliced before </body>: that tag lives in the page
+# template below, not in the body this script is editing.
+shared += '''
+<script>
+(function () {
+  var v = document.querySelector(".clip video");
+  if (!v) { return; }
+  try {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      v.autoplay = false; v.loop = false; v.controls = true; v.pause();
+    }
+  } catch (e) { /* an old browser just keeps the loop */ }
+})();
+</script>
+'''
+
 doc = f'''<!doctype html>
 <html lang="zh-Hant">
 <head>
