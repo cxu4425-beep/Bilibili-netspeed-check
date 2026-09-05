@@ -171,12 +171,25 @@ jobs:
           # not built at all rather than shipped as a trap.
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::warning::ANDROID_KEYSTORE_BASE64 is not set - skipping the APK."
             echo "built=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          # The APK carries the version of the release it ships in. The phone
+          # compares the release tag against its own manifest version to decide
+          # whether an update exists, so two separate numbering schemes meant
+          # that comparison was true forever - an update offered every day that
+          # installing could never satisfy.
+          TAG="${RELEASE_TAG:-$GITHUB_REF_NAME}"
+          case "$TAG" in
+            v[0-9]*) python3 android/set_version.py android/AndroidManifest.xml "$TAG" ;;
+            *) echo "not a release build; keeping the manifest version" ;;
+          esac
+
           mkdir -p android/keystore
           echo "$KEYSTORE_BASE64" | base64 -d > android/keystore/lagscope.jks
           cd android
@@ -185,12 +198,30 @@ jobs:
 
       - name: Check it is signed with the expected key
         if: steps.apk.outputs.built == 'yes'
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           # A silently wrong key produces an APK that installs fine on a clean
           # phone and refuses to update anyone who already has the app - the
           # kind of failure that only shows up on somebody else's device.
           apksigner verify --print-certs android/build/LagScope-viewer.apk
           aapt dump badging android/build/LagScope-viewer.apk | head -3
+          # And that the version really was stamped: an APK whose versionName
+          # does not match its release is one the phone will keep offering to
+          # update forever.
+          TAG="${RELEASE_TAG:-$GITHUB_REF_NAME}"
+          case "$TAG" in
+            v[0-9]*)
+              WANT="${TAG#v}"
+              GOT=$(aapt dump badging android/build/LagScope-viewer.apk \
+                    | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+              if [ "$GOT" != "$WANT" ]; then
+                echo "::error::APK versionName is $GOT but the release is $WANT"
+                exit 1
+              fi
+              echo "versionName $GOT matches the release"
+              ;;
+          esac
 
       - uses: actions/upload-artifact@v4
         if: steps.apk.outputs.built == 'yes'
