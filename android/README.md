@@ -75,16 +75,38 @@ java -cp build/test PairingTest
 
 > 早期版本把它放在 `build/` 裡，而 `build.sh` 每次開頭都 `rm -rf build`——所以**每次建置都在偷偷換一把新金鑰**。做出來的 APK 在乾淨的手機上裝得起來，卻沒辦法更新任何已經裝過的人。這種 bug 只會在別人的手機上現形，在這裡看不到。現在它放在 `keystore/`，不會被清掉。
 
-### 讓 GitHub Actions 也用同一把
+### 讓每次發布都附上 APK
 
-Release 的 APK 必須跟你手動編的是同一把金鑰簽的，否則自動更新會裝不上去。
+**最省事的做法:跑一次 `Create the Android signing key` 這個 workflow。**
+
+Actions → 選那個 workflow → Run workflow。它會在 GitHub 的 runner 上產一把金鑰，
+以 artifact 交給你下載 —— **金鑰不會經過聊天視窗、不會進 commit、也不會出現在 log 裡**。
+下載後照裡面的 `README.txt` 加兩個 secret 就完成了。
+
+> 它會拒絕覆蓋已經在用的金鑰,除非你在輸入欄打 `regenerate`。
+> 換金鑰等於讓每一支已經裝了 App 的手機再也無法更新 —— Android 不接受不同金鑰簽的更新。
+
+要自己產也可以:
 
 1. 把 `keystore/lagscope.jks` 轉成 base64：
    `base64 -w0 keystore/lagscope.jks`（macOS 用 `base64 -i`）
 2. 在 repo 的 **Settings → Secrets and variables → Actions** 新增：
    - `ANDROID_KEYSTORE_BASE64` — 上一步的內容
    - `ANDROID_KEYSTORE_PASSWORD` — 金鑰密碼
-3. 之後每次發布都會自動附上 `LagScope-viewer.apk`
+
+不管用哪一種，設好之後每次發布都會自動附上 `LagScope-viewer.apk`。
+
+**把那把金鑰和密碼另外存一份。** 它就是這個 App 的身分,弄丟了就沒有第二把 ——
+所有裝過的人都得先解除安裝才能再更新。artifact 一天後就會被刪掉,你留的那份就是唯一備份。
+
+### APK 的版本會跟著 release 走
+
+發布時 CI 會先把 release 標籤蓋到 `AndroidManifest.xml` 上（`v4.11.3` → `versionName=4.11.3`、
+`versionCode=41103`），再編譯。
+
+這不是為了整齊,是**更新功能的前提**:手機是拿 release 標籤比對 APK 自己的 manifest 版本
+來判斷有沒有新版。兩邊各自編號的話（release 4.11.x vs manifest 1.3），那個比較**永遠成立** ——
+裝了最新版之後它還是會天天說有新版,而且裝再多次也不會變。
 
 **沒有設這兩個 secret 的話，CI 會印一個警告然後跳過 APK，不會讓建置失敗。** 這是刻意的：寧可沒有 APK，也不要發一個用臨時金鑰簽、誰都更新不了的 APK。
 
