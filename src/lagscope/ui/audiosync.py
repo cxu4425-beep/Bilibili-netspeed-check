@@ -183,10 +183,14 @@ class AudioSyncDialog(QDialog):
         layout.addWidget(self._wrapped(tr("audio.accuracy"), muted=True))
         if spawns_process() and self._available:
             layout.addWidget(self._wrapped(tr("audio.spawn_caveat"), muted=True))
+        # Always built, hidden until there is something to say: a failure that
+        # only happens once playback is attempted has nowhere else to appear.
+        self.failure_label = self._wrapped("")
+        self.failure_label.setStyleSheet("color: palette(highlight);")
+        self.failure_label.setVisible(False)
+        layout.addWidget(self.failure_label)
         if not self._available:
-            warning = self._wrapped(tr("audio.unavailable"))
-            warning.setStyleSheet("color: palette(highlight);")
-            layout.addWidget(warning)
+            self._show_failure("", key="audio.unavailable")
             self.start_button.setEnabled(False)
 
         buttons = QHBoxLayout()
@@ -232,6 +236,20 @@ class AudioSyncDialog(QDialog):
             tr("audio.hint_zero") if value == 0 else tr("audio.hint_adjusting"))
 
     # -------------------------------------------------------------- running
+    def _show_failure(self, detail: str, key: str = "audio.failed") -> None:
+        """Say that no sound came out, and what the system said about it.
+
+        Two different failures, so two different sentences: no player found
+        before anything started is not the same as playback refusing once it
+        did, and telling a Windows user their machine has no audio program
+        would send them looking for the wrong thing.
+        """
+        text = tr(key)
+        if detail:
+            text = f"{text}\n{detail}"
+        self.failure_label.setText(text)
+        self.failure_label.setVisible(True)
+
     def _on_toggle_run(self, running: bool) -> None:
         if running and not self._available:
             self.start_button.setChecked(False)
@@ -264,11 +282,14 @@ class AudioSyncDialog(QDialog):
         if not self._clicked:
             self._clicked = True
             if self._clicker is not None and not self._clicker.play():
-                # Playback died after the dialog opened - stop rather than
-                # let someone calibrate against a silence.
+                # Playback died after the dialog opened - stop rather than let
+                # someone calibrate against a silence, and say why. Greying the
+                # button out on its own leaves a dialog that does nothing and
+                # no way to find out what went wrong.
                 self._available = False
                 self.start_button.setChecked(False)
                 self.start_button.setEnabled(False)
+                self._show_failure(self._clicker.last_error)
                 return
 
         offset = self.offset_ms

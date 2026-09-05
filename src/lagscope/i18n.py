@@ -449,6 +449,12 @@ STRINGS: dict[str, tuple[str, str, str]] = {
         "這台機器上找不到可以放音的程式，無法校正。",
         "No way to play a sound was found on this machine, so calibration cannot run.",
     ),
+    "audio.failed": (
+        "没有声音送出来，所以校正停下来了——对着无声调整只会得到一个错的数字。",
+        "沒有聲音送出來，所以校正停下來了——對著無聲調整只會得到一個錯的數字。",
+        "No sound came out, so the calibration stopped: adjusting against silence would "
+        "only produce a wrong number.",
+    ),
     "audio.spawn_caveat": (
         "注意：在这个系统上，每次响声都要另外启动一个播放程序，那段启动时间（数十毫秒）会被算进结果里，"
         "所以量出来的数字会偏大。Windows 上没有这个问题。",

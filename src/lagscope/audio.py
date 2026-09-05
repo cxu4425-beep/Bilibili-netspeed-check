@@ -143,6 +143,10 @@ class Clicker:
         self._path: Optional[str] = None
         self._player = None if sys.platform == "win32" else posix_player()
         self._processes: List[subprocess.Popen] = []
+        # Why the last attempt failed, for the UI to show. Silently greying a
+        # button out leaves someone staring at a dialog that does nothing and
+        # no way to find out why.
+        self.last_error: str = ""
 
     @property
     def wav(self) -> bytes:
@@ -154,32 +158,46 @@ class Clicker:
             if sys.platform == "win32":
                 return self._play_windows()
             return self._play_posix()
-        except Exception:
+        except Exception as exc:
             LOG.exception("could not play calibration click")
+            self.last_error = f"{type(exc).__name__}: {exc}"[:200]
             return False
 
-    def _play_windows(self) -> bool:
-        try:
-            import winsound
-        except ImportError:
-            return False
-        # SND_ASYNC returns before the sound finishes, so the buffer has to
-        # outlive the call - hence keeping it on the instance rather than
-        # passing a temporary.
-        winsound.PlaySound(self._wav, winsound.SND_MEMORY | winsound.SND_ASYNC)
-        return True
-
-    def _play_posix(self) -> bool:
-        if not self._player:
-            return False
+    def _wav_path(self) -> str:
+        """The click on disk. Written once and reused for the whole session."""
         if self._path is None:
             handle, path = tempfile.mkstemp(prefix="lagscope-click-", suffix=".wav")
             with os.fdopen(handle, "wb") as out:
                 out.write(self._wav)
             self._path = path
+        return self._path
+
+    def _play_windows(self) -> bool:
+        try:
+            import winsound
+        except ImportError:
+            self.last_error = "winsound is missing from this build"
+            return False
+        # From a file, not from memory. CPython refuses SND_MEMORY together
+        # with SND_ASYNC outright - PC/winsound.c raises "Cannot play
+        # asynchronously from memory", because an async call would return
+        # while still holding a buffer it does not own. Playing synchronously
+        # instead would block the UI thread on the audio device, which on a
+        # Bluetooth headset is exactly the thing being measured. So the click
+        # goes to a temporary file and Windows reads it from there.
+        winsound.PlaySound(self._wav_path(),
+                           winsound.SND_FILENAME | winsound.SND_ASYNC
+                           | winsound.SND_NODEFAULT)
+        return True
+
+    def _play_posix(self) -> bool:
+        if not self._player:
+            self.last_error = "no audio player found (paplay / aplay / ffplay)"
+            return False
+        path = self._wav_path()
         self._reap()
         self._processes.append(subprocess.Popen(
-            [*self._player, self._path],
+            [*self._player, path],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         ))
         return True

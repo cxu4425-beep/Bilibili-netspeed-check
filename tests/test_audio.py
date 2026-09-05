@@ -213,7 +213,7 @@ class _FakeClock:
 
 
 class _FakeClicker:
-    def __init__(self): self.plays = 0
+    def __init__(self): self.plays = 0; self.last_error = ""
     def play(self): self.plays += 1; return True
     def stop(self): pass
     def close(self): pass
@@ -292,7 +292,9 @@ def test_silence_stops_the_run_rather_than_calibrating_against_nothing(qt_app):
     from lagscope.ui.audiosync import AudioSyncDialog
 
     class _DeadClicker(_FakeClicker):
-        def play(self): return False
+        def play(self):
+            self.last_error = "the audio device is not available"
+            return False
 
     dialog = AudioSyncDialog(Config())
     dialog._elapsed = _FakeClock()
@@ -303,6 +305,11 @@ def test_silence_stops_the_run_rather_than_calibrating_against_nothing(qt_app):
     dialog._tick()
     assert dialog._available is False
     assert dialog.start_button.isEnabled() is False
+    # and it says so, rather than leaving a dead button with no explanation.
+    # isHidden(), not isVisible(): a child of a dialog that was never shown
+    # reports invisible however its own flag is set.
+    assert not dialog.failure_label.isHidden()
+    assert "not available" in dialog.failure_label.text()
     dialog.close()
 
 
@@ -348,3 +355,100 @@ def test_cancelling_changes_nothing(qt_app):
     assert dialog.apply_to(config) is False      # never saved
     assert config.audio.offset_ms == 120.0
     dialog.close()
+
+
+# ------------------------------------------------------- the Windows path
+class _FakeWinsound:
+    """Windows' winsound, with the one rule that matters here.
+
+    CPython's PC/winsound.c refuses SND_MEMORY together with SND_ASYNC
+    outright - an async call would return while still holding a buffer it does
+    not own - and raises RuntimeError. The real module was shipped for three
+    releases doing exactly that, and the failure was invisible from any machine
+    a test could run on. This stands in for it.
+    """
+
+    SND_ASYNC = 0x0001
+    SND_NODEFAULT = 0x0002
+    SND_MEMORY = 0x0004
+    SND_PURGE = 0x0040
+    SND_FILENAME = 0x00020000
+
+    def __init__(self):
+        self.calls = []
+
+    def PlaySound(self, sound, flags):  # noqa: N802 - the real name
+        if flags & self.SND_MEMORY and flags & self.SND_ASYNC:
+            raise RuntimeError("Cannot play asynchronously from memory")
+        self.calls.append((sound, flags))
+
+
+@pytest.fixture
+def windows(monkeypatch):
+    fake = _FakeWinsound()
+    monkeypatch.setattr(audio.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "winsound", fake)
+    return fake
+
+
+def test_the_click_plays_on_windows(windows):
+    """The whole feature rested on this call, and it raised every time."""
+    clicker = audio.Clicker()
+    assert clicker.play() is True
+    assert clicker.last_error == ""
+    assert len(windows.calls) == 1
+    clicker.close()
+
+
+def test_windows_plays_from_a_file_not_from_memory(windows):
+    clicker = audio.Clicker()
+    clicker.play()
+    sound, flags = windows.calls[0]
+
+    assert isinstance(sound, str) and os.path.exists(sound)
+    assert flags & _FakeWinsound.SND_FILENAME
+    assert flags & _FakeWinsound.SND_ASYNC
+    # The combination CPython rejects. Asserted directly, because the symptom
+    # of getting it wrong is a greyed-out button on someone else's machine.
+    assert not (flags & _FakeWinsound.SND_MEMORY)
+    clicker.close()
+
+
+def test_the_file_windows_plays_is_the_click(windows):
+    clicker = audio.Clicker()
+    clicker.play()
+    sound, _flags = windows.calls[0]
+    with open(sound, "rb") as handle:
+        assert handle.read() == clicker.wav
+    clicker.close()
+
+
+def test_windows_reuses_one_file_across_clicks(windows):
+    clicker = audio.Clicker()
+    clicker.play()
+    clicker.play()
+    assert windows.calls[0][0] == windows.calls[1][0]
+    clicker.close()
+
+
+def test_the_temporary_file_is_cleaned_up(windows):
+    clicker = audio.Clicker()
+    clicker.play()
+    path = windows.calls[0][0]
+    clicker.close()
+    assert not os.path.exists(path)
+
+
+def test_a_failure_says_why(monkeypatch):
+    """A silently greyed-out button leaves someone staring at a dialog that
+    does nothing, with no way to find out what went wrong."""
+    class _Broken(_FakeWinsound):
+        def PlaySound(self, sound, flags):
+            raise RuntimeError("the audio device is not available")
+
+    monkeypatch.setattr(audio.sys, "platform", "win32")
+    monkeypatch.setitem(sys.modules, "winsound", _Broken())
+    clicker = audio.Clicker()
+    assert clicker.play() is False
+    assert "not available" in clicker.last_error
+    clicker.close()
